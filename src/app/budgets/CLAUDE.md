@@ -1,0 +1,70 @@
+# Budgets mensuels
+
+## Fonctionnalités
+
+### Navigation mensuelle
+- Réutilise le composant `MonthNavigator` de transactions
+- Paramètre URL `?month=2026-02`
+
+### Résumé total (en haut de page)
+Card avec 3 colonnes, affichée au-dessus de la grille si au moins un budget actif (budgeted > 0 ou spent > 0) :
+- **Total budgété** : somme des budgets alloués
+- **Total dépensé** (rouge) : somme des dépenses réelles
+- **Total restant** (vert/rouge) : argent réellement disponible après engagements
+
+**Calcul du Total restant :**
+```
+Total restant = carryOver + forecast − Σ max(budgété, dépensé) par catégorie
+```
+- `carryOver` = report cumulé des mois précédents via `getPreviousMonthBudgetRemaining()` (délègue à `getCarryOver()`)
+- `forecast` = somme de toutes les transactions COMPLETED + PENDING du mois (via `getTransactionTotals`)
+- Pour chaque catégorie active, on prend `max(budgété, dépensé)` — cela "réserve" le budget même s'il n'est pas encore consommé, et prend en compte les dépassements
+- Si le carry-over est non nul, une ligne "dont report : X€" s'affiche sous le montant
+
+**Exemple concret :**
+- Revenus du mois : 3 606€ (forecast)
+- Logement : budgété 850, dépensé 850 → engagé 850
+- Alimentation : budgété 200, dépensé 0 → engagé 200 (réservé)
+- Épargne : budgété 0, dépensé 1 500 → engagé 1 500 (dépassement)
+- Total engagé : 2 694€
+- **Total restant : 3 606 − 2 694 = 912€**
+
+### Grille de budgets (BudgetCard)
+Une Card par catégorie, **entièrement cliquable** → navigation vers `/transactions?category=<id>`.
+Effet hover : ombre + léger soulèvement. L'édition inline du budget utilise `stopPropagation` pour rester fonctionnelle.
+
+Chaque Card affiche :
+- Pastille couleur + nom de la catégorie
+- Montant budgété (éditable inline via bouton crayon)
+- Barre de progression colorée :
+  - **Vert** : < 75% du budget consommé
+  - **Jaune** : 75-100%
+  - **Rouge** : > 100% (dépassement), y compris le cas budget=0 avec dépenses > 0
+- Dépensé / Restant
+- **Bordure rouge** (`border-red-500 border-2`) si dépenses > budget (y compris budget à 0)
+
+### Édition inline
+- Clic sur le montant → Input numérique
+- Validation : `parseFloat`, doit être >= 0
+- `Enter` pour sauvegarder, `Escape` pour annuler
+- Appelle `upsertBudget()` (crée ou met à jour)
+
+### Copie du mois précédent (CopyBudgetsButton)
+- Bouton "Copier du mois précédent"
+- Copie tous les budgets de M-1 vers le mois courant (upsert)
+- Erreur si aucun budget au mois précédent
+
+## Server Actions (_actions/budget-actions.ts)
+
+| Fonction | Description |
+|----------|-------------|
+| `getBudgetsWithSpent(year, month)` | Toutes les catégories avec budget du mois + dépenses réelles via `groupBy` |
+| `upsertBudget(categoryId, year, month, amount)` | Création ou mise à jour d'un budget + `recomputeMonthlyBalance` |
+| `copyBudgetsFromPreviousMonth(year, month)` | Copie les budgets de M-1 vers le mois courant + `recomputeMonthlyBalance` |
+
+## Calcul des dépenses par catégorie
+
+Les dépenses sont calculées via `prisma.transaction.groupBy` :
+- Filtré par mois, statut `COMPLETED` ou `PENDING`, montant négatif (`lt: 0`)
+- Groupé par `categoryId`
+- Le montant est passé en valeur absolue (`Math.abs`)

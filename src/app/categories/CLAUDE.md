@@ -1,0 +1,52 @@
+# Catégories & Sous-catégories
+
+## Fonctionnalités
+
+### Grille de catégories
+Affichage en grille responsive (1/2/3 colonnes) de Cards cliquables.
+Chaque Card contient :
+- Pastille couleur + nom de la catégorie
+- Boutons éditer/supprimer la catégorie (positionnés en `relative z-10` au-dessus du lien)
+- Liste des sous-catégories avec badges (idem `relative z-10`)
+- Boutons éditer/supprimer par sous-catégorie
+- Bouton "Sous-catégorie" pour en ajouter
+
+**Clic sur la card** → navigation vers `/transactions?category=<id>` avec filtre pré-sélectionné.
+Implémenté via un `<Link>` en `absolute inset-0 z-0` (stretched link pattern) avec effet hover (`hover:shadow-lg hover:-translate-y-0.5`).
+
+### CRUD Catégories (CategoryFormDialog)
+Champs :
+- **Nom** (requis, unique en base)
+- **Couleur** (color picker, défaut #6366f1)
+- **Icône** (texte libre, nom d'icône Lucide, ex: "ShoppingCart")
+- **Ordre** d'affichage
+
+### CRUD Sous-catégories (SubCategoryFormDialog)
+Champs :
+- **Nom** (requis, unique par catégorie)
+- **Ordre** d'affichage
+- `categoryId` est injecté automatiquement par le composant parent
+
+### Suppression
+- Supprimer une catégorie supprime aussi toutes ses sous-catégories (cascade)
+- **Impossible de supprimer une catégorie utilisée par des transactions** (`onDelete: Restrict`) — `categoryId` est requis (non nullable) sur les transactions
+- Confirmation via `confirm()` browser
+
+## Server Actions (_actions/category-actions.ts)
+
+| Fonction | Description |
+|----------|-------------|
+| `getCategories()` | Toutes les catégories avec sous-catégories triées |
+| `createCategory(formData)` | Création avec validation Zod |
+| `updateCategory(id, formData)` | Mise à jour |
+| `deleteCategory(id)` | Suppression (cascade sous-catégories) |
+| `createSubCategory(formData)` | Création sous-catégorie |
+| `updateSubCategory(id, formData)` | Mise à jour |
+| `deleteSubCategory(id)` | Suppression |
+
+## Catégories par défaut (seed)
+
+14 catégories avec couleurs et icônes :
+Logement, Alimentation, Transport, Santé, Loisirs, Shopping, Abonnements, Éducation, Impôts & Taxes, Épargne, Revenus, Remboursements, Cadeaux, Divers.
+
+Chacune a des sous-catégories pertinentes (ex: Alimentation → Courses, Restaurant, Livraison).
