@@ -8,7 +8,7 @@ const currencyFormatter = new Intl.NumberFormat("fr-FR", {
 
 export function formatCurrency(amount: number | string): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  return currencyFormatter.format(num);
+  return currencyFormatter.format(num === 0 ? 0 : num);
 }
 
 export function formatDate(date: Date | string): string {

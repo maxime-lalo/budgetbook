@@ -48,7 +48,9 @@ Mouvement financier.
 |-------|------|-------------|
 | label | String | Libellé ("Courses Carrefour") |
 | amount | Decimal(12,2) | Positif = revenu, négatif = dépense |
-| date | Date | Date de la transaction (sans heure) |
+| date | Date? | Date de la transaction (sans heure), **optionnel** — `null` pour les transactions récurrentes |
+| month | Int | Mois de rattachement budgétaire (1-12) |
+| year | Int | Année de rattachement budgétaire |
 | status | TransactionStatus | PENDING, COMPLETED, CANCELLED |
 | note | String? | Obligatoire si status = CANCELLED |
 | accountId | String | Compte concerné |
@@ -56,6 +58,10 @@ Mouvement financier.
 | subCategoryId | String? | Sous-catégorie (SetNull on delete) |
 | bucketId | String? | Bucket cible pour épargne (SetNull on delete) |
 | isAmex | Boolean | `true` si transaction faite via carte AMEX (débit différé sur compte courant) |
+
+**date optionnel** : les transactions récurrentes (loyer, abonnements) n'ont pas de date précise. Elles sont rattachées à un mois via `month`/`year`.
+
+**month/year séparés de date** : permettent le rattachement budgétaire indépendant de la date réelle. Par ex. une transaction datée du 31 janvier peut être rattachée au budget de février.
 
 **categoryId est non nullable** : chaque transaction doit avoir une catégorie. `onDelete: Restrict` empêche la suppression d'une catégorie utilisée par des transactions.
 
@@ -90,6 +96,16 @@ Matérialise le surplus budgétaire de chaque mois pour permettre un report cumu
 **Index** : (year, month).
 
 Mis à jour automatiquement après chaque mutation de transaction ou budget via `recomputeMonthlyBalance()`. Le carry-over pour un mois M = `SUM(surplus)` de tous les mois antérieurs.
+
+## Scripts d'import
+
+| Fichier | Description |
+|---------|-------------|
+| `import-data.ts` | Import de transactions depuis `data/transactions-bnp.json` en BDD (tsx) |
+| `extract-excel.py` | Extraction de transactions depuis un export Excel BNP → JSON |
+| `categorize.py` | Auto-catégorisation des transactions importées |
+
+Le dossier `data/` contient les fichiers JSON d'import (ignoré par git sauf `categories.json`).
 
 ## Seed (prisma/seed.ts)
 

@@ -3,6 +3,19 @@
 import { prisma } from "@/lib/prisma";
 
 export async function getYearlyOverview(year: number, accountId?: string) {
+  // Exclure les comptes épargne/investissement pour avoir les vrais revenus vs dépenses
+  const realAccounts = accountId
+    ? undefined
+    : await prisma.account.findMany({
+        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
+        select: { id: true },
+      });
+  const accountFilter = accountId
+    ? { accountId }
+    : realAccounts
+      ? { accountId: { in: realAccounts.map((a) => a.id) } }
+      : {};
+
   const data = [];
 
   for (let month = 1; month <= 12; month++) {
@@ -10,7 +23,7 @@ export async function getYearlyOverview(year: number, accountId?: string) {
       year,
       month,
       status: { in: ["COMPLETED" as const, "PENDING" as const] },
-      ...(accountId ? { accountId } : {}),
+      ...accountFilter,
     };
 
     const [income, expenses] = await Promise.all([
@@ -36,13 +49,25 @@ export async function getYearlyOverview(year: number, accountId?: string) {
 }
 
 export async function getCategoryBreakdown(year: number, accountId?: string) {
+  const realAccounts = accountId
+    ? undefined
+    : await prisma.account.findMany({
+        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
+        select: { id: true },
+      });
+  const accountFilter = accountId
+    ? { accountId }
+    : realAccounts
+      ? { accountId: { in: realAccounts.map((a) => a.id) } }
+      : {};
+
   const result = await prisma.transaction.groupBy({
     by: ["categoryId"],
     where: {
       year,
       status: { in: ["COMPLETED", "PENDING"] },
       amount: { lt: 0 },
-      ...(accountId ? { accountId } : {}),
+      ...accountFilter,
     },
     _sum: { amount: true },
     orderBy: { _sum: { amount: "asc" } },
@@ -67,6 +92,18 @@ export async function getCategoryBreakdown(year: number, accountId?: string) {
 }
 
 export async function getSubCategoryBreakdown(year: number, accountId?: string) {
+  const realAccounts = accountId
+    ? undefined
+    : await prisma.account.findMany({
+        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
+        select: { id: true },
+      });
+  const accountFilter = accountId
+    ? { accountId }
+    : realAccounts
+      ? { accountId: { in: realAccounts.map((a) => a.id) } }
+      : {};
+
   const result = await prisma.transaction.groupBy({
     by: ["categoryId", "subCategoryId"],
     where: {
@@ -74,7 +111,7 @@ export async function getSubCategoryBreakdown(year: number, accountId?: string) 
       status: { in: ["COMPLETED", "PENDING"] },
       amount: { lt: 0 },
       subCategoryId: { not: null },
-      ...(accountId ? { accountId } : {}),
+      ...accountFilter,
     },
     _sum: { amount: true },
     orderBy: { _sum: { amount: "asc" } },
@@ -114,16 +151,28 @@ export async function getCategoryYearComparison(
   month: number,
   accountId?: string
 ) {
+  // Exclure les comptes épargne/investissement pour éviter le double comptage des transferts
+  const realAccounts = accountId
+    ? undefined
+    : await prisma.account.findMany({
+        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
+        select: { id: true },
+      });
+  const accountFilter = accountId
+    ? { accountId }
+    : realAccounts
+      ? { accountId: { in: realAccounts.map((a) => a.id) } }
+      : {};
+
   const baseWhere = {
     status: { in: ["COMPLETED" as const, "PENDING" as const] },
-    amount: { lt: 0 as const },
-    ...(accountId ? { accountId } : {}),
+    ...accountFilter,
   };
 
   const [currentMonthData, currentYearData, prevYearData] = await Promise.all([
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: { ...baseWhere, year, month },
+      where: { ...baseWhere, year, month: { lte: month } },
       _sum: { amount: true },
     }),
     prisma.transaction.groupBy({
@@ -151,18 +200,20 @@ export async function getCategoryYearComparison(
   });
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
+  // Négation : dépenses (négatif en BDD) → positif, rentrées (positif en BDD) → négatif
   const currentMonthMap = new Map(
-    currentMonthData.map((r) => [r.categoryId, Math.abs(r._sum.amount?.toNumber() ?? 0)])
+    currentMonthData.map((r) => [r.categoryId, -(r._sum.amount?.toNumber() ?? 0)])
   );
   const currentYearMap = new Map(
-    currentYearData.map((r) => [r.categoryId, Math.abs(r._sum.amount?.toNumber() ?? 0)])
+    currentYearData.map((r) => [r.categoryId, -(r._sum.amount?.toNumber() ?? 0)])
   );
   const prevYearMap = new Map(
-    prevYearData.map((r) => [r.categoryId, Math.abs(r._sum.amount?.toNumber() ?? 0)])
+    prevYearData.map((r) => [r.categoryId, -(r._sum.amount?.toNumber() ?? 0)])
   );
 
-  const currentYearTotal = [...currentYearMap.values()].reduce((a, b) => a + b, 0);
-  const currentMonthTotal = [...currentMonthMap.values()].reduce((a, b) => a + b, 0);
+  // Totaux en valeur absolue pour les pourcentages
+  const currentYearAbsTotal = [...currentYearMap.values()].reduce((a, b) => a + Math.abs(b), 0);
+  const currentMonthAbsTotal = [...currentMonthMap.values()].reduce((a, b) => a + Math.abs(b), 0);
 
   const rows = categories.map((c) => c.id)
     .map((catId) => {
@@ -172,7 +223,7 @@ export async function getCategoryYearComparison(
       const prevYear = prevYearMap.get(catId) ?? 0;
       const currentAvg = thisYear / month;
       const prevAvg = prevYear / 12;
-      const diffPercent = prevAvg === 0 ? (currentAvg > 0 ? 100 : 0) : ((currentAvg - prevAvg) / prevAvg) * 100;
+      const diffPercent = prevAvg === 0 ? (currentAvg !== 0 ? 100 : 0) : ((currentAvg - prevAvg) / Math.abs(prevAvg)) * 100;
 
       return {
         category: cat?.name ?? "Sans catégorie",
@@ -180,18 +231,21 @@ export async function getCategoryYearComparison(
         currentMonth: thisMonth,
         currentAvg,
         yearlyTotal: thisYear,
-        percentOfMonthTotal: currentMonthTotal > 0 ? (thisMonth / currentMonthTotal) * 100 : 0,
-        percentOfYearTotal: currentYearTotal > 0 ? (thisYear / currentYearTotal) * 100 : 0,
+        percentOfMonthTotal: currentMonthAbsTotal > 0 ? (Math.abs(thisMonth) / currentMonthAbsTotal) * 100 : 0,
+        percentOfYearTotal: currentYearAbsTotal > 0 ? (Math.abs(thisYear) / currentYearAbsTotal) * 100 : 0,
         prevYearAvg: prevAvg,
         diffPercent,
       };
     })
     .sort((a, b) => a.category.localeCompare(b.category, "fr"));
 
+  // Totaux : uniquement les catégories de dépenses (valeurs > 0), pas les revenus
+  const sumPositive = (values: IterableIterator<number>) =>
+    [...values].filter((v) => v > 0).reduce((a, b) => a + b, 0);
   const totals = {
-    currentMonth: currentMonthTotal,
-    yearlyTotal: currentYearTotal,
-    prevYearTotal: [...prevYearMap.values()].reduce((a, b) => a + b, 0),
+    currentMonth: sumPositive(currentMonthMap.values()),
+    yearlyTotal: sumPositive(currentYearMap.values()),
+    prevYearTotal: sumPositive(prevYearMap.values()),
   };
 
   return { rows, totals, month };
@@ -213,17 +267,24 @@ export async function getSavingsOverview(year: number) {
   }
 
   // Get cumulative total of all savings transactions up to end of previous year
-  const previousYearsTotal = await prisma.transaction.aggregate({
-    where: {
-      accountId: { in: accountIds },
-      status: { in: ["COMPLETED", "PENDING"] },
-      year: { lt: year },
-    },
-    _sum: { amount: true },
-  });
+  const [previousYearsTotal, totalBaseAmount] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: {
+        accountId: { in: accountIds },
+        status: { in: ["COMPLETED", "PENDING"] },
+        year: { lt: year },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.bucket.aggregate({
+      where: { accountId: { in: accountIds } },
+      _sum: { baseAmount: true },
+    }),
+  ]);
 
   // Le signe est inversé : un montant négatif sur un compte épargne = versement (épargne augmente)
-  let cumulative = -(previousYearsTotal._sum.amount?.toNumber() ?? 0);
+  // On ajoute aussi les montants de base des buckets au cumul initial
+  let cumulative = -(previousYearsTotal._sum.amount?.toNumber() ?? 0) + (totalBaseAmount._sum.baseAmount?.toNumber() ?? 0);
   const data = [];
 
   for (let month = 1; month <= 12; month++) {

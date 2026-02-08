@@ -26,7 +26,12 @@ Redirect immédiat vers `/transactions` (la vue principale).
 
 - **Sidebar** (desktop, >= md) : 5 liens + toggle thème en bas
 - **MobileNav** (mobile, < md) : Sheet latéral avec les mêmes liens
-- **MonthNavigator** : composant partagé entre `/transactions` et `/budgets` avec flèches gauche/droite
+- **MonthNavigator** : composant dans `transactions/_components/` réutilisé par `/budgets`, avec :
+  - Flèches gauche/droite
+  - Sélecteur de mois (dropdown 12 mois en français)
+  - Sélecteur d'année (dropdown 2017 → année courante)
+  - Bouton "Aujourd'hui" (masqué si déjà sur le mois courant)
+  - Persistance du mois sélectionné via localStorage
 - Le mois courant est le défaut si pas de paramètre `?month`
 
 ### Navigation inter-pages (catégorie → transactions)

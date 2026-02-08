@@ -9,14 +9,35 @@ import { formatCurrency, ACCOUNT_TYPE_LABELS } from "@/lib/formatters";
 import { prisma } from "@/lib/prisma";
 
 async function getBucketBalances(bucketIds: string[]) {
-  const balances: Record<string, number> = {};
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const balances: Record<string, { current: number; forecast: number }> = {};
+  const buckets = await prisma.bucket.findMany({
+    where: { id: { in: bucketIds } },
+    select: { id: true, baseAmount: true },
+  });
+  const baseAmountMap = new Map(buckets.map((b) => [b.id, b.baseAmount.toNumber()]));
+
   for (const id of bucketIds) {
-    const result = await prisma.transaction.aggregate({
+    const transactions = await prisma.transaction.findMany({
       where: { bucketId: id, status: "COMPLETED" },
-      _sum: { amount: true },
+      select: { amount: true, year: true, month: true },
     });
+    const base = baseAmountMap.get(id) ?? 0;
+    let currentSum = 0;
+    let totalSum = 0;
+    for (const t of transactions) {
+      const amt = t.amount.toNumber();
+      totalSum += amt;
+      if (t.year < currentYear || (t.year === currentYear && t.month <= currentMonth)) {
+        currentSum += amt;
+      }
+    }
     // Signe inversé : négatif sur un compte épargne = versement (solde augmente)
-    balances[id] = -(result._sum.amount?.toNumber() ?? 0);
+    balances[id] = {
+      current: -currentSum + base,
+      forecast: -totalSum + base,
+    };
   }
   return balances;
 }
@@ -43,12 +64,21 @@ export default async function AccountsPage() {
       <div className="grid gap-6">
         {accounts.map((account) => {
           const isSavingsOrInvestment = account.type === "SAVINGS" || account.type === "INVESTMENT";
-          const rawBalance = account.transactions.reduce(
-            (sum, t) => sum + Number(t.amount),
-            0
-          );
+          const currentYear = new Date().getFullYear();
+          const currentMonth = new Date().getMonth() + 1;
+          let currentRaw = 0;
+          let totalRaw = 0;
+          for (const t of account.transactions) {
+            totalRaw += t.amount;
+            if (t.year < currentYear || (t.year === currentYear && t.month <= currentMonth)) {
+              currentRaw += t.amount;
+            }
+          }
           // Signe inversé pour épargne/investissement : négatif = versement (solde augmente)
-          const balance = isSavingsOrInvestment ? -rawBalance : rawBalance;
+          const bucketsBaseAmount = account.buckets.reduce((sum, b) => sum + (b.baseAmount ?? 0), 0);
+          const balance = (isSavingsOrInvestment ? -currentRaw : currentRaw) + bucketsBaseAmount;
+          const forecast = (isSavingsOrInvestment ? -totalRaw : totalRaw) + bucketsBaseAmount;
+          const hasForecast = Math.abs(forecast - balance) > 0.005;
 
           return (
             <Card key={account.id}>
@@ -72,10 +102,17 @@ export default async function AccountsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {formatCurrency(balance)}
-                  </span>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className={`text-xl font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(balance)}
+                    </span>
+                    {hasForecast && (
+                      <div className={`text-xs text-muted-foreground`}>
+                        Prévisionnel : <span className={forecast >= 0 ? "text-green-600" : "text-red-600"}>{formatCurrency(forecast)}</span>
+                      </div>
+                    )}
+                  </div>
                   <AccountFormDialog account={account} checkingAccounts={checkingAccounts} />
                   <DeleteAccountButton id={account.id} />
                 </div>
@@ -89,7 +126,10 @@ export default async function AccountsPage() {
                       <BucketFormDialog accountId={account.id} />
                     </div>
                     {account.buckets.map((bucket) => {
-                      const bucketBalance = bucketBalances[bucket.id] ?? 0;
+                      const bucketBal = bucketBalances[bucket.id] ?? { current: 0, forecast: 0 };
+                      const bucketBalance = bucketBal.current;
+                      const bucketForecast = bucketBal.forecast;
+                      const bucketHasForecast = Math.abs(bucketForecast - bucketBalance) > 0.005;
                       const goal = bucket.goal ? Number(bucket.goal) : null;
                       const progress = goal ? Math.min((bucketBalance / goal) * 100, 100) : null;
 
@@ -104,12 +144,19 @@ export default async function AccountsPage() {
                               <span className="text-sm font-medium">{bucket.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">
-                                {formatCurrency(bucketBalance)}
-                                {goal && (
-                                  <span className="text-muted-foreground"> / {formatCurrency(goal)}</span>
+                              <div className="text-right">
+                                <span className="text-sm font-medium">
+                                  {formatCurrency(bucketBalance)}
+                                  {goal && (
+                                    <span className="text-muted-foreground"> / {formatCurrency(goal)}</span>
+                                  )}
+                                </span>
+                                {bucketHasForecast && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Prév. : {formatCurrency(bucketForecast)}
+                                  </div>
                                 )}
-                              </span>
+                              </div>
                               <BucketFormDialog accountId={account.id} bucket={bucket} />
                               <DeleteBucketButton id={bucket.id} />
                             </div>

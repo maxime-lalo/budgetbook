@@ -21,6 +21,7 @@ type Bucket = {
   accountId: string;
   color: string | null;
   goal: number | null;
+  baseAmount: number;
   sortOrder: number;
 };
 
@@ -92,6 +93,17 @@ export function BucketFormDialog({
                 placeholder="Optionnel"
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bucket-baseAmount">Montant de base (EUR)</Label>
+            <Input
+              id="bucket-baseAmount"
+              name="baseAmount"
+              type="number"
+              step="0.01"
+              defaultValue={bucket?.baseAmount?.toString() ?? "0"}
+              placeholder="0"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="bucket-sortOrder">Ordre</Label>

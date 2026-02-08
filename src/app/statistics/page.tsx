@@ -26,12 +26,14 @@ export default async function StatisticsPage({
   const year = params.year ? parseInt(params.year) : new Date().getFullYear();
   const accountId = params.account || undefined;
 
+  const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
+  const comparisonMonth = year === currentYear ? currentMonth : 12;
   const [yearlyData, categoryData, subCategoryData, comparisonData, savingsData, accounts] = await Promise.all([
     getYearlyOverview(year, accountId),
     getCategoryBreakdown(year, accountId),
     getSubCategoryBreakdown(year, accountId),
-    getCategoryYearComparison(year, currentMonth, accountId),
+    getCategoryYearComparison(year, comparisonMonth, accountId),
     getSavingsOverview(year),
     getAccounts(),
   ]);

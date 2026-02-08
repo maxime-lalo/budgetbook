@@ -23,7 +23,7 @@ Schémas Zod 4 centralisés pour toutes les entités. Conventions :
 | `bucketSchema` | `goal` = preprocess `""` → `null`, puis `number.nonnegative().nullable()` |
 | `categorySchema` | Basique (nom, couleur, icône, ordre) |
 | `subCategorySchema` | `categoryId` requis |
-| `transactionSchema` | `amount != 0`, `categoryId` requis, `date` coercé en Date, refine note si CANCELLED |
+| `transactionSchema` | `amount != 0`, `categoryId` requis, `date` optionnel (null si récurrent), `month`/`year` séparés, `isAmex` boolean, refine note si CANCELLED |
 | `budgetSchema` | `month` 1-12, `year` 2000-2100 |
 
 Types exportés : `AccountInput`, `BucketInput`, `CategoryInput`, `SubCategoryInput`, `TransactionInput`, `BudgetInput`.
@@ -58,12 +58,17 @@ Fonction `cn()` : merge de classes Tailwind via `clsx` + `twMerge` (standard Sha
 ## hooks/
 
 ### use-month-navigation.ts
-Hook React pour la navigation mensuelle par URL searchParams.
+Hook React pour la navigation mensuelle par URL searchParams avec **persistance localStorage**.
 
 **Retourne** :
 - `year`, `month` : mois courant parsé depuis l'URL
 - `monthParam` : format string `"2026-02"`
 - `previousMonth()`, `nextMonth()` : navigation M-1 / M+1
 - `navigateToMonth(year, month)` : navigation directe
+
+**Comportement** :
+- Lit le searchParam `?month=` de l'URL
+- Si pas de searchParam mais localStorage contient un mois, redirige automatiquement
+- Persiste le mois sélectionné dans localStorage à chaque navigation
 
 **Utilisé par** : `MonthNavigator` (transactions et budgets).

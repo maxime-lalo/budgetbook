@@ -85,6 +85,15 @@ export function EditableTransactionRow({
   const [subCategoryId, setSubCategoryId] = useState(transaction.subCategoryId ?? "");
   const [status, setStatus] = useState(transaction.status);
 
+  const [bucketDialogOpen, setBucketDialogOpen] = useState(false);
+  const [pendingAccountChange, setPendingAccountChange] = useState<{
+    newAccountId: string;
+    prevAccountId: string;
+    prevAmex: boolean;
+    shouldResetAmex: boolean;
+    buckets: { id: string; name: string }[];
+  } | null>(null);
+  const [selectedBucketForChange, setSelectedBucketForChange] = useState("");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelNote, setCancelNote] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -139,11 +148,57 @@ export function EditableTransactionRow({
     const prevAmex = isAmex;
     const newAccount = accounts.find((a) => a.id === value);
     const shouldResetAmex = isAmex && newAccount?.type !== "CHECKING";
+    const hasBuckets = newAccount && (newAccount.type === "SAVINGS" || newAccount.type === "INVESTMENT") && newAccount.buckets.length > 0;
+
+    if (hasBuckets) {
+      setPendingAccountChange({
+        newAccountId: value,
+        prevAccountId: prev,
+        prevAmex,
+        shouldResetAmex,
+        buckets: newAccount.buckets,
+      });
+      setSelectedBucketForChange(newAccount.buckets[0].id);
+      setBucketDialogOpen(true);
+      return;
+    }
+
     setAccountId(value);
     if (shouldResetAmex) setIsAmex(false);
-    const fields: Parameters<typeof updateTransactionField>[1] = { accountId: value };
+    const fields: Parameters<typeof updateTransactionField>[1] = { accountId: value, bucketId: null };
     if (shouldResetAmex) fields.isAmex = false;
     saveField(fields, () => { setAccountId(prev); if (shouldResetAmex) setIsAmex(prevAmex); });
+  }
+
+  async function handleBucketChangeConfirm() {
+    if (!pendingAccountChange) return;
+    const { newAccountId, prevAccountId, prevAmex, shouldResetAmex } = pendingAccountChange;
+
+    setAccountId(newAccountId);
+    if (shouldResetAmex) setIsAmex(false);
+
+    const fields: Parameters<typeof updateTransactionField>[1] = {
+      accountId: newAccountId,
+      bucketId: selectedBucketForChange,
+    };
+    if (shouldResetAmex) fields.isAmex = false;
+
+    setBucketDialogOpen(false);
+    setTimeout(() => {
+      setPendingAccountChange(null);
+      setSelectedBucketForChange("");
+    }, 300);
+
+    saveField(fields, () => {
+      setAccountId(prevAccountId);
+      if (shouldResetAmex) setIsAmex(prevAmex);
+    });
+  }
+
+  function handleBucketChangeCancel() {
+    setBucketDialogOpen(false);
+    setPendingAccountChange(null);
+    setSelectedBucketForChange("");
   }
 
   function handleAmexToggle() {
@@ -217,7 +272,9 @@ export function EditableTransactionRow({
     setEditRecurring(date === "");
     setEditMonth(`${transaction.year}-${String(transaction.month).padStart(2, "0")}`);
     setEditAccountId(accountId);
-    setEditBucketId(transaction.bucketId ?? "");
+    const currentAccount = accounts.find((a) => a.id === accountId);
+    const hasBuckets = currentAccount && (currentAccount.type === "SAVINGS" || currentAccount.type === "INVESTMENT") && currentAccount.buckets.length > 0;
+    setEditBucketId(transaction.bucketId ?? (hasBuckets ? currentAccount.buckets[0].id : ""));
     setEditDialogOpen(true);
   }
 
@@ -415,6 +472,40 @@ export function EditableTransactionRow({
         </TableCell>
       </TableRow>
 
+      {/* Dialog de sélection de bucket (changement de compte) */}
+      <Dialog open={bucketDialogOpen} onOpenChange={(open) => { if (!open) handleBucketChangeCancel(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sélectionner un bucket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Ce compte possède des buckets. Veuillez en sélectionner un.
+            </p>
+            <Select value={selectedBucketForChange} onValueChange={setSelectedBucketForChange}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pendingAccountChange?.buckets.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleBucketChangeCancel}>
+                Annuler
+              </Button>
+              <Button onClick={handleBucketChangeConfirm}>
+                Confirmer
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog d'annulation */}
       <Dialog open={cancelDialogOpen} onOpenChange={handleCancelDialogClose}>
         <DialogContent>
@@ -479,7 +570,12 @@ export function EditableTransactionRow({
             </div>
             <div className="space-y-2">
               <Label>Compte</Label>
-              <Select value={editAccountId} onValueChange={(v) => { setEditAccountId(v); setEditBucketId(""); }}>
+              <Select value={editAccountId} onValueChange={(v) => {
+                setEditAccountId(v);
+                const newAccount = accounts.find((a) => a.id === v);
+                const hasBuckets = newAccount && (newAccount.type === "SAVINGS" || newAccount.type === "INVESTMENT") && newAccount.buckets.length > 0;
+                setEditBucketId(hasBuckets ? newAccount.buckets[0].id : "");
+              }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -499,12 +595,11 @@ export function EditableTransactionRow({
               return (
                 <div className="space-y-2">
                   <Label>Bucket</Label>
-                  <Select value={editBucketId || "__none__"} onValueChange={(v) => setEditBucketId(v === "__none__" ? "" : v)}>
+                  <Select value={editBucketId} onValueChange={setEditBucketId}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Aucun</SelectItem>
                       {editAccount.buckets.map((b) => (
                         <SelectItem key={b.id} value={b.id}>
                           {b.name}

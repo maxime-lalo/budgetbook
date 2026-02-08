@@ -16,7 +16,7 @@ La migration Excel → BDD est un projet séparé ultérieur.
 | ORM | Prisma 6 |
 | Validation | Zod 4 |
 | UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
-| Graphiques | Recharts 3 |
+| Graphiques | Recharts 2 |
 | Icônes | Lucide React |
 | Notifications | Sonner |
 | Thème | next-themes (dark/light/system) |
@@ -43,21 +43,30 @@ docker compose -f docker-compose.prod.yml up -d --build
 # Build
 pnpm build                       # prisma generate + next build
 pnpm lint                        # ESLint
+
+# Import de données
+pnpm db:extract                  # Extraire transactions depuis Excel (Python)
+pnpm db:import                   # Importer transactions en BDD (tsx)
 ```
 
 ## Architecture
 
 - **Server Actions** pour toutes les mutations (pas d'API routes)
 - **`_components/` et `_actions/`** co-localisés par route
-- **Navigation mensuelle** via searchParams URL (`?month=2026-02`)
+- **Navigation mensuelle** via searchParams URL (`?month=2026-02`) avec persistance localStorage
 - **Sérialisation explicite** des Decimal Prisma → number avant passage aux Client Components
 - **output: standalone** pour Docker
+- **Transactions récurrentes** : transactions sans date (`date: null`) avec `month`/`year` pour le rattachement budgétaire
 
 ## Structure des dossiers
 
 ```
 comptes/
 ├── prisma/                  # Schéma, migrations, seed
+│   ├── data/                # Données importées (JSON BNP, catégories)
+│   ├── import-data.ts       # Script d'import BNP → BDD
+│   ├── extract-excel.py     # Extraction Excel → JSON
+│   └── categorize.py        # Auto-catégorisation des transactions
 ├── src/
 │   ├── app/                 # Pages (App Router)
 │   │   ├── transactions/    # Vue principale mensuelle
@@ -85,7 +94,9 @@ comptes/
 
 - Les montants sont stockés en `Decimal(12,2)` (jamais de float)
 - Montant positif = rentrée d'argent, négatif = dépense
-- Les dates de transaction sont `@db.Date` (sans composante horaire)
+- Les dates de transaction sont `@db.Date` (sans composante horaire) et **optionnelles** (`null` pour les transactions récurrentes)
+- Chaque transaction a des champs `month` et `year` séparés de `date` pour le rattachement budgétaire
+- `isAmex` (Boolean) marque les transactions faites via carte AMEX ; elles vivent sur le compte courant, pas sur un compte CREDIT_CARD séparé
 - `onDelete: Cascade` pour Bucket/SubCategory sous leur parent
 - `onDelete: Restrict` pour Transaction → Category (impossible de supprimer une catégorie utilisée par des transactions)
 - `categoryId` est **requis** (non nullable) sur les transactions ; seule `subCategoryId` est optionnelle

@@ -56,6 +56,7 @@ Le toggle "AMEX" dans le formulaire de transaction sélectionne automatiquement 
 | `createBucket(formData)` | Création bucket |
 | `updateBucket(id, formData)` | Mise à jour bucket |
 | `deleteBucket(id)` | Suppression bucket |
+| `getBucketBalance(bucketId)` | Somme des transactions COMPLETED du bucket (signe inversé) |
 
 ## Sérialisation
 

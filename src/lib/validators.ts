@@ -17,6 +17,10 @@ export const bucketSchema = z.object({
     (v) => (v === "" || v === undefined ? null : v),
     z.coerce.number().nonnegative("L'objectif doit être positif").nullable()
   ),
+  baseAmount: z.preprocess(
+    (v) => (v === "" || v === undefined ? 0 : v),
+    z.coerce.number().default(0)
+  ),
   sortOrder: z.coerce.number().int().default(0),
 });
 

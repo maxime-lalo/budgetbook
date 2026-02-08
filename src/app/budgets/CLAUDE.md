@@ -29,25 +29,22 @@ Total restant = carryOver + forecast − Σ max(budgété, dépensé) par catég
 - Total engagé : 2 694€
 - **Total restant : 3 606 − 2 694 = 912€**
 
-### Grille de budgets (BudgetCard)
-Une Card par catégorie, **entièrement cliquable** → navigation vers `/transactions?category=<id>`.
-Effet hover : ombre + léger soulèvement. L'édition inline du budget utilise `stopPropagation` pour rester fonctionnelle.
+### Tableau de budgets (BudgetRow)
+Affichage en tableau (pas de cards) avec une ligne par catégorie.
 
-Chaque Card affiche :
-- Pastille couleur + nom de la catégorie
-- Montant budgété (éditable inline via bouton crayon)
-- Barre de progression colorée :
+Chaque ligne affiche :
+- **Catégorie** : pastille couleur + nom
+- **Barre de progression** : largeur proportionnelle au % consommé
   - **Vert** : < 75% du budget consommé
   - **Jaune** : 75-100%
-  - **Rouge** : > 100% (dépassement), y compris le cas budget=0 avec dépenses > 0
-- Dépensé / Restant
-- **Bordure rouge** (`border-red-500 border-2`) si dépenses > budget (y compris budget à 0)
+  - **Rouge** : ≥ 100% (dépassement), y compris le cas budget=0 avec dépenses > 0
+  - Texte overlay : pourcentage
+- **Budgété** : input numérique éditable inline (sauvegarde au blur via `upsertBudget()`)
+- **Dépensé** : montant formaté ou "–"
+- **Restant** : vert si positif, rouge si négatif, ou "–"
+- **Fond rouge** (`red/10`) si dépassement
 
-### Édition inline
-- Clic sur le montant → Input numérique
-- Validation : `parseFloat`, doit être >= 0
-- `Enter` pour sauvegarder, `Escape` pour annuler
-- Appelle `upsertBudget()` (crée ou met à jour)
+Note : `BudgetCard` existe encore dans le code mais n'est **plus utilisé** — remplacé par `BudgetRow` en tableau.
 
 ### Copie du mois précédent (CopyBudgetsButton)
 - Bouton "Copier du mois précédent"

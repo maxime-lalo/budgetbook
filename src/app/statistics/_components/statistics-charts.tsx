@@ -188,6 +188,7 @@ export function SubCategoryBreakdownChart({ data }: { data: SubCategoryData }) {
 
 export function CategoryComparisonTable({ data, year }: { data: CategoryComparisonData; year: number }) {
   const { rows, totals } = data;
+  const isCurrentYear = year === new Date().getFullYear();
 
   function formatPct(v: number) {
     return v.toFixed(2) + "%";
@@ -210,10 +211,10 @@ export function CategoryComparisonTable({ data, year }: { data: CategoryComparis
             <thead>
               <tr className="border-b text-muted-foreground">
                 <th className="text-left py-2 pr-4 font-medium">Catégorie</th>
-                <th className="text-right py-2 px-3 font-medium">Mois actuel</th>
+                {isCurrentYear && <th className="text-right py-2 px-3 font-medium">Cumul jan.-{new Date().toLocaleDateString("fr-FR", { month: "short" })}</th>}
                 <th className="text-right py-2 px-3 font-medium">Moy. mens.</th>
                 <th className="text-right py-2 px-3 font-medium">Total annuel</th>
-                <th className="text-right py-2 px-3 font-medium">% mois</th>
+                {isCurrentYear && <th className="text-right py-2 px-3 font-medium">% mois</th>}
                 <th className="text-right py-2 px-3 font-medium">% annuel</th>
                 <th className="text-right py-2 px-3 font-medium">Moy. {year - 1}</th>
                 <th className="text-right py-2 pl-3 font-medium">Diff {year - 1}</th>
@@ -231,10 +232,10 @@ export function CategoryComparisonTable({ data, year }: { data: CategoryComparis
                       {row.category}
                     </div>
                   </td>
-                  <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.currentMonth)}</td>
+                  {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.currentMonth)}</td>}
                   <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.currentAvg)}</td>
                   <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.yearlyTotal)}</td>
-                  <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{formatPct(row.percentOfMonthTotal)}</td>
+                  {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{formatPct(row.percentOfMonthTotal)}</td>}
                   <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{formatPct(row.percentOfYearTotal)}</td>
                   <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.prevYearAvg)}</td>
                   <td className={`text-right py-2 pl-3 tabular-nums font-semibold ${diffColor(row.diffPercent)}`}>
@@ -248,10 +249,10 @@ export function CategoryComparisonTable({ data, year }: { data: CategoryComparis
             <tfoot>
               <tr className="border-t-2 font-semibold">
                 <td className="py-2 pr-4">Total</td>
-                <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.currentMonth)}</td>
+                {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.currentMonth)}</td>}
                 <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal / data.month)}</td>
                 <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal)}</td>
-                <td className="text-right py-2 px-3 tabular-nums">100%</td>
+                {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">100%</td>}
                 <td className="text-right py-2 px-3 tabular-nums">100%</td>
                 <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.prevYearTotal / 12)}</td>
                 <td className="text-right py-2 pl-3 tabular-nums">—</td>

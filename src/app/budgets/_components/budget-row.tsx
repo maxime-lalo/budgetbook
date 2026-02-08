@@ -55,7 +55,7 @@ export function BudgetRow({
   const progress = budgeted > 0 ? Math.min((spent / budgeted) * 100, 100) : (spent > 0 ? 100 : 0);
 
   return (
-    <TableRow className={overBudget ? "bg-red-500/10" : ""}>
+    <TableRow className={overBudget ? "bg-red-500/10 border-2 border-red-500" : ""}>
       <TableCell className="py-2">
         <div className="flex items-center gap-2">
           <span

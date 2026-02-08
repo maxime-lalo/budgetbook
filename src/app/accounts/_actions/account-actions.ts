@@ -13,7 +13,7 @@ export async function getAccounts() {
       linkedCards: true,
       transactions: {
         where: { status: "COMPLETED" },
-        select: { amount: true },
+        select: { amount: true, year: true, month: true },
       },
     },
     orderBy: { sortOrder: "asc" },
@@ -35,10 +35,13 @@ export async function getAccounts() {
       accountId: b.accountId,
       color: b.color,
       goal: b.goal?.toNumber() ?? null,
+      baseAmount: b.baseAmount.toNumber(),
       sortOrder: b.sortOrder,
     })),
     transactions: a.transactions.map((t) => ({
       amount: t.amount.toNumber(),
+      year: t.year,
+      month: t.month,
     })),
   }));
 }
@@ -98,6 +101,7 @@ export async function createBucket(formData: FormData) {
     data: {
       ...parsed.data,
       goal: parsed.data.goal ? new Prisma.Decimal(parsed.data.goal) : null,
+      baseAmount: new Prisma.Decimal(parsed.data.baseAmount),
     },
   });
   revalidatePath("/accounts");
@@ -114,6 +118,7 @@ export async function updateBucket(id: string, formData: FormData) {
     data: {
       ...parsed.data,
       goal: parsed.data.goal ? new Prisma.Decimal(parsed.data.goal) : null,
+      baseAmount: new Prisma.Decimal(parsed.data.baseAmount),
     },
   });
   revalidatePath("/accounts");
@@ -127,10 +132,14 @@ export async function deleteBucket(id: string) {
 }
 
 export async function getBucketBalance(bucketId: string): Promise<number> {
-  const result = await prisma.transaction.aggregate({
-    where: { bucketId, status: "COMPLETED" },
-    _sum: { amount: true },
-  });
+  const [result, bucket] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { bucketId, status: "COMPLETED" },
+      _sum: { amount: true },
+    }),
+    prisma.bucket.findUnique({ where: { id: bucketId }, select: { baseAmount: true } }),
+  ]);
   // Signe inversé : les buckets sont sur des comptes épargne/investissement
-  return -(result._sum.amount?.toNumber() ?? 0);
+  const transactionBalance = -(result._sum.amount?.toNumber() ?? 0);
+  return transactionBalance + (bucket?.baseAmount.toNumber() ?? 0);
 }

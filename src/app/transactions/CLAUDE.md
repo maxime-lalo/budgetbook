@@ -12,16 +12,19 @@ La page de transactions est le coeur de l'application. Elle affiche toutes les t
 
 ### Barre de totaux (TotalsBar)
 3 cartes affichant :
-- **Total réel** : somme des transactions COMPLETED uniquement (vert si positif, rouge si négatif)
+- **Total sur compte** : somme des transactions COMPLETED + report cumulé (vert si positif, rouge si négatif)
 - **Reste à passer** : somme des transactions PENDING (bleu/orange)
-- **Total actuel** : réel + pending + report budget du mois précédent. Représente le solde réel du compte.
+- **Total réel** : forecast (COMPLETED + PENDING) + report cumulé. Représente le solde réel estimé du compte.
   - Si un report existe, une ligne "dont report : X€" s'affiche sous le montant.
 
 ### Table des transactions (TransactionsTable)
-Colonnes : Libellé | Catégorie | Sous-catégorie | Statut | Montant | Actions
+Colonnes : Libellé | Catégorie | Statut | Montant | Compte | Actions
 
 - **Ligne de report** : en première position, affiche le solde reporté du mois précédent (si non nul)
-- Accepte une prop optionnelle `initialCategory` (via searchParam `?category=<id>`) pour pré-sélectionner le filtre catégorie
+- **Filtre catégorie** : dropdown persistant au-dessus de la table (pré-sélectionné via searchParam `?category=<id>`)
+- **Tri** : colonnes Statut et Montant cliquables (toggle asc/desc/aucun)
+- **Sections** (sans tri actif) : deux sections — "Récurrentes" (pliable) pour les transactions sans date, et "Transactions" pour les datées. Si un tri est actif, liste plate unique.
+- **Boutons au-dessus de la table** : filtre catégorie, CopyRecurringButton, CompleteAmexButton (si AMEX en attente), affichage total AMEX mensuel
 - Les transactions CANCELLED sont affichées en opacité réduite
 - Édition inline : tous les champs sont modifiables directement dans la table
 - Sélecteurs de catégorie et statut avec pastilles de couleur (catégorie : couleur de la catégorie, statut : orange/vert/rouge)
@@ -31,18 +34,30 @@ Colonnes : Libellé | Catégorie | Sous-catégorie | Statut | Montant | Actions
 ### Formulaire de création (TransactionFormDialog)
 Dialog modal avec les champs (dans cet ordre) :
 - **Libellé** (requis)
-- **Montant** + **Date** + **Récurrent** (toggle qui désactive le champ date)
-- **Catégorie** (requis) → **Sous-catégorie** (optionnel)
+- **Dépense/Rentrée** : boutons toggle qui inversent le signe du montant (AMEX force "Dépense")
+- **Montant** (min 0.01) + **Date** (désactivé si Récurrent)
+- **Récurrent** (toggle qui désactive le champ date — transaction sans date rattachée au mois)
+- **Toggle AMEX** : switch visible uniquement si le compte sélectionné est CHECKING
+- **Catégorie** (requis) → **Sous-catégorie** (optionnel, peuplé dynamiquement)
 - **Compte** + **Statut** (sur la même ligne)
-- **Toggle AMEX** : switch rapide vers la carte de crédit AMEX (visible si un compte CREDIT_CARD existe)
 - **Bucket** (visible uniquement si le compte est SAVINGS ou INVESTMENT et a des buckets)
 - **Note** (obligatoire si CANCELLED, optionnel sinon)
 
 ### Actions en ligne (EditableTransactionRow)
-Boutons inline en bout de ligne (pas de menu dropdown) :
-- **Éditer** (icône Pencil) → ouvre une modal avec : Récurrent (toggle), Date, Mois budgétaire, Compte, Bucket (si SAVINGS/INVESTMENT)
-- **Supprimer** (icône Trash2) → suppression directe sans confirmation
-- **Annuler** → le passage en CANCELLED via le sélecteur de statut ouvre un dialog demandant la raison
+Édition inline de chaque champ avec sauvegarde au blur :
+- **Libellé** : input texte
+- **Catégorie + Sous-catégorie** : double select avec pastilles couleur
+- **Statut** : select avec pastilles couleur ; passage en CANCELLED ouvre un dialog pour la raison obligatoire
+- **Montant** : input numérique sans spinners, vert/rouge
+- **Compte** : select avec toggle **AMEX** (icône carte bleue, visible uniquement pour les comptes CHECKING)
+- **Boutons d'action** (fin de ligne) :
+  - **Éditer** (icône Pencil) → modal avec : Récurrent (toggle), Date (désactivé si récurrent), Mois budgétaire (input type="month"), Compte, Bucket (si SAVINGS/INVESTMENT)
+  - **Supprimer** (icône Trash2) → suppression directe sans confirmation
+
+### Boutons spéciaux
+
+- **CopyRecurringButton** : copie les transactions récurrentes (sans date) de M-1 vers le mois courant
+- **CompleteAmexButton** : valide en bloc toutes les transactions AMEX PENDING du mois (visible si count > 0, avec dialog de confirmation)
 
 ## Server Actions (_actions/transaction-actions.ts)
 
@@ -55,7 +70,8 @@ Boutons inline en bout de ligne (pas de menu dropdown) :
 | `deleteTransaction(id)` | Suppression |
 | `markTransactionCompleted(id)` | Passage en COMPLETED |
 | `cancelTransaction(id, note)` | Passage en CANCELLED avec note obligatoire |
-| `updateTransactionField(id, fields)` | Mise à jour partielle d'un ou plusieurs champs |
+| `updateTransactionField(id, fields)` | Mise à jour partielle d'un ou plusieurs champs (inclut isAmex) |
+| `completeAmexTransactions(year, month)` | Passage en bloc de toutes les transactions AMEX PENDING en COMPLETED |
 | `getPreviousMonthBudgetRemaining(year, month)` | Report du mois précédent (voir calcul ci-dessous) |
 | `copyRecurringTransactions(year, month)` | Copie les transactions récurrentes (sans date) du mois précédent |
 | `getFormData()` | Comptes + catégories (avec couleurs) pour le formulaire (objets plain sans Decimal) |

@@ -9,11 +9,12 @@ src/
 │   ├── ui/        # Shadcn/UI (ne pas modifier manuellement)
 │   └── layout/    # Sidebar, mobile-nav, theme
 └── lib/           # Utilitaires partagés
-    ├── prisma.ts       # Singleton Prisma
-    ├── validators.ts   # Schémas Zod (toute la validation)
-    ├── formatters.ts   # Formatage monnaie, dates, labels
-    ├── utils.ts        # cn() pour Tailwind (Shadcn)
-    └── hooks/          # React hooks custom
+    ├── prisma.ts          # Singleton Prisma
+    ├── validators.ts      # Schémas Zod (toute la validation)
+    ├── formatters.ts      # Formatage monnaie, dates, labels
+    ├── monthly-balance.ts # Report cumulatif inter-mois (MonthlyBalance)
+    ├── utils.ts           # cn() pour Tailwind (Shadcn)
+    └── hooks/             # React hooks custom
 ```
 
 ## Conventions

@@ -266,12 +266,11 @@ export function TransactionFormDialog({
           {showBuckets && (
             <div className="space-y-2">
               <Label>Bucket</Label>
-              <Select name="bucketId" defaultValue="__none__">
+              <Select name="bucketId" defaultValue={selectedAccount.buckets[0].id}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Aucun" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Aucun</SelectItem>
                   {selectedAccount.buckets.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {b.name}
