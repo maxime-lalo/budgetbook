@@ -55,10 +55,13 @@ Mouvement financier.
 | categoryId | String | Catégorie (**requis**, Restrict on delete) |
 | subCategoryId | String? | Sous-catégorie (SetNull on delete) |
 | bucketId | String? | Bucket cible pour épargne (SetNull on delete) |
+| isAmex | Boolean | `true` si transaction faite via carte AMEX (débit différé sur compte courant) |
 
 **categoryId est non nullable** : chaque transaction doit avoir une catégorie. `onDelete: Restrict` empêche la suppression d'une catégorie utilisée par des transactions.
 
-**Index** : (accountId, date), (categoryId), (date), (status), (year, month).
+**isAmex** : remplace l'ancien compte CREDIT_CARD séparé. Les transactions AMEX vivent sur le compte courant avec `isAmex: true`. Le total AMEX mensuel est affiché dans la barre de filtre de la page transactions.
+
+**Index** : (accountId, date), (categoryId), (date), (status), (year, month), (isAmex, status).
 
 ### Budget (table: `budgets`)
 Enveloppe budgétaire mensuelle par catégorie.
@@ -92,13 +95,13 @@ Mis à jour automatiquement après chaque mutation de transaction ou budget via 
 
 Données de démonstration :
 - **14 catégories** avec sous-catégories : Logement, Alimentation, Transport, Santé, Loisirs, Shopping, Abonnements, Éducation, Impôts & Taxes, Épargne, Revenus, Remboursements, Cadeaux, Divers
-- **3 comptes** : Compte Courant (CHECKING), AMEX (CREDIT_CARD lié au courant), Livret A (SAVINGS)
+- **2 comptes** : Compte Courant (CHECKING), Livret A (SAVINGS)
 - **2 buckets** : Fonds d'urgence (objectif 10 000 EUR), Voyages (objectif 3 000 EUR)
 - **10 transactions** d'exemple pour le mois courant
 - **7 budgets** pour le mois courant
 - **Backfill MonthlyBalance** : calcul et insertion du surplus pour chaque mois distinct
 
-Les IDs des comptes et buckets sont fixes (`checking-main`, `credit-amex`, `savings-main`, `bucket-emergency`, `bucket-travel`) pour permettre des upserts idempotents.
+Les IDs des comptes et buckets sont fixes (`checking-main`, `savings-main`, `bucket-emergency`, `bucket-travel`) pour permettre des upserts idempotents. Les transactions AMEX de démonstration utilisent `isAmex: true` sur le compte courant.
 
 ## Commandes
 

@@ -21,12 +21,12 @@ export default async function TransactionsPage({
     getPreviousMonthBudgetRemaining(year, month),
   ]);
 
-  const amexAccountIds = new Set(
-    formData.accounts.filter((a) => a.type === "CREDIT_CARD").map((a) => a.id)
-  );
   const amexPendingCount = transactions.filter(
-    (t) => t.status === "PENDING" && amexAccountIds.has(t.accountId)
+    (t) => t.isAmex && t.status === "PENDING"
   ).length;
+  const amexMonthlyTotal = transactions
+    .filter((t) => t.isAmex && t.status !== "CANCELLED")
+    .reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -59,6 +59,7 @@ export default async function TransactionsPage({
         year={year}
         month={month}
         amexPendingCount={amexPendingCount}
+        amexMonthlyTotal={amexMonthlyTotal}
       />
     </div>
   );

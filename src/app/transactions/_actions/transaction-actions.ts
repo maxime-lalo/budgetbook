@@ -31,6 +31,7 @@ export async function getTransactions(year: number, month: number) {
     categoryId: t.categoryId,
     subCategoryId: t.subCategoryId,
     bucketId: t.bucketId,
+    isAmex: t.isAmex,
     account: { name: t.account.name, color: t.account.color },
     category: { name: t.category.name, color: t.category.color },
     subCategory: t.subCategory ? { name: t.subCategory.name } : null,
@@ -77,6 +78,7 @@ export async function createTransaction(data: Record<string, unknown>) {
       categoryId: parsed.data.categoryId,
       subCategoryId: parsed.data.subCategoryId || null,
       bucketId: parsed.data.bucketId || null,
+      isAmex: parsed.data.isAmex,
     },
   });
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
@@ -107,6 +109,7 @@ export async function updateTransaction(id: string, data: Record<string, unknown
       categoryId: parsed.data.categoryId,
       subCategoryId: parsed.data.subCategoryId || null,
       bucketId: parsed.data.bucketId || null,
+      isAmex: parsed.data.isAmex,
     },
   });
 
@@ -155,19 +158,12 @@ export async function markTransactionCompleted(id: string) {
 }
 
 export async function completeAmexTransactions(year: number, month: number) {
-  const amexAccounts = await prisma.account.findMany({
-    where: { type: "CREDIT_CARD" },
-    select: { id: true },
-  });
-  const amexIds = amexAccounts.map((a) => a.id);
-  if (amexIds.length === 0) return { count: 0 };
-
   const result = await prisma.transaction.updateMany({
     where: {
       year,
       month,
       status: "PENDING",
-      accountId: { in: amexIds },
+      isAmex: true,
     },
     data: { status: "COMPLETED" },
   });
@@ -212,6 +208,7 @@ export async function updateTransactionField(
     bucketId: string | null;
     status: string;
     note: string | null;
+    isAmex: boolean;
   }>
 ) {
   const oldTransaction = await prisma.transaction.findUnique({
@@ -241,6 +238,7 @@ export async function updateTransactionField(
   if (fields.bucketId !== undefined) data.bucketId = fields.bucketId;
   if (fields.status !== undefined) data.status = fields.status;
   if (fields.note !== undefined) data.note = fields.note;
+  if (fields.isAmex !== undefined) data.isAmex = fields.isAmex;
 
   const updated = await prisma.transaction.update({
     where: { id },
@@ -289,6 +287,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
         categoryId: t.categoryId,
         subCategoryId: t.subCategoryId,
         bucketId: t.bucketId,
+        isAmex: t.isAmex,
       },
     });
   }

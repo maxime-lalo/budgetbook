@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 import { EditableTransactionRow } from "./editable-transaction-row";
 import { CopyRecurringButton } from "./copy-recurring-button";
 import { CompleteAmexButton } from "./complete-amex-button";
@@ -35,6 +35,7 @@ type Transaction = {
   categoryId: string;
   subCategoryId: string | null;
   bucketId: string | null;
+  isAmex: boolean;
   account: { name: string; color: string | null };
   category: { name: string; color: string | null };
   subCategory: { name: string } | null;
@@ -74,6 +75,7 @@ export function TransactionsTable({
   year,
   month,
   amexPendingCount,
+  amexMonthlyTotal,
 }: {
   transactions: Transaction[];
   accounts: Account[];
@@ -83,6 +85,7 @@ export function TransactionsTable({
   year: number;
   month: number;
   amexPendingCount: number;
+  amexMonthlyTotal: number;
 }) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -256,7 +259,7 @@ export function TransactionsTable({
               colSpan={6}
               className="bg-muted/50 py-2 px-4 text-sm font-medium text-muted-foreground"
             >
-              Transactions
+              Transactions ({dated.length})
             </TableCell>
           </TableRow>
         )}
@@ -290,6 +293,15 @@ export function TransactionsTable({
         </Select>
         <CopyRecurringButton year={year} month={month} />
         <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
+        {amexMonthlyTotal !== 0 && (
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-auto">
+            <CreditCard className="h-4 w-4" />
+            <span>AMEX du mois :</span>
+            <span className={`font-medium ${amexMonthlyTotal < 0 ? "text-red-600" : "text-green-600"}`}>
+              {formatCurrency(amexMonthlyTotal)}
+            </span>
+          </div>
+        )}
       </div>
       <div className="rounded-md border">
         <Table>

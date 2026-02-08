@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, CreditCard } from "lucide-react";
 import { STATUS_LABELS } from "@/lib/formatters";
 import {
   updateTransactionField,
@@ -43,6 +43,7 @@ type Transaction = {
   categoryId: string;
   subCategoryId: string | null;
   bucketId: string | null;
+  isAmex: boolean;
   account: { name: string; color: string | null };
   category: { name: string; color: string | null };
   subCategory: { name: string } | null;
@@ -79,6 +80,7 @@ export function EditableTransactionRow({
     transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : ""
   );
   const [accountId, setAccountId] = useState(transaction.accountId);
+  const [isAmex, setIsAmex] = useState(transaction.isAmex);
   const [categoryId, setCategoryId] = useState(transaction.categoryId);
   const [subCategoryId, setSubCategoryId] = useState(transaction.subCategoryId ?? "");
   const [status, setStatus] = useState(transaction.status);
@@ -134,8 +136,21 @@ export function EditableTransactionRow({
 
   function handleAccountChange(value: string) {
     const prev = accountId;
+    const prevAmex = isAmex;
+    const newAccount = accounts.find((a) => a.id === value);
+    const shouldResetAmex = isAmex && newAccount?.type !== "CHECKING";
     setAccountId(value);
-    saveField({ accountId: value }, () => setAccountId(prev));
+    if (shouldResetAmex) setIsAmex(false);
+    const fields: Parameters<typeof updateTransactionField>[1] = { accountId: value };
+    if (shouldResetAmex) fields.isAmex = false;
+    saveField(fields, () => { setAccountId(prev); if (shouldResetAmex) setIsAmex(prevAmex); });
+  }
+
+  function handleAmexToggle() {
+    const prev = isAmex;
+    const newVal = !isAmex;
+    setIsAmex(newVal);
+    saveField({ isAmex: newVal }, () => setIsAmex(prev));
   }
 
   function handleCategoryChange(value: string) {
@@ -349,18 +364,30 @@ export function EditableTransactionRow({
 
         {/* Compte */}
         <TableCell className="p-1 whitespace-nowrap">
-          <Select value={accountId} onValueChange={handleAccountChange}>
-            <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1">
+            {accounts.find((a) => a.id === accountId)?.type === "CHECKING" && (
+              <button
+                type="button"
+                onClick={handleAmexToggle}
+                title={isAmex ? "AMEX activé" : "Activer AMEX"}
+                className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <Select value={accountId} onValueChange={handleAccountChange}>
+              <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </TableCell>
 
         {/* Actions directes */}

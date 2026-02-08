@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -26,11 +25,13 @@ export function CompleteAmexButton({
   pendingCount: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   async function handleConfirm() {
+    setLoading(true);
     const result = await completeAmexTransactions(year, month);
     toast.success(`${result.count} transaction(s) AMEX passée(s) en réalisé`);
-    setOpen(false);
+    window.location.reload();
   }
 
   if (pendingCount === 0) return null;
@@ -51,10 +52,10 @@ export function CompleteAmexButton({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>
-              Confirmer
-            </AlertDialogAction>
+            <AlertDialogCancel disabled={loading}>Annuler</AlertDialogCancel>
+            <Button onClick={handleConfirm} disabled={loading}>
+              {loading ? "Validation..." : "Confirmer"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

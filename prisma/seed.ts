@@ -3,6 +3,15 @@ import { PrismaClient, Prisma } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Vider la base de données (ordre respectant les FK)
+  await prisma.monthlyBalance.deleteMany();
+  await prisma.budget.deleteMany();
+  await prisma.transaction.deleteMany();
+  await prisma.subCategory.deleteMany();
+  await prisma.category.deleteMany();
+  await prisma.bucket.deleteMany();
+  await prisma.account.deleteMany();
+
   // Catégories avec sous-catégories
   const categories = [
     { name: "Logement", color: "#6366f1", icon: "Home", subs: ["Loyer", "Charges", "Assurance habitation", "Travaux"] },
@@ -52,20 +61,6 @@ async function main() {
     },
   });
 
-  await prisma.account.upsert({
-    where: { id: "credit-amex" },
-    update: {},
-    create: {
-      id: "credit-amex",
-      name: "AMEX",
-      type: "CREDIT_CARD",
-      color: "#6366f1",
-      icon: "CreditCard",
-      sortOrder: 1,
-      linkedAccountId: checking.id,
-    },
-  });
-
   const savings = await prisma.account.upsert({
     where: { id: "savings-main" },
     update: {},
@@ -75,7 +70,7 @@ async function main() {
       type: "SAVINGS",
       color: "#10b981",
       icon: "PiggyBank",
-      sortOrder: 2,
+      sortOrder: 1,
     },
   });
 
@@ -121,7 +116,7 @@ async function main() {
   const sampleTransactions = [
     { label: "Salaire", amount: 3200, date: new Date(currentYear, currentMonth, 1), month, year: currentYear, status: "COMPLETED" as const, accountId: checking.id, categoryId: getCatId("Revenus"), subCategoryId: getSubId("Revenus", "Salaire") },
     { label: "Courses Carrefour", amount: -87.5, date: new Date(currentYear, currentMonth, 8), month, year: currentYear, status: "COMPLETED" as const, accountId: checking.id, categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Courses") },
-    { label: "Restaurant", amount: -45, date: new Date(currentYear, currentMonth, 10), month, year: currentYear, status: "COMPLETED" as const, accountId: "credit-amex", categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Restaurant") },
+    { label: "Restaurant", amount: -45, date: new Date(currentYear, currentMonth, 10), month, year: currentYear, status: "COMPLETED" as const, accountId: checking.id, categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Restaurant"), isAmex: true },
     { label: "Essence", amount: -65, date: new Date(currentYear, currentMonth, 12), month, year: currentYear, status: "COMPLETED" as const, accountId: checking.id, categoryId: getCatId("Transport"), subCategoryId: getSubId("Transport", "Essence") },
     { label: "Virement épargne", amount: -500, date: new Date(currentYear, currentMonth, 2), month, year: currentYear, status: "COMPLETED" as const, accountId: checking.id, categoryId: getCatId("Épargne"), subCategoryId: getSubId("Épargne", "Livret A") },
     { label: "Virement épargne reçu", amount: 500, date: new Date(currentYear, currentMonth, 2), month, year: currentYear, status: "COMPLETED" as const, accountId: savings.id, categoryId: getCatId("Épargne"), subCategoryId: getSubId("Épargne", "Livret A"), bucketId: "bucket-emergency" },

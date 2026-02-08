@@ -62,18 +62,6 @@ async function createAccounts() {
     },
   });
 
-  const amex = await prisma.account.create({
-    data: {
-      id: "amex-card",
-      name: "AMEX",
-      type: "CREDIT_CARD",
-      color: "#ef4444",
-      icon: "CreditCard",
-      sortOrder: 1,
-      linkedAccountId: bnp.id,
-    },
-  });
-
   const livretA = await prisma.account.create({
     data: {
       id: "livret-a",
@@ -81,12 +69,12 @@ async function createAccounts() {
       type: "SAVINGS",
       color: "#10b981",
       icon: "PiggyBank",
-      sortOrder: 2,
+      sortOrder: 1,
     },
   });
 
-  console.log(`  Created accounts: ${bnp.name}, ${amex.name}, ${livretA.name}`);
-  return { bnpId: bnp.id, amexId: amex.id, livretAId: livretA.id };
+  console.log(`  Created accounts: ${bnp.name}, ${livretA.name}`);
+  return { bnpId: bnp.id, livretAId: livretA.id };
 }
 
 async function importCategories(categoriesData: CategoryData[]) {
@@ -125,7 +113,7 @@ async function importCategories(categoriesData: CategoryData[]) {
 
 async function importTransactions(
   transactions: TransactionData[],
-  accountIds: { bnpId: string; amexId: string; livretAId: string },
+  accountIds: { bnpId: string; livretAId: string },
   categoryMap: Map<string, string>,
   subCategoryMap: Map<string, string>
 ) {
@@ -165,13 +153,13 @@ async function importTransactions(
       if (tx.status === "COMPLETED") status = "COMPLETED";
       else if (tx.status === "CANCELLED") status = "CANCELLED";
 
-      // Determine target account and label adjustments
-      let targetAccountId = accountIds.bnpId;
+      // Determine label and isAmex flag
       let label = tx.label;
+      let isAmex = false;
 
       // AMEX: transactions whose label starts with "AMEX "
       if (tx.label.startsWith("AMEX ")) {
-        targetAccountId = accountIds.amexId;
+        isAmex = true;
         label = tx.label.slice(5); // Remove "AMEX " prefix
         amexCount++;
       }
@@ -183,10 +171,11 @@ async function importTransactions(
         month: tx.month,
         year: tx.year,
         status,
-        accountId: targetAccountId,
+        accountId: accountIds.bnpId,
         categoryId,
         subCategoryId,
         note: status === "CANCELLED" ? "Annulé dans Excel" : undefined,
+        isAmex,
       };
 
       data.push(txData);

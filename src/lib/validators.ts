@@ -49,6 +49,7 @@ export const transactionSchema = z
     categoryId: z.string().min(1, "La catégorie est requise"),
     subCategoryId: z.string().nullable().optional(),
     bucketId: z.string().nullable().optional(),
+    isAmex: z.boolean().default(false),
   })
   .refine(
     (data) => data.status !== "CANCELLED" || (data.note && data.note.trim().length > 0),

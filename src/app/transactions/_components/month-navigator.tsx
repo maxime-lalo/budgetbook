@@ -41,8 +41,20 @@ export function MonthNavigator() {
   const { year, month, previousMonth, nextMonth, navigateToMonth } =
     useMonthNavigation();
 
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+
   return (
     <div className="flex items-center gap-2">
+      {!isCurrentMonth && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigateToMonth(now.getFullYear(), now.getMonth() + 1)}
+        >
+          Aujourd&apos;hui
+        </Button>
+      )}
       <Button variant="outline" size="icon" onClick={previousMonth}>
         <ChevronLeft className="h-4 w-4" />
       </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -64,19 +64,7 @@ export function TransactionFormDialog({
   const selectedCategory = categories.find((c) => c.id === categoryId);
   const showBuckets = selectedAccount && (selectedAccount.type === "SAVINGS" || selectedAccount.type === "INVESTMENT") && selectedAccount.buckets.length > 0;
 
-  const checkingAccount = accounts.find((a) => a.type === "CHECKING");
-  const amexAccount = accounts.find((a) => a.type === "CREDIT_CARD");
-
-  useEffect(() => {
-    if (isAmex && amexAccount) {
-      setAccountId(amexAccount.id);
-      setIsExpense(true);
-    } else if (!isAmex && checkingAccount) {
-      setAccountId(checkingAccount.id);
-    }
-  }, [isAmex, amexAccount, checkingAccount]);
-
-  const isCreditCard = selectedAccount?.type === "CREDIT_CARD";
+  const showAmexToggle = selectedAccount?.type === "CHECKING";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -94,6 +82,7 @@ export function TransactionFormDialog({
       categoryId,
       subCategoryId: formData.get("subCategoryId") || null,
       bucketId: formData.get("bucketId") === "__none__" ? null : formData.get("bucketId") || null,
+      isAmex,
     };
 
     const result = await createTransaction(data);
@@ -135,7 +124,7 @@ export function TransactionFormDialog({
             />
           </div>
 
-          {!isCreditCard && (
+          {!isAmex && (
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -194,11 +183,14 @@ export function TransactionFormDialog({
             </div>
           </div>
 
-          {amexAccount && (
+          {showAmexToggle && (
             <div className="flex items-center gap-3">
               <Switch
                 checked={isAmex}
-                onCheckedChange={setIsAmex}
+                onCheckedChange={(checked) => {
+                  setIsAmex(checked);
+                  if (checked) setIsExpense(true);
+                }}
               />
               <Label>AMEX</Label>
             </div>
