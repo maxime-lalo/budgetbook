@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -51,7 +50,6 @@ export function BudgetCard({
   year,
   month,
 }: BudgetCardProps) {
-  const router = useRouter();
   const [value, setValue] = useState(budgeted.toString());
 
   async function handleBlur() {
@@ -70,8 +68,7 @@ export function BudgetCard({
 
   return (
     <Card
-      className={`relative cursor-pointer transition-shadow transition-transform duration-200 hover:shadow-lg hover:-translate-y-0.5 ${overBudget ? "border-red-500 border-2" : ""}`}
-      onClick={() => router.push(`/transactions?category=${categoryId}`)}
+      className={`relative ${overBudget ? "border-red-500 border-2" : ""}`}
     >
       <CardContent className="pt-4 space-y-3">
         <div className="flex items-center justify-between">
@@ -82,18 +79,15 @@ export function BudgetCard({
             />
             <span className="font-medium text-sm">{name}</span>
           </div>
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-          <div onClick={(e) => e.stopPropagation()}>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onBlur={handleBlur}
-              className="h-7 w-24 text-right text-sm border-transparent bg-transparent hover:border-input focus:border-input font-medium"
-            />
-          </div>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={handleBlur}
+            className="h-7 w-24 text-right text-sm border-transparent bg-transparent hover:border-input focus:border-input font-medium"
+          />
         </div>
 
         <Progress value={progress} className={`h-2 ${getProgressColor(spent, budgeted)}`} />

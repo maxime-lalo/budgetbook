@@ -2,10 +2,17 @@ import { Suspense } from "react";
 import { parseMonthParam, formatCurrency } from "@/lib/formatters";
 import { getBudgetsWithSpent } from "./_actions/budget-actions";
 import { getTransactionTotals, getPreviousMonthBudgetRemaining } from "../transactions/_actions/transaction-actions";
-import { BudgetCard } from "./_components/budget-card";
+import { BudgetRow } from "./_components/budget-row";
 import { CopyBudgetsButton } from "./_components/copy-budgets-button";
 import { MonthNavigator } from "../transactions/_components/month-navigator";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default async function BudgetsPage({
@@ -43,47 +50,57 @@ export default async function BudgetsPage({
       </div>
 
       {activeBudgets.length > 0 && (
-        <Card>
-          <CardContent className="pt-4">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-sm text-muted-foreground">Total budgété</div>
-                <div className="text-xl font-bold">{formatCurrency(totalBudgeted)}</div>
+        <div className="grid gap-2 grid-cols-3">
+          <Card className="py-2">
+            <CardContent className="px-3 py-0">
+              <div className="text-xs text-muted-foreground">Total budgété</div>
+              <div className="text-lg font-bold">{formatCurrency(totalBudgeted)}</div>
+            </CardContent>
+          </Card>
+          <Card className="py-2">
+            <CardContent className="px-3 py-0">
+              <div className="text-xs text-muted-foreground">Total dépensé</div>
+              <div className="text-lg font-bold text-red-600">{formatCurrency(totalSpent)}</div>
+            </CardContent>
+          </Card>
+          <Card className="py-2">
+            <CardContent className="px-3 py-0">
+              <div className="text-xs text-muted-foreground">Total restant</div>
+              <div className={`text-lg font-bold ${totalRemaining >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {formatCurrency(totalRemaining)}
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Total dépensé</div>
-                <div className="text-xl font-bold text-red-600">{formatCurrency(totalSpent)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Total restant</div>
-                <div className={`text-xl font-bold ${totalRemaining >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {formatCurrency(totalRemaining)}
-                </div>
-                {carryOver !== 0 && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    dont report : {formatCurrency(carryOver)}
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {budgets.map((budget) => (
-          <BudgetCard
-            key={budget.id}
-            categoryId={budget.id}
-            name={budget.name}
-            color={budget.color}
-            budgeted={budget.budgeted}
-            spent={budget.spent}
-            remaining={budget.remaining}
-            year={year}
-            month={month}
-          />
-        ))}
+      <div className="rounded-md border w-fit">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Catégorie</TableHead>
+              <TableHead>Progression</TableHead>
+              <TableHead className="text-center">Budget</TableHead>
+              <TableHead className="text-center">Dépensé</TableHead>
+              <TableHead className="text-center">Restant</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {budgets.map((budget) => (
+              <BudgetRow
+                key={budget.id}
+                categoryId={budget.id}
+                name={budget.name}
+                color={budget.color}
+                budgeted={budget.budgeted}
+                spent={budget.spent}
+                remaining={budget.remaining}
+                year={year}
+                month={month}
+              />
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ export async function getTransactions(year: number, month: number) {
       subCategory: true,
       bucket: true,
     },
-    orderBy: [{ date: { sort: "desc", nulls: "first" } }, { createdAt: "desc" }],
+    orderBy: [{ date: { sort: "asc", nulls: "first" } }, { label: "asc" }],
   });
 
   return transactions.map((t) => ({
@@ -152,6 +152,29 @@ export async function markTransactionCompleted(id: string) {
 
   revalidatePath("/transactions");
   return { success: true };
+}
+
+export async function completeAmexTransactions(year: number, month: number) {
+  const amexAccounts = await prisma.account.findMany({
+    where: { type: "CREDIT_CARD" },
+    select: { id: true },
+  });
+  const amexIds = amexAccounts.map((a) => a.id);
+  if (amexIds.length === 0) return { count: 0 };
+
+  const result = await prisma.transaction.updateMany({
+    where: {
+      year,
+      month,
+      status: "PENDING",
+      accountId: { in: amexIds },
+    },
+    data: { status: "COMPLETED" },
+  });
+
+  await recomputeMonthlyBalance(year, month);
+  revalidatePath("/transactions");
+  return { count: result.count };
 }
 
 export async function cancelTransaction(id: string, note: string) {

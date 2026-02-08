@@ -16,8 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown } from "lucide-react";
 import { EditableTransactionRow } from "./editable-transaction-row";
+import { CopyRecurringButton } from "./copy-recurring-button";
+import { CompleteAmexButton } from "./complete-amex-button";
 import { formatCurrency } from "@/lib/formatters";
 
 type Transaction = {
@@ -69,16 +71,23 @@ export function TransactionsTable({
   categories,
   budgetCarryOver,
   initialCategory,
+  year,
+  month,
+  amexPendingCount,
 }: {
   transactions: Transaction[];
   accounts: Account[];
   categories: Category[];
   budgetCarryOver: number;
   initialCategory?: string;
+  year: number;
+  month: number;
+  amexPendingCount: number;
 }) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [categoryFilter, setCategoryFilter] = useState<string>(initialCategory ?? "__all__");
+  const [recurringOpen, setRecurringOpen] = useState(false);
 
   function toggleSort(column: SortColumn) {
     if (sortColumn !== column) {
@@ -163,7 +172,6 @@ export function TransactionsTable({
       </TableCell>
       <TableCell />
       <TableCell />
-      <TableCell />
       <TableCell
         className={`py-2 text-sm font-medium ${
           budgetCarryOver >= 0 ? "text-green-600" : "text-red-600"
@@ -171,6 +179,7 @@ export function TransactionsTable({
       >
         {formatCurrency(budgetCarryOver)}
       </TableCell>
+      <TableCell />
       <TableCell />
     </TableRow>
   );
@@ -212,22 +221,33 @@ export function TransactionsTable({
       <>
         {dateless.length > 0 && (
           <>
-            <TableRow>
+            <TableRow
+              className="bg-muted/50 cursor-pointer select-none"
+              onClick={() => setRecurringOpen((o) => !o)}
+            >
               <TableCell
                 colSpan={6}
-                className="bg-muted/50 py-2 px-4 text-sm font-medium text-muted-foreground"
+                className="py-1.5 px-4 text-sm font-medium text-muted-foreground"
               >
-                Récurrentes
+                <div className="flex items-center gap-1">
+                  {recurringOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  Récurrentes ({dateless.length})
+                </div>
               </TableCell>
             </TableRow>
-            {dateless.map((t) => (
-              <EditableTransactionRow
-                key={t.id}
-                transaction={t}
-                accounts={accounts}
-                categories={categories}
-              />
-            ))}
+            {recurringOpen &&
+              dateless.map((t) => (
+                <EditableTransactionRow
+                  key={t.id}
+                  transaction={t}
+                  accounts={accounts}
+                  categories={categories}
+                />
+              ))}
           </>
         )}
         {hasBothSections && (
@@ -236,7 +256,7 @@ export function TransactionsTable({
               colSpan={6}
               className="bg-muted/50 py-2 px-4 text-sm font-medium text-muted-foreground"
             >
-              Transactions datées
+              Transactions
             </TableCell>
           </TableRow>
         )}
@@ -268,6 +288,8 @@ export function TransactionsTable({
             ))}
           </SelectContent>
         </Select>
+        <CopyRecurringButton year={year} month={month} />
+        <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
       </div>
       <div className="rounded-md border">
         <Table>
@@ -275,12 +297,13 @@ export function TransactionsTable({
             <TableRow>
               <TableHead>Libellé</TableHead>
               <TableHead>Catégorie</TableHead>
-              <TableHead>Sous-catégorie</TableHead>
               <SortableHeader column="status" label="Statut" />
               <SortableHeader
                 column="amount"
                 label="Montant"
+                className="w-[100px]"
               />
+              <TableHead>Compte</TableHead>
               <TableHead className="w-[100px]" />
             </TableRow>
           </TableHeader>

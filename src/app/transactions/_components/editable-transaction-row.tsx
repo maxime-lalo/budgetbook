@@ -74,8 +74,7 @@ export function EditableTransactionRow({
   categories: Category[];
 }) {
   const [label, setLabel] = useState(transaction.label);
-  const [amount, setAmount] = useState(String(Math.abs(transaction.amount)));
-  const [isExpense, setIsExpense] = useState(transaction.amount < 0);
+  const [amount, setAmount] = useState(transaction.amount.toFixed(2));
   const [date, setDate] = useState(
     transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : ""
   );
@@ -122,28 +121,14 @@ export function EditableTransactionRow({
 
   function handleAmountBlur() {
     const num = Number(amount);
-    if (isNaN(num) || num <= 0) {
-      setAmount(String(Math.abs(transaction.amount)));
+    if (isNaN(num) || num === 0) {
+      setAmount(transaction.amount.toFixed(2));
       return;
     }
-    const signed = isExpense ? -num : num;
-    if (signed === transaction.amount) return;
-    saveField({ amount: signed }, () => {
-      setAmount(String(Math.abs(transaction.amount)));
-      setIsExpense(transaction.amount < 0);
-    });
-  }
-
-  function handleSignToggle() {
-    const newIsExpense = !isExpense;
-    setIsExpense(newIsExpense);
-    const num = Number(amount);
-    if (isNaN(num) || num <= 0) return;
-    const signed = newIsExpense ? -num : num;
-    if (signed === transaction.amount) return;
-    saveField({ amount: signed }, () => {
-      setIsExpense(transaction.amount < 0);
-      setAmount(String(Math.abs(transaction.amount)));
+    setAmount(num.toFixed(2));
+    if (num === transaction.amount) return;
+    saveField({ amount: num }, () => {
+      setAmount(transaction.amount.toFixed(2));
     });
   }
 
@@ -250,17 +235,6 @@ export function EditableTransactionRow({
       return;
     }
 
-    // Gérer le cas carte de crédit
-    if (fields.accountId) {
-      const newAccount = accounts.find((a) => a.id === editAccountId);
-      if (newAccount?.type === "CREDIT_CARD" && !isExpense) {
-        const num = Number(amount);
-        if (!isNaN(num) && num > 0) {
-          fields.amount = -num;
-        }
-      }
-    }
-
     const result = await updateTransactionField(transaction.id, fields);
     if (!result.success) {
       toast.error("Erreur lors de la mise à jour");
@@ -273,10 +247,6 @@ export function EditableTransactionRow({
     }
     if (fields.accountId) {
       setAccountId(editAccountId);
-      if (fields.amount) {
-        setIsExpense(true);
-        setAmount(String(Math.abs(fields.amount)));
-      }
     }
     setEditDialogOpen(false);
   }
@@ -295,51 +265,49 @@ export function EditableTransactionRow({
           />
         </TableCell>
 
-        {/* Catégorie */}
-        <TableCell className="p-1">
-          <Select value={categoryId} onValueChange={handleCategoryChange}>
-            <SelectTrigger className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: c.color ?? "#6b7280" }}
-                    />
-                    {c.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </TableCell>
-
-        {/* Sous-catégorie */}
-        <TableCell className="p-1">
-          {selectedCategory && selectedCategory.subCategories.length > 0 && (
-            <Select value={subCategoryId || "__none__"} onValueChange={handleSubCategoryChange}>
-              <SelectTrigger className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-                <SelectValue placeholder="Sous-cat." />
+        {/* Catégorie + Sous-catégorie */}
+        <TableCell className="p-1 whitespace-nowrap">
+          <div className="flex items-center gap-1">
+            <Select value={categoryId} onValueChange={handleCategoryChange}>
+              <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">Aucune</SelectItem>
-                {selectedCategory.subCategories.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: c.color ?? "#6b7280" }}
+                      />
+                      {c.name}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
+            {selectedCategory && selectedCategory.subCategories.length > 0 && (
+              <Select value={subCategoryId || "__none__"} onValueChange={handleSubCategoryChange}>
+                <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+                  <SelectValue placeholder="Sous-cat." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Aucune</SelectItem>
+                  {selectedCategory.subCategories.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </TableCell>
 
         {/* Statut */}
-        <TableCell className="p-1">
+        <TableCell className="p-1 whitespace-nowrap">
           <Select value={status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+            <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -366,29 +334,33 @@ export function EditableTransactionRow({
         </TableCell>
 
         {/* Montant */}
-        <TableCell className="p-1">
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 text-sm font-bold ${isExpense ? "text-red-600" : "text-green-600"}`}
-              onClick={handleSignToggle}
-            >
-              {isExpense ? "−" : "+"}
-            </Button>
-            <Input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              onBlur={handleAmountBlur}
-              className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[95px] font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                isExpense ? "text-red-600" : "text-green-600"
-              }`}
-            />
-          </div>
+        <TableCell className="p-1 whitespace-nowrap">
+          <Input
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onBlur={handleAmountBlur}
+            className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-full font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+              Number(amount) < 0 ? "text-red-600" : "text-green-600"
+            }`}
+          />
+        </TableCell>
+
+        {/* Compte */}
+        <TableCell className="p-1 whitespace-nowrap">
+          <Select value={accountId} onValueChange={handleAccountChange}>
+            <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </TableCell>
 
         {/* Actions directes */}

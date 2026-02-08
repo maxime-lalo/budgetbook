@@ -15,20 +15,22 @@ export async function getBudgetsWithSpent(year: number, month: number) {
     orderBy: { name: "asc" },
   });
 
-  // Get spent amounts per category
+  // Get net spent amounts per category (includes refunds)
   const spent = await prisma.transaction.groupBy({
     by: ["categoryId"],
     where: {
       year,
       month,
       status: { in: ["COMPLETED", "PENDING"] },
-      amount: { lt: 0 },
     },
     _sum: { amount: true },
   });
 
   const spentMap = new Map(
-    spent.map((s) => [s.categoryId, Math.abs(s._sum.amount?.toNumber() ?? 0)])
+    spent.map((s) => {
+      const net = s._sum.amount?.toNumber() ?? 0;
+      return [s.categoryId, net < 0 ? Math.abs(net) : 0];
+    })
   );
 
   return categories

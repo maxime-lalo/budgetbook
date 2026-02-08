@@ -5,7 +5,6 @@ import { MonthNavigator } from "./_components/month-navigator";
 import { TotalsBar } from "./_components/totals-bar";
 import { TransactionsTable } from "./_components/transactions-table";
 import { TransactionFormDialog } from "./_components/transaction-form-dialog";
-import { CopyRecurringButton } from "./_components/copy-recurring-button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default async function TransactionsPage({
@@ -22,6 +21,13 @@ export default async function TransactionsPage({
     getPreviousMonthBudgetRemaining(year, month),
   ]);
 
+  const amexAccountIds = new Set(
+    formData.accounts.filter((a) => a.type === "CREDIT_CARD").map((a) => a.id)
+  );
+  const amexPendingCount = transactions.filter(
+    (t) => t.status === "PENDING" && amexAccountIds.has(t.accountId)
+  ).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -33,7 +39,6 @@ export default async function TransactionsPage({
           <Suspense fallback={<Skeleton className="h-10 w-[250px]" />}>
             <MonthNavigator />
           </Suspense>
-          <CopyRecurringButton year={year} month={month} />
           <TransactionFormDialog
             accounts={formData.accounts}
             categories={formData.categories}
@@ -51,6 +56,9 @@ export default async function TransactionsPage({
         categories={formData.categories}
         budgetCarryOver={budgetCarryOver}
         initialCategory={params.category}
+        year={year}
+        month={month}
+        amexPendingCount={amexPendingCount}
       />
     </div>
   );
