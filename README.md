@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Comptes
 
-## Getting Started
+Application web de gestion de finances personnelles, conçue pour remplacer un système Excel historique (2019-2026).
 
-First, run the development server:
+## Fonctionnalités
+
+- **Transactions** : saisie mensuelle avec édition inline, transactions récurrentes, copie du mois précédent
+- **Budgets** : allocation mensuelle par catégorie avec suivi des dépenses et report cumulatif
+- **Catégories** : gestion hiérarchique (catégories + sous-catégories) avec codes couleur
+- **Comptes** : comptes courants, cartes de crédit, épargne et investissement avec buckets d'objectifs
+- **Statistiques** : vue annuelle, répartition par catégorie/sous-catégorie, évolution de l'épargne, comparaison N vs N-1
+
+## Stack technique
+
+| Couche | Technologie |
+|--------|-------------|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| Langage | TypeScript 5, React 19 |
+| Base de données | PostgreSQL 17 |
+| ORM | Prisma 6 |
+| Validation | Zod 4 |
+| UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
+| Graphiques | Recharts 3 |
+| Icônes | Lucide React |
+| Package manager | pnpm |
+| Conteneurisation | Docker multi-stage + Docker Compose |
+
+## Démarrage rapide
+
+### Prérequis
+
+- Node.js 20+
+- pnpm
+- Docker (pour PostgreSQL)
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Démarrer PostgreSQL
+docker compose up -d db
+
+# Installer les dépendances
+pnpm install
+
+# Générer le client Prisma et appliquer les migrations
+pnpm db:generate
+pnpm db:migrate
+
+# (Optionnel) Insérer des données de démonstration
+pnpm db:seed
+
+# Lancer le serveur de développement
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+L'application est accessible sur [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
-## Learn More
+## Architecture
 
-To learn more about Next.js, take a look at the following resources:
+- **Server Actions** pour toutes les mutations (pas d'API REST)
+- **Server Components** pour le rendu initial, **Client Components** pour l'interactivité
+- Co-localisation `_actions/` et `_components/` par route
+- Navigation mensuelle via `searchParams` URL
+- Montants stockés en `Decimal(12,2)`, convertis en `number` avant passage aux composants client
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Variables d'environnement
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | URL de connexion PostgreSQL |
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Copier `.env.example` en `.env` et renseigner les valeurs.
