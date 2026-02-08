@@ -98,3 +98,35 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
   revalidatePath("/budgets");
   return { success: true, count: previousBudgets.length };
 }
+
+export async function calibrateBudgets(year: number, month: number) {
+  const budgets = await getBudgetsWithSpent(year, month);
+  const overBudget = budgets.filter((b) => b.spent > b.budgeted && b.spent > 0);
+
+  if (overBudget.length === 0) {
+    return { error: "Aucun dépassement de budget à calibrer" };
+  }
+
+  for (const b of overBudget) {
+    await prisma.budget.upsert({
+      where: {
+        categoryId_year_month: {
+          categoryId: b.id,
+          year,
+          month,
+        },
+      },
+      update: { amount: new Prisma.Decimal(b.spent) },
+      create: {
+        categoryId: b.id,
+        year,
+        month,
+        amount: new Prisma.Decimal(b.spent),
+      },
+    });
+  }
+
+  await recomputeMonthlyBalance(year, month);
+  revalidatePath("/budgets");
+  return { success: true, count: overBudget.length };
+}

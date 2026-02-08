@@ -51,6 +51,15 @@ Note : `BudgetCard` existe encore dans le code mais n'est **plus utilisé** — 
 - Copie tous les budgets de M-1 vers le mois courant (upsert)
 - Erreur si aucun budget au mois précédent
 
+### Calibration des budgets (CalibrateBudgetsButton)
+- Bouton "Calibrer les budgets" (icône `Scale`) affiché **uniquement** s'il y a au moins un dépassement (`spent > budgeted && spent > 0`)
+- Au clic : ajuste chaque budget en dépassement = montant dépensé ; les budgets non dépassés restent intacts
+- Placé juste au-dessus du tableau, à côté de CopyBudgetsButton
+- Toast "X budget(s) calibré(s)" au succès
+
+### Boutons d'action
+Les boutons CopyBudgetsButton et CalibrateBudgetsButton sont positionnés juste au-dessus du tableau (pas dans le header).
+
 ## Server Actions (_actions/budget-actions.ts)
 
 | Fonction | Description |
@@ -58,6 +67,7 @@ Note : `BudgetCard` existe encore dans le code mais n'est **plus utilisé** — 
 | `getBudgetsWithSpent(year, month)` | Toutes les catégories avec budget du mois + dépenses réelles via `groupBy` |
 | `upsertBudget(categoryId, year, month, amount)` | Création ou mise à jour d'un budget + `recomputeMonthlyBalance` |
 | `copyBudgetsFromPreviousMonth(year, month)` | Copie les budgets de M-1 vers le mois courant + `recomputeMonthlyBalance` |
+| `calibrateBudgets(year, month)` | Ajuste les budgets en dépassement = dépenses réelles + `recomputeMonthlyBalance` |
 
 ## Calcul des dépenses par catégorie
 

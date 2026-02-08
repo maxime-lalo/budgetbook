@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
@@ -39,6 +39,10 @@ export function BudgetRow({
   month,
 }: BudgetRowProps) {
   const [value, setValue] = useState(budgeted.toString());
+
+  useEffect(() => {
+    setValue(budgeted.toString());
+  }, [budgeted]);
 
   async function handleBlur() {
     const amount = parseFloat(value);

@@ -4,6 +4,7 @@ import { getBudgetsWithSpent } from "./_actions/budget-actions";
 import { getTransactionTotals, getPreviousMonthBudgetRemaining } from "../transactions/_actions/transaction-actions";
 import { BudgetRow } from "./_components/budget-row";
 import { CopyBudgetsButton } from "./_components/copy-budgets-button";
+import { CalibrateBudgetsButton } from "./_components/calibrate-budgets-button";
 import { MonthNavigator } from "../transactions/_components/month-navigator";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -33,6 +34,7 @@ export default async function BudgetsPage({
   const totalSpent = activeBudgets.reduce((sum, b) => sum + b.spent, 0);
   const totalCommitted = activeBudgets.reduce((sum, b) => sum + Math.max(0, b.budgeted - b.spent), 0);
   const totalRemaining = carryOver + totals.forecast - totalCommitted;
+  const hasOverBudget = budgets.some((b) => b.spent > b.budgeted && b.spent > 0);
 
   return (
     <div className="space-y-6">
@@ -45,7 +47,6 @@ export default async function BudgetsPage({
           <Suspense fallback={<Skeleton className="h-10 w-[250px]" />}>
             <MonthNavigator />
           </Suspense>
-          <CopyBudgetsButton year={year} month={month} />
         </div>
       </div>
 
@@ -74,6 +75,11 @@ export default async function BudgetsPage({
         </div>
       )}
 
+      <div className="flex items-center gap-2">
+        <CalibrateBudgetsButton year={year} month={month} hasOverBudget={hasOverBudget} />
+        <CopyBudgetsButton year={year} month={month} />
+      </div>
+
       <div className="rounded-md border w-fit">
         <Table>
           <TableHeader>
@@ -88,7 +94,7 @@ export default async function BudgetsPage({
           <TableBody>
             {budgets.map((budget) => (
               <BudgetRow
-                key={budget.id}
+                key={`${budget.id}-${year}-${month}`}
                 categoryId={budget.id}
                 name={budget.name}
                 color={budget.color}
