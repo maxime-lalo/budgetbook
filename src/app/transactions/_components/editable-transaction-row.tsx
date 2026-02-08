@@ -95,8 +95,6 @@ export function EditableTransactionRow({
   const [editAccountId, setEditAccountId] = useState(accountId);
   const [editBucketId, setEditBucketId] = useState(transaction.bucketId ?? "");
 
-  const selectedAccount = accounts.find((a) => a.id === accountId);
-  const isCreditCard = selectedAccount?.type === "CREDIT_CARD";
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
   const saveField = useCallback(
@@ -152,18 +150,6 @@ export function EditableTransactionRow({
   function handleAccountChange(value: string) {
     const prev = accountId;
     setAccountId(value);
-    const newAccount = accounts.find((a) => a.id === value);
-    if (newAccount?.type === "CREDIT_CARD" && !isExpense) {
-      setIsExpense(true);
-      const num = Number(amount);
-      if (!isNaN(num) && num > 0) {
-        saveField({ accountId: value, amount: -num }, () => {
-          setAccountId(prev);
-          setIsExpense(transaction.amount < 0);
-        });
-        return;
-      }
-    }
     saveField({ accountId: value }, () => setAccountId(prev));
   }
 
@@ -382,17 +368,15 @@ export function EditableTransactionRow({
         {/* Montant */}
         <TableCell className="p-1">
           <div className="flex items-center gap-1">
-            {!isCreditCard && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={`h-7 w-7 text-sm font-bold ${isExpense ? "text-red-600" : "text-green-600"}`}
-                onClick={handleSignToggle}
-              >
-                {isExpense ? "−" : "+"}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 text-sm font-bold ${isExpense ? "text-red-600" : "text-green-600"}`}
+              onClick={handleSignToggle}
+            >
+              {isExpense ? "−" : "+"}
+            </Button>
             <Input
               type="number"
               min="0.01"
