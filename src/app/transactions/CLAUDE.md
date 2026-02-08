@@ -18,35 +18,31 @@ La page de transactions est le coeur de l'application. Elle affiche toutes les t
   - Si un report existe, une ligne "dont report : X€" s'affiche sous le montant.
 
 ### Table des transactions (TransactionsTable)
-Colonnes : Date | Libellé | Compte | Catégorie | Statut | Montant | Actions
+Colonnes : Libellé | Catégorie | Sous-catégorie | Statut | Montant | Actions
 
 - **Ligne de report** : en première position, affiche le solde reporté du mois précédent (si non nul)
 - Accepte une prop optionnelle `initialCategory` (via searchParam `?category=<id>`) pour pré-sélectionner le filtre catégorie
 - Les transactions CANCELLED sont affichées en opacité réduite
-- Badge de statut coloré (default=COMPLETED, secondary=PENDING, destructive=CANCELLED)
-- Montant vert si positif, rouge si négatif
-- Notes affichées sous le libellé (tronquées)
-- Catégories avec pastille de couleur + sous-catégorie séparée par " > "
-- Bucket affiché sous la catégorie si présent
+- Édition inline : tous les champs sont modifiables directement dans la table
+- Sélecteurs de catégorie et statut avec pastilles de couleur (catégorie : couleur de la catégorie, statut : orange/vert/rouge)
+- Montant centré, 95px de large, sans spinners, vert si positif, rouge si négatif
 - La catégorie est **requise** : pas d'option "Aucune" dans le sélecteur de catégorie inline
 
-### Formulaire (TransactionFormDialog)
-Dialog modal avec les champs :
+### Formulaire de création (TransactionFormDialog)
+Dialog modal avec les champs (dans cet ordre) :
 - **Libellé** (requis)
-- **Montant** (requis, != 0) — positif = revenu, négatif = dépense
-- **Date** (requis, input type=date)
-- **Toggle AMEX** : switch rapide qui change automatiquement le compte sélectionné vers la carte de crédit AMEX (visible uniquement en création, si un compte CREDIT_CARD existe)
-- **Compte** (requis)
-- **Catégorie** (requis) → **Sous-catégorie** (optionnel, dépendant, la liste se met à jour quand on change de catégorie)
+- **Montant** + **Date** + **Récurrent** (toggle qui désactive le champ date)
+- **Catégorie** (requis) → **Sous-catégorie** (optionnel)
+- **Compte** + **Statut** (sur la même ligne)
+- **Toggle AMEX** : switch rapide vers la carte de crédit AMEX (visible si un compte CREDIT_CARD existe)
 - **Bucket** (visible uniquement si le compte est SAVINGS ou INVESTMENT et a des buckets)
-- **Statut** (PENDING par défaut)
 - **Note** (obligatoire si CANCELLED, optionnel sinon)
 
-### Actions en ligne (TransactionActionsCell)
-Menu dropdown avec :
-- **Marquer réalisée** (visible si PENDING) → passe en COMPLETED
-- **Annuler** (visible si pas CANCELLED) → ouvre un dialog demandant la raison, passe en CANCELLED
-- **Supprimer** → confirmation browser + suppression
+### Actions en ligne (EditableTransactionRow)
+Boutons inline en bout de ligne (pas de menu dropdown) :
+- **Éditer** (icône Pencil) → ouvre une modal avec : Récurrent (toggle), Date, Mois budgétaire, Compte, Bucket (si SAVINGS/INVESTMENT)
+- **Supprimer** (icône Trash2) → suppression directe sans confirmation
+- **Annuler** → le passage en CANCELLED via le sélecteur de statut ouvre un dialog demandant la raison
 
 ## Server Actions (_actions/transaction-actions.ts)
 
@@ -59,9 +55,10 @@ Menu dropdown avec :
 | `deleteTransaction(id)` | Suppression |
 | `markTransactionCompleted(id)` | Passage en COMPLETED |
 | `cancelTransaction(id, note)` | Passage en CANCELLED avec note obligatoire |
+| `updateTransactionField(id, fields)` | Mise à jour partielle d'un ou plusieurs champs |
 | `getPreviousMonthBudgetRemaining(year, month)` | Report du mois précédent (voir calcul ci-dessous) |
 | `copyRecurringTransactions(year, month)` | Copie les transactions récurrentes (sans date) du mois précédent |
-| `getFormData()` | Comptes + catégories pour le formulaire (objets plain sans Decimal) |
+| `getFormData()` | Comptes + catégories (avec couleurs) pour le formulaire (objets plain sans Decimal) |
 
 ## Report cumulatif de mois (`getPreviousMonthBudgetRemaining`)
 

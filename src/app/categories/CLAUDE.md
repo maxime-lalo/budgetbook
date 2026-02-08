@@ -36,7 +36,7 @@ Champs :
 
 | Fonction | Description |
 |----------|-------------|
-| `getCategories()` | Toutes les catégories avec sous-catégories triées |
+| `getCategories()` | Toutes les catégories avec sous-catégories, triées via `localeCompare('fr')` pour gérer les accents |
 | `createCategory(formData)` | Création avec validation Zod |
 | `updateCategory(id, formData)` | Mise à jour |
 | `deleteCategory(id)` | Suppression (cascade sous-catégories) |

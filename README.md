@@ -1,59 +1,59 @@
-# Comptes
+# BudgetBook
 
-Application web de gestion de finances personnelles, conçue pour remplacer un système Excel historique (2019-2026).
+A personal finance management web app, built to replace a historical Excel system (2019-2026).
 
-## Fonctionnalités
+## Features
 
-- **Transactions** : saisie mensuelle avec édition inline, transactions récurrentes, copie du mois précédent
-- **Budgets** : allocation mensuelle par catégorie avec suivi des dépenses et report cumulatif
-- **Catégories** : gestion hiérarchique (catégories + sous-catégories) avec codes couleur
-- **Comptes** : comptes courants, cartes de crédit, épargne et investissement avec buckets d'objectifs
-- **Statistiques** : vue annuelle, répartition par catégorie/sous-catégorie, évolution de l'épargne, comparaison N vs N-1
+- **Transactions**: monthly entry with inline editing, recurring transactions, copy from previous month
+- **Budgets**: monthly allocation per category with expense tracking and cumulative carry-over
+- **Categories**: hierarchical management (categories + subcategories) with color codes
+- **Accounts**: checking, credit card, savings and investment accounts with goal-based buckets
+- **Statistics**: yearly overview, category/subcategory breakdown, savings evolution, year-over-year comparison
 
-## Stack technique
+## Tech Stack
 
-| Couche | Technologie |
-|--------|-------------|
+| Layer | Technology |
+|-------|------------|
 | Framework | Next.js 16 (App Router, Turbopack) |
-| Langage | TypeScript 5, React 19 |
-| Base de données | PostgreSQL 17 |
+| Language | TypeScript 5, React 19 |
+| Database | PostgreSQL 17 |
 | ORM | Prisma 6 |
 | Validation | Zod 4 |
 | UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
-| Graphiques | Recharts 3 |
-| Icônes | Lucide React |
+| Charts | Recharts 3 |
+| Icons | Lucide React |
 | Package manager | pnpm |
-| Conteneurisation | Docker multi-stage + Docker Compose |
+| Containerization | Docker multi-stage + Docker Compose |
 
-## Démarrage rapide
+## Getting Started
 
-### Prérequis
+### Prerequisites
 
 - Node.js 20+
 - pnpm
-- Docker (pour PostgreSQL)
+- Docker (for PostgreSQL)
 
 ### Installation
 
 ```bash
-# Démarrer PostgreSQL
+# Start PostgreSQL
 docker compose up -d db
 
-# Installer les dépendances
+# Install dependencies
 pnpm install
 
-# Générer le client Prisma et appliquer les migrations
+# Generate Prisma client and apply migrations
 pnpm db:generate
 pnpm db:migrate
 
-# (Optionnel) Insérer des données de démonstration
+# (Optional) Seed demo data
 pnpm db:seed
 
-# Lancer le serveur de développement
+# Start the development server
 pnpm dev
 ```
 
-L'application est accessible sur [http://localhost:3000](http://localhost:3000).
+The app is available at [http://localhost:3000](http://localhost:3000).
 
 ### Production
 
@@ -63,16 +63,20 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Architecture
 
-- **Server Actions** pour toutes les mutations (pas d'API REST)
-- **Server Components** pour le rendu initial, **Client Components** pour l'interactivité
-- Co-localisation `_actions/` et `_components/` par route
-- Navigation mensuelle via `searchParams` URL
-- Montants stockés en `Decimal(12,2)`, convertis en `number` avant passage aux composants client
+- **Server Actions** for all mutations (no REST API)
+- **Server Components** for initial render, **Client Components** for interactivity
+- Co-located `_actions/` and `_components/` per route
+- Monthly navigation via URL `searchParams`
+- Amounts stored as `Decimal(12,2)`, converted to `number` before passing to client components
 
-## Variables d'environnement
+## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | URL de connexion PostgreSQL |
+| `DATABASE_URL` | PostgreSQL connection URL |
 
-Copier `.env.example` en `.env` et renseigner les valeurs.
+Copy `.env.example` to `.env` and fill in the values.
+
+## License
+
+This project is licensed under [CC BY-NC 4.0](LICENSE). Non-commercial use only. For commercial licensing, contact the author.

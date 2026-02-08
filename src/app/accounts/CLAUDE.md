@@ -7,7 +7,7 @@ Chaque compte est affiché dans une Card avec :
 - Pastille de couleur + nom
 - Badge du type (Compte courant, Carte de crédit, Épargne, Investissement)
 - Badge "Lié à {nom}" si le compte est une carte liée à un compte courant
-- **Solde calculé** : somme des transactions COMPLETED du compte (vert/rouge)
+- **Solde calculé** : somme des transactions COMPLETED du compte (vert/rouge). Pour les comptes SAVINGS/INVESTMENT, le signe est inversé (négatif = versement = solde augmente)
 - Boutons éditer/supprimer
 
 ### CRUD Comptes (AccountFormDialog)
@@ -41,8 +41,8 @@ Le toggle "AMEX" dans le formulaire de transaction sélectionne automatiquement 
 
 - Tout compte peut avoir des buckets
 - Les transactions d'épargne ciblent un bucket via le sélecteur (visible si compte SAVINGS/INVESTMENT)
-- Solde bucket = somme transactions COMPLETED qui le référencent
-- Solde réel du compte = somme de toutes ses transactions COMPLETED
+- Solde bucket = somme transactions COMPLETED qui le référencent (signe inversé car buckets sur comptes épargne)
+- Solde réel du compte = somme de toutes ses transactions COMPLETED (signe inversé pour SAVINGS/INVESTMENT)
 
 ## Server Actions (_actions/account-actions.ts)
 
