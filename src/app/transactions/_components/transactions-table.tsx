@@ -69,6 +69,45 @@ const STATUS_ORDER: Record<string, number> = {
   CANCELLED: 2,
 };
 
+function SortableHeader({
+  column,
+  label,
+  className,
+  sortColumn,
+  sortDirection,
+  onToggleSort,
+}: {
+  column: SortColumn;
+  label: string;
+  className?: string;
+  sortColumn: SortColumn | null;
+  sortDirection: SortDirection;
+  onToggleSort: (column: SortColumn) => void;
+}) {
+  const icon =
+    sortColumn === column ? (
+      sortDirection === "asc" ? (
+        <ArrowUp className="h-3.5 w-3.5" />
+      ) : (
+        <ArrowDown className="h-3.5 w-3.5" />
+      )
+    ) : (
+      <ArrowUpDown className="h-3.5 w-3.5" />
+    );
+
+  return (
+    <TableHead className={className}>
+      <button
+        onClick={() => onToggleSort(column)}
+        className="flex items-center gap-1 hover:text-foreground"
+      >
+        {label}
+        {icon}
+      </button>
+    </TableHead>
+  );
+}
+
 export function TransactionsTable({
   transactions,
   accounts,
@@ -128,39 +167,6 @@ export function TransactionsTable({
     }
 
     return 0;
-  }
-
-  function SortableHeader({
-    column,
-    label,
-    className,
-  }: {
-    column: SortColumn;
-    label: string;
-    className?: string;
-  }) {
-    const icon =
-      sortColumn === column ? (
-        sortDirection === "asc" ? (
-          <ArrowUp className="h-3.5 w-3.5" />
-        ) : (
-          <ArrowDown className="h-3.5 w-3.5" />
-        )
-      ) : (
-        <ArrowUpDown className="h-3.5 w-3.5" />
-      );
-
-    return (
-      <TableHead className={className}>
-        <button
-          onClick={() => toggleSort(column)}
-          className="flex items-center gap-1 hover:text-foreground"
-        >
-          {label}
-          {icon}
-        </button>
-      </TableHead>
-    );
   }
 
   if (transactions.length === 0 && budgetCarryOver === 0) {
@@ -301,7 +307,7 @@ export function TransactionsTable({
         {amexMonthlyTotal !== 0 && (
           <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground border rounded-md h-9 px-3">
             <CreditCard className="h-4 w-4" />
-            <span>AMEX :</span>
+            <span>AMEX</span>
             <span className={`font-medium ${amexMonthlyTotal < 0 ? "text-red-600" : "text-green-600"}`}>
               {formatCurrency(amexMonthlyTotal)}
             </span>
@@ -317,9 +323,18 @@ export function TransactionsTable({
                 column="amount"
                 label="Montant"
                 className="w-[100px]"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onToggleSort={toggleSort}
               />
               <TableHead>Catégorie</TableHead>
-              <SortableHeader column="status" label="Statut" />
+              <SortableHeader
+                column="status"
+                label="Statut"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onToggleSort={toggleSort}
+              />
               <TableHead>Compte</TableHead>
               <TableHead className="w-[100px]" />
             </TableRow>
