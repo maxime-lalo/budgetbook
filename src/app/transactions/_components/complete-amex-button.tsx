@@ -38,7 +38,7 @@ export function CompleteAmexButton({
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button variant="outline" onClick={() => setOpen(true)} className="w-full">
         <CreditCard className="h-4 w-4 mr-2" />
         Valider AMEX ({pendingCount})
       </Button>

@@ -49,7 +49,7 @@ export async function getYearlyOverview(year: number, accountId?: string) {
   return data;
 }
 
-export async function getCategoryBreakdown(year: number, accountId?: string) {
+export async function getCategoryBreakdown(year: number, month: number, accountId?: string) {
   const realAccounts = accountId
     ? undefined
     : await prisma.account.findMany({
@@ -66,13 +66,11 @@ export async function getCategoryBreakdown(year: number, accountId?: string) {
     by: ["categoryId"],
     where: {
       year,
+      month: { lte: month },
       status: { in: ["COMPLETED", "PENDING"] },
-      amount: { lt: 0 },
-      destinationAccountId: null,
       ...accountFilter,
     },
     _sum: { amount: true },
-    orderBy: { _sum: { amount: "asc" } },
   });
 
   const categories = await prisma.category.findMany({
@@ -87,13 +85,13 @@ export async function getCategoryBreakdown(year: number, accountId?: string) {
       return {
         category: cat?.name ?? "Sans catégorie",
         color: cat?.color ?? "#6b7280",
-        amount: Math.abs(r._sum.amount?.toNumber() ?? 0),
+        amount: -(r._sum.amount?.toNumber() ?? 0),
       };
     })
-    .sort((a, b) => a.category.localeCompare(b.category, "fr"));
+    .sort((a, b) => b.amount - a.amount);
 }
 
-export async function getSubCategoryBreakdown(year: number, accountId?: string) {
+export async function getSubCategoryBreakdown(year: number, month: number, accountId?: string) {
   const realAccounts = accountId
     ? undefined
     : await prisma.account.findMany({
@@ -110,14 +108,12 @@ export async function getSubCategoryBreakdown(year: number, accountId?: string) 
     by: ["categoryId", "subCategoryId"],
     where: {
       year,
+      month: { lte: month },
       status: { in: ["COMPLETED", "PENDING"] },
-      amount: { lt: 0 },
       subCategoryId: { not: null },
-      destinationAccountId: null,
       ...accountFilter,
     },
     _sum: { amount: true },
-    orderBy: { _sum: { amount: "asc" } },
   });
 
   const categoryIds = [...new Set(result.map((r) => r.categoryId))];
@@ -138,7 +134,7 @@ export async function getSubCategoryBreakdown(year: number, accountId?: string) 
       categoryId: r.categoryId,
       subCategory: sub?.name ?? "?",
       color: cat?.color ?? "#6b7280",
-      amount: Math.abs(r._sum.amount?.toNumber() ?? 0),
+      amount: -(r._sum.amount?.toNumber() ?? 0),
     };
   });
 
@@ -169,19 +165,18 @@ export async function getCategoryYearComparison(
 
   const baseWhere = {
     status: { in: ["COMPLETED" as const, "PENDING" as const] },
-    destinationAccountId: null,
     ...accountFilter,
   };
 
   const [currentMonthData, currentYearData, prevYearData] = await Promise.all([
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: { ...baseWhere, year, month: { lte: month } },
+      where: { ...baseWhere, year, month },
       _sum: { amount: true },
     }),
     prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: { ...baseWhere, year },
+      where: { ...baseWhere, year, month: { lte: month } },
       _sum: { amount: true },
     }),
     prisma.transaction.groupBy({
@@ -225,9 +220,10 @@ export async function getCategoryYearComparison(
       const thisMonth = currentMonthMap.get(catId) ?? 0;
       const thisYear = currentYearMap.get(catId) ?? 0;
       const prevYear = prevYearMap.get(catId) ?? 0;
-      const currentAvg = thisYear / month;
+      const currentAvg = thisYear / 12;
+      const currentPeriodAvg = thisYear / month;
       const prevAvg = prevYear / 12;
-      const diffPercent = prevAvg === 0 ? (currentAvg !== 0 ? 100 : 0) : ((currentAvg - prevAvg) / Math.abs(prevAvg)) * 100;
+      const diffPercent = prevAvg === 0 ? (currentPeriodAvg !== 0 ? 100 : 0) : ((currentPeriodAvg - prevAvg) / Math.abs(prevAvg)) * 100;
 
       return {
         category: cat?.name ?? "Sans catégorie",

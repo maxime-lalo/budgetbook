@@ -16,7 +16,7 @@ export function CopyRecurringButton({ year, month }: { year: number; month: numb
   }
 
   return (
-    <Button variant="outline" onClick={handleCopy}>
+    <Button variant="outline" onClick={handleCopy} className="w-full">
       <Copy className="h-4 w-4 mr-2" />
       Copier récurrentes
     </Button>

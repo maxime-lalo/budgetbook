@@ -75,17 +75,18 @@ export default async function BudgetsPage({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
         <CalibrateBudgetsButton year={year} month={month} hasOverBudget={hasOverBudget} />
         <CopyBudgetsButton year={year} month={month} />
       </div>
 
-      <div className="rounded-md border w-fit">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Catégorie</TableHead>
-              <TableHead>Progression</TableHead>
+              <TableHead className="hidden sm:table-cell">Progression</TableHead>
+              <TableHead className="sm:hidden text-center">%</TableHead>
               <TableHead className="text-center">Budget</TableHead>
               <TableHead className="text-center">Dépensé</TableHead>
               <TableHead className="text-center">Restant</TableHead>

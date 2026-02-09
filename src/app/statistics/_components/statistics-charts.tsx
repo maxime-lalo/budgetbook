@@ -105,20 +105,21 @@ export function YearlyOverviewChart({ data, year }: { data: YearlyData; year: nu
 }
 
 export function CategoryBreakdownChart({ data }: { data: CategoryData }) {
+  const expenses = data.filter((d) => d.amount > 0);
   return (
     <Card>
       <CardHeader>
         <CardTitle>Répartition par catégorie</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={Math.max(300, data.length * 40)}>
-          <BarChart data={data} layout="vertical">
+        <ResponsiveContainer width="100%" height={Math.max(300, expenses.length * 40)}>
+          <BarChart data={expenses} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
             <YAxis type="category" dataKey="category" width={120} />
             <Tooltip formatter={tooltipFormatter} />
             <Bar dataKey="amount" name="Dépensé" radius={[0, 4, 4, 0]}>
-              {data.map((entry, index) => (
+              {expenses.map((entry, index) => (
                 <Cell key={index} fill={entry.color} />
               ))}
             </Bar>
@@ -212,8 +213,9 @@ export function CategoryComparisonTable({ data, year }: { data: CategoryComparis
               <tr className="border-b text-muted-foreground">
                 <th className="text-left py-2 pr-4 font-medium">Catégorie</th>
                 {isCurrentYear && <th className="text-right py-2 px-3 font-medium">Cumul jan.-{new Date().toLocaleDateString("fr-FR", { month: "short" })}</th>}
+                {isCurrentYear && <th className="text-right py-2 px-3 font-medium">Moy. jan.-{new Date().toLocaleDateString("fr-FR", { month: "short" })}</th>}
                 <th className="text-right py-2 px-3 font-medium">Moy. mens.</th>
-                <th className="text-right py-2 px-3 font-medium">Total annuel</th>
+                {!isCurrentYear && <th className="text-right py-2 px-3 font-medium">Total annuel</th>}
                 {isCurrentYear && <th className="text-right py-2 px-3 font-medium">% mois</th>}
                 <th className="text-right py-2 px-3 font-medium">% annuel</th>
                 <th className="text-right py-2 px-3 font-medium">Moy. {year - 1}</th>
@@ -232,9 +234,10 @@ export function CategoryComparisonTable({ data, year }: { data: CategoryComparis
                       {row.category}
                     </div>
                   </td>
-                  {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.currentMonth)}</td>}
+                  {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.yearlyTotal)}</td>}
+                  {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.yearlyTotal / data.month)}</td>}
                   <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.currentAvg)}</td>
-                  <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.yearlyTotal)}</td>
+                  {!isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.yearlyTotal)}</td>}
                   {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{formatPct(row.percentOfMonthTotal)}</td>}
                   <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">{formatPct(row.percentOfYearTotal)}</td>
                   <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(row.prevYearAvg)}</td>
@@ -249,9 +252,10 @@ export function CategoryComparisonTable({ data, year }: { data: CategoryComparis
             <tfoot>
               <tr className="border-t-2 font-semibold">
                 <td className="py-2 pr-4">Total</td>
-                {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.currentMonth)}</td>}
-                <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal / data.month)}</td>
-                <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal)}</td>
+                {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal)}</td>}
+                {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal / data.month)}</td>}
+                <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal / 12)}</td>
+                {!isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.yearlyTotal)}</td>}
                 {isCurrentYear && <td className="text-right py-2 px-3 tabular-nums">100%</td>}
                 <td className="text-right py-2 px-3 tabular-nums">100%</td>
                 <td className="text-right py-2 px-3 tabular-nums">{formatCurrency(totals.prevYearTotal / 12)}</td>

@@ -29,13 +29,13 @@ export default async function TransactionsPage({
     .reduce((sum, t) => sum + t.amount, 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Transactions</h1>
           <p className="text-muted-foreground">Vue mensuelle de toutes vos transactions.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-4">
           <TransactionFormDialog
             accounts={formData.accounts}
             categories={formData.categories}

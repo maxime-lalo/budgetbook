@@ -31,8 +31,8 @@ export default async function StatisticsPage({
   const comparisonMonth = year === currentYear ? currentMonth : 12;
   const [yearlyData, categoryData, subCategoryData, comparisonData, savingsData, accounts] = await Promise.all([
     getYearlyOverview(year, accountId),
-    getCategoryBreakdown(year, accountId),
-    getSubCategoryBreakdown(year, accountId),
+    getCategoryBreakdown(year, comparisonMonth, accountId),
+    getSubCategoryBreakdown(year, comparisonMonth, accountId),
     getCategoryYearComparison(year, comparisonMonth, accountId),
     getSavingsOverview(year),
     getAccounts(),

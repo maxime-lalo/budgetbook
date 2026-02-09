@@ -8,6 +8,25 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { upsertBudget } from "../_actions/budget-actions";
 import { toast } from "sonner";
 
+function ProgressPercent({ value, max, variant }: { value: number; max: number; variant: "budget" | "goal" }) {
+  const ratio = max > 0 ? value / max : value > 0 ? 1 : 0;
+  const percent = Math.round(Math.min(ratio * 100, 999));
+
+  let colorClass: string;
+  if (variant === "budget") {
+    if (max === 0 && value === 0) colorClass = "text-muted-foreground";
+    else if (ratio >= 1) colorClass = "text-red-500";
+    else if (ratio >= 0.75) colorClass = "text-yellow-500";
+    else colorClass = "text-green-500";
+  } else {
+    if (ratio >= 0.75) colorClass = "text-green-500";
+    else if (ratio >= 0.5) colorClass = "text-yellow-500";
+    else colorClass = "text-red-500";
+  }
+
+  return <span className={`text-sm font-medium ${colorClass}`}>{percent}%</span>;
+}
+
 type BudgetRowProps = {
   categoryId: string;
   name: string;
@@ -59,8 +78,11 @@ export function BudgetRow({
           <span className="font-medium text-sm">{name}</span>
         </div>
       </TableCell>
-      <TableCell className="py-2 min-w-[200px]">
+      <TableCell className="py-2 hidden sm:table-cell min-w-[200px]">
         <ProgressBar value={spent} max={budgeted} variant="budget" />
+      </TableCell>
+      <TableCell className="py-2 sm:hidden text-center">
+        <ProgressPercent value={spent} max={budgeted} variant="budget" />
       </TableCell>
       <TableCell className="py-2 text-center">
         <Input

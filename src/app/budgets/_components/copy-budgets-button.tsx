@@ -16,9 +16,10 @@ export function CopyBudgetsButton({ year, month }: { year: number; month: number
   }
 
   return (
-    <Button variant="outline" onClick={handleCopy}>
+    <Button variant="outline" onClick={handleCopy} className="w-full sm:w-auto">
       <Copy className="h-4 w-4 mr-2" />
-      Copier du mois précédent
+      <span className="sm:hidden">Copier M-1</span>
+      <span className="hidden sm:inline">Copier du mois précédent</span>
     </Button>
   );
 }

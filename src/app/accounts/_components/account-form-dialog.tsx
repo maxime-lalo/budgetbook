@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,90 +60,156 @@ export function AccountFormDialog({
     setOpen(false);
   }
 
+  if (isEdit) {
+    return (
+      <>
+        <Button variant="ghost" size="icon" onClick={() => setOpen(true)}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Modifier le compte</DialogTitle>
+            </DialogHeader>
+            <form action={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nom</Label>
+                <Input id="name" name="name" defaultValue={account?.name} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select name="type" defaultValue={account?.type ?? "CHECKING"}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="color">Couleur</Label>
+                  <Input id="color" name="color" type="color" defaultValue={account?.color ?? "#3b82f6"} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sortOrder">Ordre</Label>
+                  <Input id="sortOrder" name="sortOrder" type="number" defaultValue={account?.sortOrder ?? 0} />
+                </div>
+              </div>
+              {checkingAccounts.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="linkedAccountId">Compte lié (pour carte de crédit)</Label>
+                  <Select name="linkedAccountId" defaultValue={account?.linkedAccountId ?? "__none__"}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Aucun" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Aucun</SelectItem>
+                      {checkingAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Annuler
+                </Button>
+                <Button type="submit">Modifier</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {isEdit ? (
-          <Button variant="ghost" size="icon">
-            <Pencil className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouveau compte
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Modifier le compte" : "Nouveau compte"}</DialogTitle>
-        </DialogHeader>
-        <form action={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nom</Label>
-            <Input id="name" name="name" defaultValue={account?.name} required />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="type">Type</Label>
-            <Select name="type" defaultValue={account?.type ?? "CHECKING"}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+    <>
+      {/* Desktop: bouton inline */}
+      <Button className="hidden sm:inline-flex" onClick={() => setOpen(true)}>
+        <Plus className="h-4 w-4 mr-2" />
+        Nouveau compte
+      </Button>
+
+      {/* Mobile: bouton flottant (FAB) */}
+      <Button
+        className="sm:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nouveau compte</DialogTitle>
+          </DialogHeader>
+          <form action={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="color">Couleur</Label>
-              <Input
-                id="color"
-                name="color"
-                type="color"
-                defaultValue={account?.color ?? "#3b82f6"}
-              />
+              <Label htmlFor="name">Nom</Label>
+              <Input id="name" name="name" required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sortOrder">Ordre</Label>
-              <Input
-                id="sortOrder"
-                name="sortOrder"
-                type="number"
-                defaultValue={account?.sortOrder ?? 0}
-              />
-            </div>
-          </div>
-          {checkingAccounts.length > 0 && (
-            <div className="space-y-2">
-              <Label htmlFor="linkedAccountId">Compte lié (pour carte de crédit)</Label>
-              <Select name="linkedAccountId" defaultValue={account?.linkedAccountId ?? "__none__"}>
+              <Label htmlFor="type">Type</Label>
+              <Select name="type" defaultValue="CHECKING">
                 <SelectTrigger>
-                  <SelectValue placeholder="Aucun" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Aucun</SelectItem>
-                  {checkingAccounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
+                  {Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Annuler
-            </Button>
-            <Button type="submit">{isEdit ? "Modifier" : "Créer"}</Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="color">Couleur</Label>
+                <Input id="color" name="color" type="color" defaultValue="#3b82f6" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sortOrder">Ordre</Label>
+                <Input id="sortOrder" name="sortOrder" type="number" defaultValue={0} />
+              </div>
+            </div>
+            {checkingAccounts.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="linkedAccountId">Compte lié (pour carte de crédit)</Label>
+                <Select name="linkedAccountId" defaultValue="__none__">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Aucun" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Aucun</SelectItem>
+                    {checkingAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Annuler
+              </Button>
+              <Button type="submit">Créer</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

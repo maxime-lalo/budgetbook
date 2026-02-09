@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,14 +109,23 @@ export function TransactionFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Nouvelle transaction
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
+    <>
+      {/* Desktop: bouton inline */}
+      <Button className="hidden sm:inline-flex" onClick={() => setOpen(true)}>
+        <Plus className="h-4 w-4 mr-2" />
+        Nouvelle transaction
+      </Button>
+
+      {/* Mobile: bouton flottant (FAB) */}
+      <Button
+        className="sm:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouvelle transaction</DialogTitle>
         </DialogHeader>
@@ -166,17 +174,7 @@ export function TransactionFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="date">Date</Label>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="no-date" className="text-xs text-muted-foreground">Récurrent</Label>
-                  <Switch
-                    id="no-date"
-                    checked={noDate}
-                    onCheckedChange={handleNoDateChange}
-                  />
-                </div>
-              </div>
+              <Label htmlFor="date">Date</Label>
               <Input
                 id="date"
                 name="date"
@@ -190,15 +188,27 @@ export function TransactionFormDialog({
             </div>
           </div>
 
-          {showAmexToggle && (
-            <div className="flex items-center gap-3">
+          <div className="grid grid-cols-2 gap-4">
+            {showAmexToggle ? (
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={isAmex}
+                  onCheckedChange={setIsAmex}
+                />
+                <Label>AMEX</Label>
+              </div>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
               <Switch
-                checked={isAmex}
-                onCheckedChange={setIsAmex}
+                id="no-date"
+                checked={noDate}
+                onCheckedChange={handleNoDateChange}
               />
-              <Label>AMEX</Label>
+              <Label htmlFor="no-date">Récurrent</Label>
             </div>
-          )}
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -375,5 +385,6 @@ export function TransactionFormDialog({
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

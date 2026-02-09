@@ -279,9 +279,9 @@ export function TransactionsTable({
 
   return (
     <>
-      <div className="flex items-center gap-2 p-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2">
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[220px] h-8 text-sm">
+          <SelectTrigger className="w-full h-9 text-sm">
             <SelectValue placeholder="Toutes les catégories" />
           </SelectTrigger>
           <SelectContent>
@@ -294,18 +294,20 @@ export function TransactionsTable({
           </SelectContent>
         </Select>
         <CopyRecurringButton year={year} month={month} />
-        <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
+        {amexPendingCount > 0 && (
+          <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
+        )}
         {amexMonthlyTotal !== 0 && (
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-auto">
+          <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground border rounded-md h-9 px-3">
             <CreditCard className="h-4 w-4" />
-            <span>AMEX du mois :</span>
+            <span>AMEX :</span>
             <span className={`font-medium ${amexMonthlyTotal < 0 ? "text-red-600" : "text-green-600"}`}>
               {formatCurrency(amexMonthlyTotal)}
             </span>
           </div>
         )}
       </div>
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

@@ -11,7 +11,7 @@ import {
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -37,10 +37,12 @@ export function MobileNav() {
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
           <div className="flex h-14 items-center border-b px-6">
-            <Link href="/" className="flex items-center gap-2 font-semibold" onClick={() => setOpen(false)}>
-              <Wallet className="h-5 w-5" />
-              <span>Comptes</span>
-            </Link>
+            <SheetTitle asChild>
+              <Link href="/" className="flex items-center gap-2 font-semibold" onClick={() => setOpen(false)}>
+                <Wallet className="h-5 w-5" />
+                <span>Comptes</span>
+              </Link>
+            </SheetTitle>
           </div>
           <nav className="flex-1 space-y-1 p-4">
             {navItems.map((item) => {

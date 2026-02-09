@@ -27,7 +27,7 @@ export function CalibrateBudgetsButton({
   }
 
   return (
-    <Button variant="outline" onClick={handleCalibrate}>
+    <Button variant="outline" onClick={handleCalibrate} className="w-full sm:w-auto">
       <Scale className="h-4 w-4 mr-2" />
       Calibrer les budgets
     </Button>
