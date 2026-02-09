@@ -54,10 +54,32 @@ Dialog modal avec les champs (dans cet ordre) :
   - **Éditer** (icône Pencil) → modal avec : Récurrent (toggle), Date (désactivé si récurrent), Mois budgétaire (input type="month"), Compte, Bucket (si SAVINGS/INVESTMENT)
   - **Supprimer** (icône Trash2) → suppression directe sans confirmation
 
+### Création rapide (NewTransactionRow)
+Ligne intégrée directement dans le tableau (dernière ligne) permettant d'ajouter une transaction sans ouvrir le dialog :
+- Champs inline : libellé, catégorie (select avec pastilles), montant (input numérique)
+- Validation : libellé requis, montant != 0, catégorie requise
+- Création au blur ou Enter sur le champ montant
+- Réinitialisation automatique après création réussie
+- Utilise les mêmes données de formulaire que `TransactionFormDialog` (comptes, catégories)
+
 ### Boutons spéciaux
 
 - **CopyRecurringButton** : copie les transactions récurrentes (sans date) de M-1 vers le mois courant
 - **CompleteAmexButton** : valide en bloc toutes les transactions AMEX PENDING du mois (visible si count > 0, avec dialog de confirmation)
+
+## Composants (_components/)
+
+| Composant | Type | Description |
+|-----------|------|-------------|
+| `transactions-table.tsx` | Client | Table principale avec sections, tri, filtres, ligne de report |
+| `editable-transaction-row.tsx` | Client | Ligne de transaction avec édition inline au blur |
+| `new-transaction-row.tsx` | Client | Ligne de création rapide intégrée au tableau |
+| `transaction-form-dialog.tsx` | Client | Dialog modal complet de création/édition |
+| `transaction-actions-cell.tsx` | Client | Cellule d'actions en fin de ligne (éditer, supprimer) |
+| `month-navigator.tsx` | Client | Navigateur mois/année avec flèches et sélecteurs |
+| `totals-bar.tsx` | Client | 3 cards de totaux (réel, en attente, prévisionnel) |
+| `copy-recurring-button.tsx` | Client | Bouton copie des récurrentes de M-1 |
+| `complete-amex-button.tsx` | Client | Bouton validation en bloc des AMEX PENDING |
 
 ## Server Actions (_actions/transaction-actions.ts)
 

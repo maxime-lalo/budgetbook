@@ -114,13 +114,14 @@ Token d'authentification pour l'API REST externe.
 
 Un seul token actif à la fois. Régénérer un token supprime tous les précédents. Géré depuis la page `/settings`.
 
-## Scripts d'import
+## Scripts d'import et utilitaires
 
 | Fichier | Description |
 |---------|-------------|
 | `import-data.ts` | Import de transactions depuis `data/transactions-bnp.json` en BDD (tsx) |
 | `extract-excel.py` | Extraction de transactions depuis un export Excel BNP → JSON |
 | `categorize.py` | Auto-catégorisation des transactions importées |
+| `migrate-transfers.ts` | Backfill `destinationAccountId` sur les transactions de virement existantes |
 
 Le dossier `data/` contient les fichiers JSON d'import (ignoré par git sauf `categories.json`).
 

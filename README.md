@@ -24,6 +24,9 @@ A personal finance management web app, built to replace a historical Excel syste
 | UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
 | Charts | Recharts 2 |
 | Icons | Lucide React |
+| Notifications | Sonner |
+| Theme | next-themes (dark/light/system) |
+| Dates | date-fns (locale fr) |
 | Package manager | pnpm |
 | Containerization | Docker multi-stage + Docker Compose |
 
@@ -113,11 +116,47 @@ access_control:
       policy: bypass
 ```
 
+## Project Structure
+
+```
+comptes/
+├── prisma/                  # Schema, migrations, seed, import scripts
+├── src/
+│   ├── app/
+│   │   ├── transactions/    # Monthly transactions view (main page)
+│   │   ├── budgets/         # Monthly budgets per category
+│   │   ├── categories/      # Category/subcategory CRUD
+│   │   ├── accounts/        # Accounts & buckets management
+│   │   ├── statistics/      # Charts & analytics (Recharts)
+│   │   ├── settings/        # Settings (API token management)
+│   │   └── api/             # REST API (transactions, categories, accounts)
+│   ├── components/
+│   │   ├── ui/              # Shadcn/UI (auto-generated)
+│   │   └── layout/          # Sidebar, mobile-nav, theme
+│   └── lib/                 # Prisma singleton, validators, formatters, hooks
+├── docker-compose.yml       # Dev: PostgreSQL only
+├── docker-compose.prod.yml  # Prod: App + PostgreSQL
+└── Dockerfile               # Multi-stage standalone build
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Development server (localhost:3000) |
+| `pnpm build` | Production build (prisma generate + next build) |
+| `pnpm lint` | ESLint |
+| `pnpm db:migrate` | Apply Prisma migrations |
+| `pnpm db:seed` | Seed demo data |
+| `pnpm db:studio` | Prisma Studio GUI |
+| `pnpm db:generate` | Generate Prisma client |
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection URL |
+| `DB_PASSWORD` | Database password (production only) |
 
 Copy `.env.example` to `.env` and fill in the values.
 
