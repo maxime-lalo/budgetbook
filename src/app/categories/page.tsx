@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { getCategories } from "./_actions/category-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

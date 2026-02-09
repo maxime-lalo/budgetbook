@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getApiToken } from "@/app/settings/_actions/settings-actions";
 import { ApiTokenCard } from "@/app/settings/_components/api-token-card";
 

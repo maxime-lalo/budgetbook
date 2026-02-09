@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAccounts, getCheckingAccounts } from "./_actions/account-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

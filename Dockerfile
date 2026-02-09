@@ -7,6 +7,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY prisma/schema.prisma prisma/schema.prisma
 RUN pnpm install --frozen-lockfile
 
 # --- Build ---
@@ -14,10 +15,16 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN pnpm build
 
+# --- Prisma CLI ---
+FROM node:22-alpine AS prisma-cli
+WORKDIR /prisma-cli
+RUN npm init -y && npm install prisma@6
+
 # --- Runner ---
-FROM base AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -31,11 +38,8 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Install prisma CLI for migrations at runtime
-COPY --from=deps /app/node_modules/.pnpm/@prisma+engines*/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=deps /app/node_modules/.pnpm/prisma@*/node_modules/prisma ./node_modules/prisma
-COPY --from=deps /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
+# Prisma CLI for runtime migrations
+COPY --from=prisma-cli /prisma-cli/node_modules /prisma-cli/node_modules
 
 USER nextjs
 
@@ -44,4 +48,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+CMD ["sh", "-c", "/prisma-cli/node_modules/.bin/prisma migrate deploy && node server.js"]
