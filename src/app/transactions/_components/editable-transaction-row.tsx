@@ -371,7 +371,7 @@ export function EditableTransactionRow({
             </Select>
             {selectedCategory && selectedCategory.subCategories.length > 0 && (
               <Select value={subCategoryId || "__none__"} onValueChange={handleSubCategoryChange}>
-                <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+                <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!subCategoryId ? "border-orange-500" : "border-transparent"}`}>
                   <SelectValue placeholder="Sous-cat." />
                 </SelectTrigger>
                 <SelectContent>
