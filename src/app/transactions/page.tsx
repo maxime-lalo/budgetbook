@@ -36,15 +36,15 @@ export default async function TransactionsPage({
           <p className="text-muted-foreground">Vue mensuelle de toutes vos transactions.</p>
         </div>
         <div className="flex items-center gap-4">
-          <Suspense fallback={<Skeleton className="h-10 w-[250px]" />}>
-            <MonthNavigator />
-          </Suspense>
           <TransactionFormDialog
             accounts={formData.accounts}
             categories={formData.categories}
             year={year}
             month={month}
           />
+          <Suspense fallback={<Skeleton className="h-10 w-[250px]" />}>
+            <MonthNavigator />
+          </Suspense>
         </div>
       </div>
 

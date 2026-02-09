@@ -124,26 +124,24 @@ export function TransactionFormDialog({
             />
           </div>
 
-          {!isAmex && (
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={isExpense ? "default" : "outline"}
-                onClick={() => setIsExpense(true)}
-                className="flex-1"
-              >
-                Dépense
-              </Button>
-              <Button
-                type="button"
-                variant={!isExpense ? "default" : "outline"}
-                onClick={() => setIsExpense(false)}
-                className="flex-1"
-              >
-                Rentrée
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={isExpense ? "default" : "outline"}
+              onClick={() => setIsExpense(true)}
+              className="flex-1"
+            >
+              Dépense
+            </Button>
+            <Button
+              type="button"
+              variant={!isExpense ? "default" : "outline"}
+              onClick={() => setIsExpense(false)}
+              className="flex-1"
+            >
+              Rentrée
+            </Button>
+          </div>
 
           <div className="grid grid-cols-2 gap-4 items-end">
             <div className="space-y-2">
@@ -187,10 +185,7 @@ export function TransactionFormDialog({
             <div className="flex items-center gap-3">
               <Switch
                 checked={isAmex}
-                onCheckedChange={(checked) => {
-                  setIsAmex(checked);
-                  if (checked) setIsExpense(true);
-                }}
+                onCheckedChange={setIsAmex}
               />
               <Label>AMEX</Label>
             </div>
