@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { upsertBudget } from "../_actions/budget-actions";
 import { toast } from "sonner";
 
@@ -17,16 +18,6 @@ type BudgetRowProps = {
   year: number;
   month: number;
 };
-
-function getBarColor(spent: number, budgeted: number): string {
-  if (budgeted === 0 && spent === 0) return "bg-muted";
-  if (spent > budgeted && spent > 0) return "bg-red-500";
-  if (budgeted === 0) return "bg-red-500";
-  const ratio = spent / budgeted;
-  if (ratio >= 1) return "bg-red-500";
-  if (ratio >= 0.75) return "bg-yellow-500";
-  return "bg-green-500";
-}
 
 export function BudgetRow({
   categoryId,
@@ -56,7 +47,6 @@ export function BudgetRow({
   }
 
   const overBudget = spent > budgeted && spent > 0;
-  const progress = budgeted > 0 ? Math.min((spent / budgeted) * 100, 100) : (spent > 0 ? 100 : 0);
 
   return (
     <TableRow className={overBudget ? "bg-red-500/10 border-2 border-red-500" : ""}>
@@ -70,15 +60,7 @@ export function BudgetRow({
         </div>
       </TableCell>
       <TableCell className="py-2 min-w-[200px]">
-        <div className="relative h-5 w-full overflow-hidden rounded-full bg-primary/20">
-          <div
-            className={`h-full rounded-full transition-all ${getBarColor(spent, budgeted)}`}
-            style={{ width: `${Math.min(progress, 100)}%` }}
-          />
-          <span className="absolute inset-0 flex items-center justify-center text-xs font-medium">
-            {Math.round(progress)}%
-          </span>
-        </div>
+        <ProgressBar value={spent} max={budgeted} variant="budget" />
       </TableCell>
       <TableCell className="py-2 text-center">
         <Input

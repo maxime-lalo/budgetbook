@@ -1,7 +1,7 @@
 import { getAccounts, getCheckingAccounts } from "./_actions/account-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { AccountFormDialog } from "./_components/account-form-dialog";
 import { BucketFormDialog } from "./_components/bucket-form-dialog";
 import { DeleteAccountButton, DeleteBucketButton } from "./_components/delete-buttons";
@@ -151,7 +151,6 @@ export default async function AccountsPage() {
                       const bucketForecast = bucketBal.forecast;
                       const bucketHasForecast = Math.abs(bucketForecast - bucketBalance) > 0.005;
                       const goal = bucket.goal ? Number(bucket.goal) : null;
-                      const progress = goal ? Math.min((bucketBalance / goal) * 100, 100) : null;
 
                       return (
                         <div key={bucket.id} className="space-y-1">
@@ -181,8 +180,8 @@ export default async function AccountsPage() {
                               <DeleteBucketButton id={bucket.id} />
                             </div>
                           </div>
-                          {progress !== null && (
-                            <Progress value={progress} className="h-2" />
+                          {goal !== null && (
+                            <ProgressBar value={bucketBalance} max={goal} variant="goal" />
                           )}
                         </div>
                       );
