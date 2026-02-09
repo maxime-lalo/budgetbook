@@ -13,6 +13,10 @@ export async function getAccounts() {
       linkedCards: true,
       transactions: {
         where: { status: "COMPLETED" },
+        select: { amount: true, year: true, month: true, destinationAccountId: true },
+      },
+      incomingTransfers: {
+        where: { status: "COMPLETED" },
         select: { amount: true, year: true, month: true },
       },
     },
@@ -39,6 +43,12 @@ export async function getAccounts() {
       sortOrder: b.sortOrder,
     })),
     transactions: a.transactions.map((t) => ({
+      amount: t.amount.toNumber(),
+      year: t.year,
+      month: t.month,
+      destinationAccountId: t.destinationAccountId,
+    })),
+    incomingTransfers: a.incomingTransfers.map((t) => ({
       amount: t.amount.toNumber(),
       year: t.year,
       month: t.month,

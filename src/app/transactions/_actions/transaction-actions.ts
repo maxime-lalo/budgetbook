@@ -14,6 +14,7 @@ export async function getTransactions(year: number, month: number) {
       category: true,
       subCategory: true,
       bucket: true,
+      destinationAccount: { select: { name: true, color: true } },
     },
     orderBy: [{ date: { sort: "asc", nulls: "first" } }, { label: "asc" }],
   });
@@ -32,7 +33,9 @@ export async function getTransactions(year: number, month: number) {
     subCategoryId: t.subCategoryId,
     bucketId: t.bucketId,
     isAmex: t.isAmex,
+    destinationAccountId: t.destinationAccountId,
     account: { name: t.account.name, color: t.account.color },
+    destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,
     category: { name: t.category.name, color: t.category.color },
     subCategory: t.subCategory ? { name: t.subCategory.name } : null,
     bucket: t.bucket ? { name: t.bucket.name } : null,
@@ -40,19 +43,36 @@ export async function getTransactions(year: number, month: number) {
 }
 
 export async function getTransactionTotals(year: number, month: number) {
-  const [completed, pending] = await Promise.all([
+  const checkingAccounts = await prisma.account.findMany({
+    where: { type: "CHECKING" },
+    select: { id: true },
+  });
+  const checkingIds = checkingAccounts.map((a) => a.id);
+
+  // Transactions dont le compte source est un compte courant (dépenses, revenus, virements sortants)
+  // + virements entrants vers un compte courant (amount négatif → inversé = crédit)
+  const [completed, pending, incomingCompleted, incomingPending] = await Promise.all([
     prisma.transaction.aggregate({
-      where: { year, month, status: "COMPLETED" },
+      where: { year, month, status: "COMPLETED", accountId: { in: checkingIds } },
       _sum: { amount: true },
     }),
     prisma.transaction.aggregate({
-      where: { year, month, status: "PENDING" },
+      where: { year, month, status: "PENDING", accountId: { in: checkingIds } },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { year, month, status: "COMPLETED", destinationAccountId: { in: checkingIds } },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { year, month, status: "PENDING", destinationAccountId: { in: checkingIds } },
       _sum: { amount: true },
     }),
   ]);
 
-  const realTotal = completed._sum.amount?.toNumber() ?? 0;
-  const pendingTotal = pending._sum.amount?.toNumber() ?? 0;
+  // Virements entrants : amount est négatif (quitte la source), on inverse pour le crédit sur checking
+  const realTotal = (completed._sum.amount?.toNumber() ?? 0) + -(incomingCompleted._sum.amount?.toNumber() ?? 0);
+  const pendingTotal = (pending._sum.amount?.toNumber() ?? 0) + -(incomingPending._sum.amount?.toNumber() ?? 0);
 
   return {
     real: realTotal,
@@ -79,6 +99,7 @@ export async function createTransaction(data: Record<string, unknown>) {
       subCategoryId: parsed.data.subCategoryId || null,
       bucketId: parsed.data.bucketId || null,
       isAmex: parsed.data.isAmex,
+      destinationAccountId: parsed.data.destinationAccountId || null,
     },
   });
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
@@ -110,6 +131,7 @@ export async function updateTransaction(id: string, data: Record<string, unknown
       subCategoryId: parsed.data.subCategoryId || null,
       bucketId: parsed.data.bucketId || null,
       isAmex: parsed.data.isAmex,
+      destinationAccountId: parsed.data.destinationAccountId || null,
     },
   });
 
@@ -209,6 +231,7 @@ export async function updateTransactionField(
     status: string;
     note: string | null;
     isAmex: boolean;
+    destinationAccountId: string | null;
   }>
 ) {
   const oldTransaction = await prisma.transaction.findUnique({
@@ -239,6 +262,7 @@ export async function updateTransactionField(
   if (fields.status !== undefined) data.status = fields.status;
   if (fields.note !== undefined) data.note = fields.note;
   if (fields.isAmex !== undefined) data.isAmex = fields.isAmex;
+  if (fields.destinationAccountId !== undefined) data.destinationAccountId = fields.destinationAccountId;
 
   const updated = await prisma.transaction.update({
     where: { id },
@@ -288,6 +312,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
         subCategoryId: t.subCategoryId,
         bucketId: t.bucketId,
         isAmex: t.isAmex,
+        destinationAccountId: t.destinationAccountId,
       },
     });
   }

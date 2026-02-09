@@ -23,6 +23,7 @@ export async function getYearlyOverview(year: number, accountId?: string) {
       year,
       month,
       status: { in: ["COMPLETED" as const, "PENDING" as const] },
+      destinationAccountId: null,
       ...accountFilter,
     };
 
@@ -67,6 +68,7 @@ export async function getCategoryBreakdown(year: number, accountId?: string) {
       year,
       status: { in: ["COMPLETED", "PENDING"] },
       amount: { lt: 0 },
+      destinationAccountId: null,
       ...accountFilter,
     },
     _sum: { amount: true },
@@ -111,6 +113,7 @@ export async function getSubCategoryBreakdown(year: number, accountId?: string) 
       status: { in: ["COMPLETED", "PENDING"] },
       amount: { lt: 0 },
       subCategoryId: { not: null },
+      destinationAccountId: null,
       ...accountFilter,
     },
     _sum: { amount: true },
@@ -166,6 +169,7 @@ export async function getCategoryYearComparison(
 
   const baseWhere = {
     status: { in: ["COMPLETED" as const, "PENDING" as const] },
+    destinationAccountId: null,
     ...accountFilter,
   };
 
@@ -266,12 +270,35 @@ export async function getSavingsOverview(year: number) {
     }));
   }
 
-  // Get cumulative total of all savings transactions up to end of previous year
-  const [previousYearsTotal, totalBaseAmount] = await Promise.all([
+  const statusFilter = { in: ["COMPLETED" as const, "PENDING" as const] };
+
+  // Cumul des années précédentes
+  const [prevStandalone, prevIncoming, prevOutgoing, totalBaseAmount] = await Promise.all([
+    // Transactions standalone sur comptes épargne (pas de destination) → signe inversé
     prisma.transaction.aggregate({
       where: {
         accountId: { in: accountIds },
-        status: { in: ["COMPLETED", "PENDING"] },
+        destinationAccountId: null,
+        status: statusFilter,
+        year: { lt: year },
+      },
+      _sum: { amount: true },
+    }),
+    // Virements entrants vers comptes épargne → negate (négatif → crédit positif)
+    prisma.transaction.aggregate({
+      where: {
+        destinationAccountId: { in: accountIds },
+        status: statusFilter,
+        year: { lt: year },
+      },
+      _sum: { amount: true },
+    }),
+    // Virements sortants depuis comptes épargne → montant direct (négatif = débit)
+    prisma.transaction.aggregate({
+      where: {
+        accountId: { in: accountIds },
+        destinationAccountId: { not: null },
+        status: statusFilter,
         year: { lt: year },
       },
       _sum: { amount: true },
@@ -282,23 +309,51 @@ export async function getSavingsOverview(year: number) {
     }),
   ]);
 
-  // Le signe est inversé : un montant négatif sur un compte épargne = versement (épargne augmente)
-  // On ajoute aussi les montants de base des buckets au cumul initial
-  let cumulative = -(previousYearsTotal._sum.amount?.toNumber() ?? 0) + (totalBaseAmount._sum.baseAmount?.toNumber() ?? 0);
+  let cumulative =
+    -(prevStandalone._sum.amount?.toNumber() ?? 0) +
+    -(prevIncoming._sum.amount?.toNumber() ?? 0) +
+    (prevOutgoing._sum.amount?.toNumber() ?? 0) +
+    (totalBaseAmount._sum.baseAmount?.toNumber() ?? 0);
+
   const data = [];
 
   for (let month = 1; month <= 12; month++) {
-    const monthTotal = await prisma.transaction.aggregate({
-      where: {
-        accountId: { in: accountIds },
-        status: { in: ["COMPLETED", "PENDING"] },
-        year,
-        month,
-      },
-      _sum: { amount: true },
-    });
+    const [standalone, incoming, outgoing] = await Promise.all([
+      prisma.transaction.aggregate({
+        where: {
+          accountId: { in: accountIds },
+          destinationAccountId: null,
+          status: statusFilter,
+          year,
+          month,
+        },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          destinationAccountId: { in: accountIds },
+          status: statusFilter,
+          year,
+          month,
+        },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          accountId: { in: accountIds },
+          destinationAccountId: { not: null },
+          status: statusFilter,
+          year,
+          month,
+        },
+        _sum: { amount: true },
+      }),
+    ]);
 
-    cumulative += -(monthTotal._sum.amount?.toNumber() ?? 0);
+    cumulative +=
+      -(standalone._sum.amount?.toNumber() ?? 0) +
+      -(incoming._sum.amount?.toNumber() ?? 0) +
+      (outgoing._sum.amount?.toNumber() ?? 0);
 
     data.push({
       month,

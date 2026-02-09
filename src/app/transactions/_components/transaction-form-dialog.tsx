@@ -53,18 +53,24 @@ export function TransactionFormDialog({
   const [open, setOpen] = useState(false);
 
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [destinationAccountId, setDestinationAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [status, setStatus] = useState("PENDING");
   const [isAmex, setIsAmex] = useState(false);
   const [noDate, setNoDate] = useState(false);
   const [dateValue, setDateValue] = useState(format(new Date(), "yyyy-MM-dd"));
   const [isExpense, setIsExpense] = useState(true);
+  const [bucketId, setBucketId] = useState("");
 
+  const isTransfer = destinationAccountId !== "";
   const selectedAccount = accounts.find((a) => a.id === accountId);
+  const destinationAccount = accounts.find((a) => a.id === destinationAccountId);
   const selectedCategory = categories.find((c) => c.id === categoryId);
-  const showBuckets = selectedAccount && (selectedAccount.type === "SAVINGS" || selectedAccount.type === "INVESTMENT") && selectedAccount.buckets.length > 0;
+  const isSavingsType = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+  const sourceHasBuckets = isSavingsType(selectedAccount);
+  const destHasBuckets = isSavingsType(destinationAccount);
 
-  const showAmexToggle = selectedAccount?.type === "CHECKING";
+  const showAmexToggle = !isTransfer && selectedAccount?.type === "CHECKING";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -72,7 +78,7 @@ export function TransactionFormDialog({
     const num = Number(formData.get("amount"));
     const data: Record<string, unknown> = {
       label: formData.get("label"),
-      amount: isExpense ? -Math.abs(num) : Math.abs(num),
+      amount: isTransfer ? -Math.abs(num) : (isExpense ? -Math.abs(num) : Math.abs(num)),
       date: noDate ? null : formData.get("date"),
       month,
       year,
@@ -81,8 +87,9 @@ export function TransactionFormDialog({
       accountId,
       categoryId,
       subCategoryId: formData.get("subCategoryId") || null,
-      bucketId: formData.get("bucketId") === "__none__" ? null : formData.get("bucketId") || null,
-      isAmex,
+      bucketId: bucketId || null,
+      isAmex: isTransfer ? false : isAmex,
+      destinationAccountId: isTransfer ? destinationAccountId : null,
     };
 
     const result = await createTransaction(data);
@@ -124,24 +131,26 @@ export function TransactionFormDialog({
             />
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={isExpense ? "default" : "outline"}
-              onClick={() => setIsExpense(true)}
-              className="flex-1"
-            >
-              Dépense
-            </Button>
-            <Button
-              type="button"
-              variant={!isExpense ? "default" : "outline"}
-              onClick={() => setIsExpense(false)}
-              className="flex-1"
-            >
-              Rentrée
-            </Button>
-          </div>
+          {!isTransfer && (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={isExpense ? "default" : "outline"}
+                onClick={() => setIsExpense(true)}
+                className="flex-1"
+              >
+                Dépense
+              </Button>
+              <Button
+                type="button"
+                variant={!isExpense ? "default" : "outline"}
+                onClick={() => setIsExpense(false)}
+                className="flex-1"
+              >
+                Rentrée
+              </Button>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4 items-end">
             <div className="space-y-2">
@@ -227,10 +236,22 @@ export function TransactionFormDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Compte</Label>
-              <Select value={accountId} onValueChange={setAccountId}>
+          <div className="space-y-2">
+            <Label>Origine</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={accountId} onValueChange={(v) => {
+                setAccountId(v);
+                if (v === destinationAccountId) setDestinationAccountId("");
+                const acct = accounts.find((a) => a.id === v);
+                if (isSavingsType(acct)) {
+                  setBucketId((prev) => {
+                    const valid = acct!.buckets.some((b) => b.id === prev);
+                    return valid ? prev : acct!.buckets[0].id;
+                  });
+                } else if (!isSavingsType(accounts.find((a) => a.id === destinationAccountId))) {
+                  setBucketId("");
+                }
+              }}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -242,39 +263,85 @@ export function TransactionFormDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Statut</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PENDING">En attente</SelectItem>
-                  <SelectItem value="COMPLETED">Réalisé</SelectItem>
-                  <SelectItem value="CANCELLED">Annulé</SelectItem>
-                </SelectContent>
-              </Select>
+              {sourceHasBuckets ? (
+                <Select value={bucketId || selectedAccount!.buckets[0].id} onValueChange={setBucketId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedAccount!.buckets.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div />
+              )}
             </div>
           </div>
 
-          {showBuckets && (
-            <div className="space-y-2">
-              <Label>Bucket</Label>
-              <Select name="bucketId" defaultValue={selectedAccount.buckets[0].id}>
+          <div className="space-y-2">
+            <Label>Destination</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={destinationAccountId || "__none__"} onValueChange={(v) => {
+                const newDest = v === "__none__" ? "" : v;
+                setDestinationAccountId(newDest);
+                const acct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
+                if (isSavingsType(acct)) {
+                  setBucketId((prev) => {
+                    const valid = acct!.buckets.some((b) => b.id === prev);
+                    return valid ? prev : acct!.buckets[0].id;
+                  });
+                } else if (!sourceHasBuckets) {
+                  setBucketId("");
+                }
+              }}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Aucun" />
                 </SelectTrigger>
                 <SelectContent>
-                  {selectedAccount.buckets.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
+                  <SelectItem value="__none__">Aucun</SelectItem>
+                  {accounts.filter((a) => a.id !== accountId).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {destHasBuckets ? (
+                <Select value={bucketId || destinationAccount!.buckets[0].id} onValueChange={setBucketId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destinationAccount!.buckets.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div />
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Statut</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PENDING">En attente</SelectItem>
+                <SelectItem value="COMPLETED">Réalisé</SelectItem>
+                <SelectItem value="CANCELLED">Annulé</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {status === "CANCELLED" && (
             <div className="space-y-2">

@@ -54,10 +54,15 @@ export const transactionSchema = z
     subCategoryId: z.string().nullable().optional(),
     bucketId: z.string().nullable().optional(),
     isAmex: z.boolean().default(false),
+    destinationAccountId: z.string().nullable().optional(),
   })
   .refine(
     (data) => data.status !== "CANCELLED" || (data.note && data.note.trim().length > 0),
     { message: "Une note est requise pour les transactions annulées", path: ["note"] }
+  )
+  .refine(
+    (data) => !data.destinationAccountId || data.destinationAccountId !== data.accountId,
+    { message: "Le compte source et destination doivent être différents", path: ["destinationAccountId"] }
   );
 
 export const budgetSchema = z.object({

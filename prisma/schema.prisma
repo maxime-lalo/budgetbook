@@ -32,8 +32,9 @@ model Account {
   linkedCards     Account[]   @relation("AmexLink")
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-  buckets         Bucket[]
-  transactions    Transaction[]
+  buckets            Bucket[]
+  transactions       Transaction[] @relation("TransactionSource")
+  incomingTransfers  Transaction[] @relation("TransactionDestination")
 
   @@map("accounts")
 }
@@ -93,8 +94,10 @@ model Transaction {
   year          Int
   status        TransactionStatus @default(PENDING)
   note          String?
-  accountId     String
-  account       Account           @relation(fields: [accountId], references: [id])
+  accountId             String
+  account               Account           @relation("TransactionSource", fields: [accountId], references: [id])
+  destinationAccountId  String?
+  destinationAccount    Account?          @relation("TransactionDestination", fields: [destinationAccountId], references: [id])
   categoryId    String
   category      Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   subCategoryId String?
@@ -111,6 +114,7 @@ model Transaction {
   @@index([status])
   @@index([year, month])
   @@index([isAmex, status])
+  @@index([destinationAccountId])
   @@map("transactions")
 }
 

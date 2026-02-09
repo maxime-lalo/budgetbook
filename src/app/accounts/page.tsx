@@ -66,18 +66,38 @@ export default async function AccountsPage() {
           const isSavingsOrInvestment = account.type === "SAVINGS" || account.type === "INVESTMENT";
           const currentYear = new Date().getFullYear();
           const currentMonth = new Date().getMonth() + 1;
-          let currentRaw = 0;
-          let totalRaw = 0;
+
+          // Séparer standalone (non-virement) et virements sortants
+          let currentStandalone = 0;
+          let totalStandalone = 0;
+          let currentOutgoing = 0;
+          let totalOutgoing = 0;
           for (const t of account.transactions) {
-            totalRaw += t.amount;
-            if (t.year < currentYear || (t.year === currentYear && t.month <= currentMonth)) {
-              currentRaw += t.amount;
+            const isCurrent = t.year < currentYear || (t.year === currentYear && t.month <= currentMonth);
+            if (t.destinationAccountId) {
+              // Virement sortant : montant direct (négatif = débit)
+              totalOutgoing += t.amount;
+              if (isCurrent) currentOutgoing += t.amount;
+            } else {
+              totalStandalone += t.amount;
+              if (isCurrent) currentStandalone += t.amount;
             }
           }
-          // Signe inversé pour épargne/investissement : négatif = versement (solde augmente)
+
+          // Virements entrants : negate (négatif inversé = crédit positif)
+          let currentIncoming = 0;
+          let totalIncoming = 0;
+          for (const t of account.incomingTransfers) {
+            const isCurrent = t.year < currentYear || (t.year === currentYear && t.month <= currentMonth);
+            totalIncoming += t.amount;
+            if (isCurrent) currentIncoming += t.amount;
+          }
+
           const bucketsBaseAmount = account.buckets.reduce((sum, b) => sum + (b.baseAmount ?? 0), 0);
-          const balance = (isSavingsOrInvestment ? -currentRaw : currentRaw) + bucketsBaseAmount;
-          const forecast = (isSavingsOrInvestment ? -totalRaw : totalRaw) + bucketsBaseAmount;
+          const standaloneBalance = isSavingsOrInvestment ? -currentStandalone : currentStandalone;
+          const standaloneForecast = isSavingsOrInvestment ? -totalStandalone : totalStandalone;
+          const balance = standaloneBalance + currentOutgoing + (-currentIncoming) + bucketsBaseAmount;
+          const forecast = standaloneForecast + totalOutgoing + (-totalIncoming) + bucketsBaseAmount;
           const hasForecast = Math.abs(forecast - balance) > 0.005;
 
           return (

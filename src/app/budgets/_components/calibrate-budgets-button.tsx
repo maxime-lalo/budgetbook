@@ -22,7 +22,8 @@ export function CalibrateBudgetsButton({
       toast.error(result.error);
       return;
     }
-    toast.success(`${result.count} budget${result.count > 1 ? "s" : ""} calibré${result.count > 1 ? "s" : ""}`);
+    const count = result.count ?? 0;
+    toast.success(`${count} budget${count > 1 ? "s" : ""} calibré${count > 1 ? "s" : ""}`);
   }
 
   return (

@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Pencil, Trash2, CreditCard } from "lucide-react";
+import { Pencil, Trash2, CreditCard, ArrowRightLeft } from "lucide-react";
 import { STATUS_LABELS } from "@/lib/formatters";
 import {
   updateTransactionField,
@@ -44,7 +44,9 @@ type Transaction = {
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
+  destinationAccountId: string | null;
   account: { name: string; color: string | null };
+  destinationAccount: { name: string; color: string | null } | null;
   category: { name: string; color: string | null };
   subCategory: { name: string } | null;
   bucket: { name: string } | null;
@@ -104,7 +106,9 @@ export function EditableTransactionRow({
   );
   const [editAccountId, setEditAccountId] = useState(accountId);
   const [editBucketId, setEditBucketId] = useState(transaction.bucketId ?? "");
+  const [editDestinationAccountId, setEditDestinationAccountId] = useState(transaction.destinationAccountId ?? "");
 
+  const isTransfer = transaction.destinationAccountId !== null;
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
   const saveField = useCallback(
@@ -272,9 +276,12 @@ export function EditableTransactionRow({
     setEditRecurring(date === "");
     setEditMonth(`${transaction.year}-${String(transaction.month).padStart(2, "0")}`);
     setEditAccountId(accountId);
-    const currentAccount = accounts.find((a) => a.id === accountId);
-    const hasBuckets = currentAccount && (currentAccount.type === "SAVINGS" || currentAccount.type === "INVESTMENT") && currentAccount.buckets.length > 0;
-    setEditBucketId(transaction.bucketId ?? (hasBuckets ? currentAccount.buckets[0].id : ""));
+    setEditDestinationAccountId(transaction.destinationAccountId ?? "");
+    const bucketAccount = transaction.destinationAccountId
+      ? accounts.find((a) => a.id === transaction.destinationAccountId)
+      : accounts.find((a) => a.id === accountId);
+    const hasBuckets = bucketAccount && (bucketAccount.type === "SAVINGS" || bucketAccount.type === "INVESTMENT") && bucketAccount.buckets.length > 0;
+    setEditBucketId(transaction.bucketId ?? (hasBuckets ? bucketAccount.buckets[0].id : ""));
     setEditDialogOpen(true);
   }
 
@@ -300,6 +307,10 @@ export function EditableTransactionRow({
     const newBucketId = editBucketId || null;
     if (newBucketId !== (transaction.bucketId ?? null)) {
       fields.bucketId = newBucketId;
+    }
+    const newDestId = editDestinationAccountId || null;
+    if (newDestId !== (transaction.destinationAccountId ?? null)) {
+      fields.destinationAccountId = newDestId;
     }
 
     if (Object.keys(fields).length === 0) {
@@ -414,37 +425,46 @@ export function EditableTransactionRow({
             onChange={(e) => setAmount(e.target.value)}
             onBlur={handleAmountBlur}
             className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-full font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-              Number(amount) < 0 ? "text-red-600" : "text-green-600"
+              isTransfer ? "text-blue-600" : Number(amount) < 0 ? "text-red-600" : "text-green-600"
             }`}
           />
         </TableCell>
 
         {/* Compte */}
         <TableCell className="p-1 whitespace-nowrap">
-          <div className="flex items-center gap-1">
-            {accounts.find((a) => a.id === accountId)?.type === "CHECKING" && (
-              <button
-                type="button"
-                onClick={handleAmexToggle}
-                title={isAmex ? "AMEX activé" : "Activer AMEX"}
-                className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
-              >
-                <CreditCard className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <Select value={accountId} onValueChange={handleAccountChange}>
-              <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {isTransfer ? (
+            <div className="flex items-center gap-1.5 text-sm px-2">
+              <ArrowRightLeft className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              <span className="truncate">{transaction.account.name}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="truncate">{transaction.destinationAccount?.name}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              {accounts.find((a) => a.id === accountId)?.type === "CHECKING" && (
+                <button
+                  type="button"
+                  onClick={handleAmexToggle}
+                  title={isAmex ? "AMEX activé" : "Activer AMEX"}
+                  className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
+                >
+                  <CreditCard className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <Select value={accountId} onValueChange={handleAccountChange}>
+                <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </TableCell>
 
         {/* Actions directes */}
@@ -572,9 +592,13 @@ export function EditableTransactionRow({
               <Label>Compte</Label>
               <Select value={editAccountId} onValueChange={(v) => {
                 setEditAccountId(v);
-                const newAccount = accounts.find((a) => a.id === v);
-                const hasBuckets = newAccount && (newAccount.type === "SAVINGS" || newAccount.type === "INVESTMENT") && newAccount.buckets.length > 0;
-                setEditBucketId(hasBuckets ? newAccount.buckets[0].id : "");
+                const newDest = v === editDestinationAccountId ? "" : editDestinationAccountId;
+                if (v === editDestinationAccountId) setEditDestinationAccountId("");
+                const isSav = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+                const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
+                const srcAcct = accounts.find((a) => a.id === v);
+                const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
+                setEditBucketId(ba ? ba.buckets[0].id : "");
               }}>
                 <SelectTrigger>
                   <SelectValue />
@@ -588,9 +612,36 @@ export function EditableTransactionRow({
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Compte destination</Label>
+              <Select value={editDestinationAccountId || "__none__"} onValueChange={(v) => {
+                const newDest = v === "__none__" ? "" : v;
+                setEditDestinationAccountId(newDest);
+                const isSav = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+                const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
+                const srcAcct = accounts.find((a) => a.id === editAccountId);
+                const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
+                setEditBucketId(ba ? ba.buckets[0].id : "");
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Aucun" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Aucun</SelectItem>
+                  {accounts.filter((a) => a.id !== editAccountId).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {(() => {
-              const editAccount = accounts.find((a) => a.id === editAccountId);
-              const showBuckets = editAccount && (editAccount.type === "SAVINGS" || editAccount.type === "INVESTMENT") && editAccount.buckets.length > 0;
+              const isSavings = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+              const destAcct = editDestinationAccountId ? accounts.find((a) => a.id === editDestinationAccountId) : undefined;
+              const srcAcct = accounts.find((a) => a.id === editAccountId);
+              const bucketAcct = isSavings(destAcct) ? destAcct : isSavings(srcAcct) ? srcAcct : undefined;
+              const showBuckets = !!bucketAcct;
               if (!showBuckets) return null;
               return (
                 <div className="space-y-2">
@@ -600,7 +651,7 @@ export function EditableTransactionRow({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {editAccount.buckets.map((b) => (
+                      {bucketAcct.buckets.map((b) => (
                         <SelectItem key={b.id} value={b.id}>
                           {b.name}
                         </SelectItem>

@@ -36,7 +36,9 @@ type Transaction = {
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
+  destinationAccountId: string | null;
   account: { name: string; color: string | null };
+  destinationAccount: { name: string; color: string | null } | null;
   category: { name: string; color: string | null };
   subCategory: { name: string } | null;
   bucket: { name: string } | null;
