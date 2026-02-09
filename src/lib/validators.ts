@@ -78,3 +78,114 @@ export type CategoryInput = z.infer<typeof categorySchema>;
 export type SubCategoryInput = z.infer<typeof subCategorySchema>;
 export type TransactionInput = z.infer<typeof transactionSchema>;
 export type BudgetInput = z.infer<typeof budgetSchema>;
+
+// --- Schéma de validation pour l'import/export complet ---
+
+const exportAccountSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(["CHECKING", "CREDIT_CARD", "SAVINGS", "INVESTMENT"]),
+  color: z.string().nullable(),
+  icon: z.string().nullable(),
+  sortOrder: z.number(),
+  linkedAccountId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportBucketSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  accountId: z.string(),
+  color: z.string().nullable(),
+  goal: z.string().nullable(),
+  baseAmount: z.string(),
+  sortOrder: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportCategorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string().nullable(),
+  icon: z.string().nullable(),
+  sortOrder: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportSubCategorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  categoryId: z.string(),
+  sortOrder: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportTransactionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  amount: z.string(),
+  date: z.string().nullable(),
+  month: z.number(),
+  year: z.number(),
+  status: z.enum(["PENDING", "COMPLETED", "CANCELLED"]),
+  note: z.string().nullable(),
+  accountId: z.string(),
+  destinationAccountId: z.string().nullable(),
+  categoryId: z.string(),
+  subCategoryId: z.string().nullable(),
+  bucketId: z.string().nullable(),
+  isAmex: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportBudgetSchema = z.object({
+  id: z.string(),
+  categoryId: z.string(),
+  month: z.number(),
+  year: z.number(),
+  amount: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportMonthlyBalanceSchema = z.object({
+  id: z.string(),
+  year: z.number(),
+  month: z.number(),
+  forecast: z.string(),
+  committed: z.string(),
+  surplus: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const exportApiTokenSchema = z.object({
+  id: z.string(),
+  token: z.string(),
+  name: z.string(),
+  createdAt: z.string(),
+});
+
+export const comptesExportSchema = z.object({
+  metadata: z.object({
+    exportDate: z.string(),
+    formatVersion: z.literal(1),
+  }),
+  data: z.object({
+    accounts: z.array(exportAccountSchema),
+    categories: z.array(exportCategorySchema),
+    subCategories: z.array(exportSubCategorySchema),
+    buckets: z.array(exportBucketSchema),
+    transactions: z.array(exportTransactionSchema),
+    budgets: z.array(exportBudgetSchema),
+    monthlyBalances: z.array(exportMonthlyBalanceSchema),
+    apiTokens: z.array(exportApiTokenSchema),
+  }),
+});
+
+export type ComptesExport = z.infer<typeof comptesExportSchema>;
