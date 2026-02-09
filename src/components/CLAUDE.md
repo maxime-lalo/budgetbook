@@ -22,15 +22,15 @@ alert-dialog, badge, button, calendar, card, chart, command, dialog, dropdown-me
 
 ### Sidebar (`sidebar.tsx`)
 - Navigation desktop (visible >= md)
-- 5 liens : Transactions, Budgets, Catégories, Comptes, Statistiques
-- Icônes Lucide : ArrowLeftRight, LayoutDashboard, Tags, Wallet, BarChart3
+- 6 liens : Transactions, Budgets, Catégories, Comptes, Statistiques, Réglages
+- Icônes Lucide : ArrowLeftRight, LayoutDashboard, Tags, Wallet, BarChart3, Settings
 - Lien actif détecté via `usePathname().startsWith(href)`
 - ThemeToggle en bas de la sidebar
 
 ### MobileNav (`mobile-nav.tsx`)
 - Navigation mobile (visible < md)
 - Sheet latéral (Shadcn Sheet) déclenché par bouton hamburger
-- Mêmes 5 liens que la sidebar
+- Mêmes 6 liens que la sidebar
 - Le sheet se ferme automatiquement lors de la navigation (`setOpen(false)`)
 
 ### ThemeProvider (`theme-provider.tsx`)

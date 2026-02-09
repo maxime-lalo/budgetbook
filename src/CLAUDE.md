@@ -13,6 +13,7 @@ src/
     ├── validators.ts      # Schémas Zod (toute la validation)
     ├── formatters.ts      # Formatage monnaie, dates, labels
     ├── monthly-balance.ts # Report cumulatif inter-mois (MonthlyBalance)
+    ├── api-auth.ts        # Validation Bearer token pour API REST
     ├── utils.ts           # cn() pour Tailwind (Shadcn)
     └── hooks/             # React hooks custom
 ```
@@ -35,7 +36,8 @@ src/app/{route}/
 Le préfixe `_` empêche Next.js de traiter ces dossiers comme des routes.
 
 ### Server Actions
-- Toutes les mutations passent par des Server Actions (pas d'API routes REST)
+- Toutes les mutations UI passent par des Server Actions (pas d'API routes REST côté UI)
+- **Exception** : les routes `/api/*` sont des API REST pour les intégrations externes (Tasker/n8n), sécurisées par Bearer token
 - Les fonctions de lecture (getXxx) sont aussi dans les fichiers actions pour la co-localisation
 - Retournent `{ success: true }` ou `{ error: ... }` pour les mutations
 - Appellent `revalidatePath()` après chaque mutation

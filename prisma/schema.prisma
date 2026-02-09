@@ -147,3 +147,12 @@ model MonthlyBalance {
   @@index([year, month])
   @@map("monthly_balances")
 }
+
+model ApiToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  name      String   @default("default")
+  createdAt DateTime @default(now())
+
+  @@map("api_tokens")
+}

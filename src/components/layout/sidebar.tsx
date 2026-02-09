@@ -8,6 +8,7 @@ import {
   Tags,
   Wallet,
   BarChart3,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -18,6 +19,7 @@ const navItems = [
   { href: "/categories", label: "Catégories", icon: Tags },
   { href: "/accounts", label: "Comptes", icon: Wallet },
   { href: "/statistics", label: "Statistiques", icon: BarChart3 },
+  { href: "/settings", label: "Réglages", icon: Settings },
 ];
 
 export function Sidebar() {

@@ -21,10 +21,23 @@ Redirect immédiat vers `/transactions` (la vue principale).
 | `/categories` | CRUD catégories et sous-catégories | - |
 | `/accounts` | CRUD comptes et buckets | - |
 | `/statistics` | Graphiques et analyses | `?year=2026&account=xxx` |
+| `/settings` | Réglages (gestion token API) | - |
+
+### API REST (routes `/api/*`)
+
+Endpoints pour intégrations externes (Tasker → n8n → API), sécurisés par Bearer token.
+
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/api/transactions` | POST | Créer une transaction (body JSON) |
+| `/api/categories` | GET | Lister catégories + sous-catégories |
+| `/api/accounts` | GET | Lister les comptes |
+
+Auth : header `Authorization: Bearer <token>`. Token géré depuis `/settings`.
 
 ## Navigation
 
-- **Sidebar** (desktop, >= md) : 5 liens + toggle thème en bas
+- **Sidebar** (desktop, >= md) : 6 liens + toggle thème en bas
 - **MobileNav** (mobile, < md) : Sheet latéral avec les mêmes liens
 - **MonthNavigator** : composant dans `transactions/_components/` réutilisé par `/budgets`, avec :
   - Flèches gauche/droite

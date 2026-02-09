@@ -102,6 +102,18 @@ Matérialise le surplus budgétaire de chaque mois pour permettre un report cumu
 
 Mis à jour automatiquement après chaque mutation de transaction ou budget via `recomputeMonthlyBalance()`. Le carry-over pour un mois M = `SUM(surplus)` de tous les mois antérieurs.
 
+### ApiToken (table: `api_tokens`)
+Token d'authentification pour l'API REST externe.
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| id | cuid | Identifiant unique |
+| token | String | Token UUID, unique |
+| name | String | Nom du token (défaut "default") |
+| createdAt | DateTime | Date de création |
+
+Un seul token actif à la fois. Régénérer un token supprime tous les précédents. Géré depuis la page `/settings`.
+
 ## Scripts d'import
 
 | Fichier | Description |

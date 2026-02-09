@@ -8,6 +8,7 @@ import {
   Tags,
   Wallet,
   BarChart3,
+  Settings,
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/categories", label: "Catégories", icon: Tags },
   { href: "/accounts", label: "Comptes", icon: Wallet },
   { href: "/statistics", label: "Statistiques", icon: BarChart3 },
+  { href: "/settings", label: "Réglages", icon: Settings },
 ];
 
 export function MobileNav() {

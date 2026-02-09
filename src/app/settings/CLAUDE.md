@@ -1,0 +1,32 @@
+# Settings - Réglages
+
+Page de configuration de l'application. Actuellement : gestion du token API.
+
+## Page (`page.tsx`) — Server Component
+
+- Titre "Réglages"
+- Récupère le token existant via `getApiToken()` et le passe au composant client
+
+## Server Actions (`_actions/settings-actions.ts`)
+
+| Fonction | Description |
+|----------|-------------|
+| `getApiToken()` | Retourne `{ token, createdAt }` ou `null` si aucun token |
+| `regenerateApiToken()` | Supprime tous les tokens, crée un nouveau (`crypto.randomUUID()`), retourne `{ token, createdAt }` |
+
+Un seul token actif à la fois. Régénérer invalide immédiatement l'ancien.
+
+## Composants
+
+### ApiTokenCard (`_components/api-token-card.tsx`) — Client Component
+
+Card Shadcn pour gérer le token API :
+
+- **Sans token** : bouton "Générer un token"
+- **Avec token** :
+  - Champ en lecture seule, masqué par défaut (`••••••••`), bouton oeil pour afficher/masquer
+  - Bouton "Copier" → clipboard + toast de confirmation (Sonner)
+  - Date de création affichée
+  - Bouton "Régénérer" (destructive) avec AlertDialog de confirmation
+
+**Props** : `initialToken: { token: string; createdAt: string } | null`

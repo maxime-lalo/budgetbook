@@ -9,6 +9,8 @@ A personal finance management web app, built to replace a historical Excel syste
 - **Categories**: hierarchical management (categories + subcategories) with color codes
 - **Accounts**: checking, credit card, savings and investment accounts with goal-based buckets
 - **Statistics**: yearly overview, category/subcategory breakdown, savings evolution, year-over-year comparison
+- **REST API**: Bearer token-secured endpoints for external integrations (Tasker, n8n)
+- **Settings**: API token management (generate, view, regenerate)
 
 ## Tech Stack
 
@@ -63,11 +65,53 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Architecture
 
-- **Server Actions** for all mutations (no REST API)
+- **Server Actions** for all UI mutations (no REST API on the frontend side)
+- **REST API** (`/api/*`) for external integrations, secured by Bearer token
 - **Server Components** for initial render, **Client Components** for interactivity
 - Co-located `_actions/` and `_components/` per route
 - Monthly navigation via URL `searchParams`
 - Amounts stored as `Decimal(12,2)`, converted to `number` before passing to client components
+
+## REST API
+
+Endpoints for external integrations (e.g. Tasker → n8n → API), secured by Bearer token.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/transactions` | POST | Create a transaction |
+| `/api/categories` | GET | List categories with subcategories |
+| `/api/accounts` | GET | List accounts |
+
+### Authentication
+
+Generate a token from the `/settings` page, then use it as a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:3000/api/categories
+```
+
+### Create a transaction
+
+```bash
+curl -X POST http://localhost:3000/api/transactions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "Groceries", "amount": -45.90, "categoryId": "<id>"}'
+```
+
+Optional fields: `date` (default: today), `accountId` (default: first checking account), `status` (default: PENDING), `subCategoryId`, `isAmex`.
+
+### Authelia configuration
+
+When deployed behind Authelia, add a bypass rule for API routes:
+
+```yaml
+access_control:
+  rules:
+    - domain: comptes.example.com
+      resources: "^/api/"
+      policy: bypass
+```
 
 ## Environment Variables
 

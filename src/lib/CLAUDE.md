@@ -52,6 +52,16 @@ Gestion du report cumulatif inter-mois via la table `MonthlyBalance`.
 
 Appelée automatiquement après chaque mutation de transaction ou budget.
 
+### api-auth.ts
+Authentification des API routes REST par Bearer token.
+
+| Fonction | Description |
+|----------|-------------|
+| `validateApiToken(request)` | Lit le header `Authorization: Bearer <token>`, vérifie en BDD, retourne `boolean` |
+| `unauthorizedResponse()` | Retourne `NextResponse.json({ error: "Unauthorized" }, { status: 401 })` |
+
+Utilisé par toutes les routes `/api/*`. Le token est stocké dans la table `api_tokens` et géré depuis `/settings`.
+
 ### utils.ts
 Fonction `cn()` : merge de classes Tailwind via `clsx` + `twMerge` (standard Shadcn/UI).
 

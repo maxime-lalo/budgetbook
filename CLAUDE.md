@@ -51,7 +51,8 @@ pnpm db:import                   # Importer transactions en BDD (tsx)
 
 ## Architecture
 
-- **Server Actions** pour toutes les mutations (pas d'API routes)
+- **Server Actions** pour toutes les mutations (pas d'API routes REST côté UI)
+- **API REST** (`/api/*`) pour les intégrations externes (Tasker/n8n), sécurisée par Bearer token
 - **`_components/` et `_actions/`** co-localisés par route
 - **Navigation mensuelle** via searchParams URL (`?month=2026-02`) avec persistance localStorage
 - **Sérialisation explicite** des Decimal Prisma → number avant passage aux Client Components
@@ -73,7 +74,9 @@ comptes/
 │   │   ├── budgets/         # Budgets mensuels par catégorie
 │   │   ├── categories/      # CRUD catégories/sous-catégories
 │   │   ├── accounts/        # Comptes, buckets, soldes
-│   │   └── statistics/      # Graphiques Recharts
+│   │   ├── statistics/      # Graphiques Recharts
+│   │   ├── settings/        # Réglages (token API)
+│   │   └── api/             # API REST (transactions, categories, accounts)
 │   ├── components/
 │   │   ├── ui/              # Shadcn/UI (auto-généré)
 │   │   └── layout/          # Sidebar, mobile-nav, theme
@@ -102,6 +105,22 @@ comptes/
 - `categoryId` est **requis** (non nullable) sur les transactions ; seule `subCategoryId` est optionnelle
 - Tous les `Decimal` Prisma sont convertis en `number` avant d'être passés aux Client Components
 - Les formulaires utilisent `FormData` (categories, accounts) ou objets JSON (transactions)
+
+## API REST externe
+
+API REST sécurisée par Bearer token pour les intégrations externes (Tasker → n8n → API). Le token est stocké en BDD (table `api_tokens`), géré depuis la page `/settings`.
+
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/api/transactions` | POST | Créer une transaction |
+| `/api/categories` | GET | Lister catégories + sous-catégories |
+| `/api/accounts` | GET | Lister les comptes |
+
+- Authentification : header `Authorization: Bearer <token>`
+- Sans token valide → 401 Unauthorized
+- L'utilitaire `src/lib/api-auth.ts` centralise la validation du token
+- POST `/api/transactions` : `categoryId` requis, `date`/`accountId`/`status` ont des valeurs par défaut
+- En production derrière Authelia, ajouter une règle bypass pour `/api/` (policy: bypass)
 
 ## Logique financière inter-pages
 
