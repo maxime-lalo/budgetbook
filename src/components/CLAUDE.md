@@ -14,7 +14,9 @@ Composants installés via `npx shadcn@latest add` :
 
 alert-dialog, badge, button, calendar, card, chart, command, dialog, dropdown-menu, form, input, label, popover, progress, scroll-area, select, separator, sheet, skeleton, switch, table, tabs, textarea, tooltip
 
-**Ne pas modifier ces fichiers manuellement.** Utiliser `npx shadcn@latest add <composant>` pour en ajouter.
+**Composant custom** : `progress-bar.tsx` — composant `ProgressBar` réutilisable avec variantes de couleur (vert, jaune, rouge). Utilisé par les budgets et les buckets pour afficher la progression vers un objectif.
+
+**Ne pas modifier les fichiers Shadcn manuellement.** Utiliser `npx shadcn@latest add <composant>` pour en ajouter.
 
 ## layout/ — Navigation et thème
 

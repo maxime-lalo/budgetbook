@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 import { EditableTransactionRow } from "./editable-transaction-row";
+import { NewTransactionRow } from "./new-transaction-row";
 import { CopyRecurringButton } from "./copy-recurring-button";
 import { CompleteAmexButton } from "./complete-amex-button";
 import { formatCurrency } from "@/lib/formatters";
@@ -175,8 +176,6 @@ export function TransactionsTable({
       <TableCell className="py-2 text-sm italic text-muted-foreground">
         Report mois précédent
       </TableCell>
-      <TableCell />
-      <TableCell />
       <TableCell
         className={`py-2 text-sm font-medium ${
           budgetCarryOver >= 0 ? "text-green-600" : "text-red-600"
@@ -184,6 +183,8 @@ export function TransactionsTable({
       >
         {formatCurrency(budgetCarryOver)}
       </TableCell>
+      <TableCell />
+      <TableCell />
       <TableCell />
       <TableCell />
     </TableRow>
@@ -312,13 +313,13 @@ export function TransactionsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Libellé</TableHead>
-              <TableHead>Catégorie</TableHead>
-              <SortableHeader column="status" label="Statut" />
               <SortableHeader
                 column="amount"
                 label="Montant"
                 className="w-[100px]"
               />
+              <TableHead>Catégorie</TableHead>
+              <SortableHeader column="status" label="Statut" />
               <TableHead>Compte</TableHead>
               <TableHead className="w-[100px]" />
             </TableRow>
@@ -326,6 +327,12 @@ export function TransactionsTable({
           <TableBody>
             {carryOverRow}
             {transactionRows}
+            <NewTransactionRow
+              accounts={accounts}
+              categories={categories}
+              year={year}
+              month={month}
+            />
           </TableBody>
         </Table>
       </div>

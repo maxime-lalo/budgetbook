@@ -17,6 +17,8 @@ Représente un compte bancaire physique.
 
 **Self-relation "AmexLink"** : Un compte CREDIT_CARD peut être lié à un compte CHECKING. `linkedAccount` = le compte courant parent, `linkedCards` = les cartes liées à ce compte.
 
+**Relations Transaction** : `transactions` (source, via `TransactionSource`) et `incomingTransfers` (destination, via `TransactionDestination` pour les virements entre comptes).
+
 ### Bucket (table: `buckets`)
 Sous-enveloppe virtuelle d'un compte (épargne par objectif).
 
@@ -26,8 +28,10 @@ Sous-enveloppe virtuelle d'un compte (épargne par objectif).
 | accountId | String | Référence au compte parent (cascade delete) |
 | goal | Decimal(12,2)? | Objectif d'épargne |
 | color | String? | Couleur d'affichage |
+| baseAmount | Decimal(12,2) | Montant de base (défaut 0), solde initial pré-existant |
+| sortOrder | Int | Ordre d'affichage (défaut 0) |
 
-Le solde d'un bucket = somme des transactions qui le référencent (status COMPLETED).
+Le solde d'un bucket = baseAmount + somme des transactions qui le référencent (status COMPLETED).
 
 ### Category (table: `categories`)
 Catégorie de dépense/revenu.
@@ -57,6 +61,7 @@ Mouvement financier.
 | categoryId | String | Catégorie (**requis**, Restrict on delete) |
 | subCategoryId | String? | Sous-catégorie (SetNull on delete) |
 | bucketId | String? | Bucket cible pour épargne (SetNull on delete) |
+| destinationAccountId | String? | Compte destinataire pour les virements entre comptes |
 | isAmex | Boolean | `true` si transaction faite via carte AMEX (débit différé sur compte courant) |
 
 **date optionnel** : les transactions récurrentes (loyer, abonnements) n'ont pas de date précise. Elles sont rattachées à un mois via `month`/`year`.
@@ -67,7 +72,7 @@ Mouvement financier.
 
 **isAmex** : remplace l'ancien compte CREDIT_CARD séparé. Les transactions AMEX vivent sur le compte courant avec `isAmex: true`. Le total AMEX mensuel est affiché dans la barre de filtre de la page transactions.
 
-**Index** : (accountId, date), (categoryId), (date), (status), (year, month), (isAmex, status).
+**Index** : (accountId, date), (categoryId), (date), (status), (year, month), (isAmex, status), (destinationAccountId).
 
 ### Budget (table: `budgets`)
 Enveloppe budgétaire mensuelle par catégorie.

@@ -20,7 +20,7 @@ A personal finance management web app, built to replace a historical Excel syste
 | ORM | Prisma 6 |
 | Validation | Zod 4 |
 | UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
-| Charts | Recharts 3 |
+| Charts | Recharts 2 |
 | Icons | Lucide React |
 | Package manager | pnpm |
 | Containerization | Docker multi-stage + Docker Compose |
@@ -29,7 +29,7 @@ A personal finance management web app, built to replace a historical Excel syste
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - pnpm
 - Docker (for PostgreSQL)
 

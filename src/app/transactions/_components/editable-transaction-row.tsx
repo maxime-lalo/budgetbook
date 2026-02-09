@@ -348,6 +348,20 @@ export function EditableTransactionRow({
           />
         </TableCell>
 
+        {/* Montant */}
+        <TableCell className="p-1 whitespace-nowrap">
+          <Input
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onBlur={handleAmountBlur}
+            className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-full font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+              isTransfer ? "text-blue-600" : Number(amount) < 0 ? "text-red-600" : "text-green-600"
+            }`}
+          />
+        </TableCell>
+
         {/* Catégorie + Sous-catégorie */}
         <TableCell className="p-1 whitespace-nowrap">
           <div className="flex items-center gap-1">
@@ -414,20 +428,6 @@ export function EditableTransactionRow({
               </SelectItem>
             </SelectContent>
           </Select>
-        </TableCell>
-
-        {/* Montant */}
-        <TableCell className="p-1 whitespace-nowrap">
-          <Input
-            type="number"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            onBlur={handleAmountBlur}
-            className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-full font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-              isTransfer ? "text-blue-600" : Number(amount) < 0 ? "text-red-600" : "text-green-600"
-            }`}
-          />
         </TableCell>
 
         {/* Compte */}

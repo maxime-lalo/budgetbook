@@ -31,11 +31,12 @@ Champs :
 - **Nom** (requis)
 - **Couleur** (color picker)
 - **Objectif EUR** (optionnel, >= 0) — `""` transformé en `null` via Zod preprocess
+- **Montant de base** (défaut 0, solde initial pré-existant)
 - **Ordre** d'affichage
 
 ## Logique AMEX
 
-Le toggle "AMEX" dans le formulaire de transaction sélectionne automatiquement le compte CREDIT_CARD. Le prélèvement mensuel AMEX sur le compte courant est une transaction manuelle de type débit.
+Les transactions AMEX utilisent le champ `isAmex: true` directement sur le compte courant (pas de compte CREDIT_CARD séparé). Le toggle AMEX dans le formulaire de transaction est visible uniquement pour les comptes CHECKING. Le prélèvement mensuel AMEX est une transaction manuelle de type débit sur le compte courant.
 
 ## Logique Buckets
 
