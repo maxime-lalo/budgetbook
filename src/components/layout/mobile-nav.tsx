@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Tags,
   Wallet,
+  PiggyBank,
   BarChart3,
   Settings,
   Menu,
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/budgets", label: "Budgets", icon: LayoutDashboard },
   { href: "/categories", label: "Catégories", icon: Tags },
   { href: "/accounts", label: "Comptes", icon: Wallet },
+  { href: "/savings", label: "Économies", icon: PiggyBank },
   { href: "/statistics", label: "Statistiques", icon: BarChart3 },
   { href: "/settings", label: "Réglages", icon: Settings },
 ];

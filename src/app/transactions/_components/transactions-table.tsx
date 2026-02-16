@@ -119,6 +119,10 @@ export function TransactionsTable({
   amexPendingCount,
   amexMonthlyTotal,
   amexEnabled = true,
+  hideCopyRecurring = false,
+  flatLayout = false,
+  defaultAccountId,
+  defaultCategoryId,
 }: {
   transactions: Transaction[];
   accounts: Account[];
@@ -130,6 +134,10 @@ export function TransactionsTable({
   amexPendingCount: number;
   amexMonthlyTotal: number;
   amexEnabled?: boolean;
+  hideCopyRecurring?: boolean;
+  flatLayout?: boolean;
+  defaultAccountId?: string;
+  defaultCategoryId?: string;
 }) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -226,6 +234,17 @@ export function TransactionsTable({
         amexEnabled={amexEnabled}
       />
     ));
+  } else if (flatLayout) {
+    // Liste plate sans sections
+    transactionRows = filtered.map((t) => (
+      <EditableTransactionRow
+        key={t.id}
+        transaction={t}
+        accounts={accounts}
+        categories={categories}
+        amexEnabled={amexEnabled}
+      />
+    ));
   } else {
     // Pas de tri : layout par sections
     const dateless = filtered.filter((t) => t.date === null);
@@ -305,7 +324,7 @@ export function TransactionsTable({
             ))}
           </SelectContent>
         </Select>
-        <CopyRecurringButton year={year} month={month} />
+        {!hideCopyRecurring && <CopyRecurringButton year={year} month={month} />}
         {amexEnabled && amexPendingCount > 0 && (
           <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
         )}
@@ -353,6 +372,8 @@ export function TransactionsTable({
               year={year}
               month={month}
               amexEnabled={amexEnabled}
+              defaultAccountId={defaultAccountId}
+              defaultCategoryId={defaultCategoryId}
             />
           </TableBody>
         </Table>

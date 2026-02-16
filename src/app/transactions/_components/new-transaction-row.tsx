@@ -37,19 +37,23 @@ export function NewTransactionRow({
   year,
   month,
   amexEnabled = true,
+  defaultAccountId,
+  defaultCategoryId,
 }: {
   accounts: Account[];
   categories: Category[];
   year: number;
   month: number;
   amexEnabled?: boolean;
+  defaultAccountId?: string;
+  defaultCategoryId?: string;
 }) {
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState(defaultCategoryId ?? "");
   const [subCategoryId, setSubCategoryId] = useState("");
   const [status, setStatus] = useState("PENDING");
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(defaultAccountId ?? accounts[0]?.id ?? "");
   const [isAmex, setIsAmex] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const labelRef = useRef<HTMLInputElement>(null);
@@ -66,10 +70,10 @@ export function NewTransactionRow({
   function resetFields() {
     setLabel("");
     setAmount("");
-    setCategoryId("");
+    setCategoryId(defaultCategoryId ?? "");
     setSubCategoryId("");
     setStatus("PENDING");
-    setAccountId(accounts[0]?.id ?? "");
+    setAccountId(defaultAccountId ?? accounts[0]?.id ?? "");
     setIsAmex(false);
   }
 

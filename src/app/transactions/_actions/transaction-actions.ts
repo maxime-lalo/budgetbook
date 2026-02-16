@@ -104,6 +104,7 @@ export async function createTransaction(data: Record<string, unknown>) {
   });
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true };
 }
 
@@ -141,6 +142,7 @@ export async function updateTransaction(id: string, data: Record<string, unknown
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true };
 }
 
@@ -157,6 +159,7 @@ export async function deleteTransaction(id: string) {
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true };
 }
 
@@ -176,6 +179,7 @@ export async function markTransactionCompleted(id: string) {
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true };
 }
 
@@ -192,6 +196,7 @@ export async function completeAmexTransactions(year: number, month: number) {
 
   await recomputeMonthlyBalance(year, month);
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { count: result.count };
 }
 
@@ -213,6 +218,7 @@ export async function cancelTransaction(id: string, note: string) {
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true };
 }
 
@@ -276,6 +282,7 @@ export async function updateTransactionField(
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true };
 }
 
@@ -319,6 +326,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
 
   await recomputeMonthlyBalance(year, month);
   revalidatePath("/transactions");
+  revalidatePath("/savings");
   return { success: true, count: previousRecurring.length };
 }
 
