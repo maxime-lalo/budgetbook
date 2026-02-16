@@ -16,29 +16,34 @@ async function getBucketBalances(bucketIds: string[]) {
   const balances: Record<string, { current: number; forecast: number }> = {};
   const buckets = await prisma.bucket.findMany({
     where: { id: { in: bucketIds } },
-    select: { id: true, baseAmount: true },
+    select: { id: true, baseAmount: true, accountId: true },
   });
   const baseAmountMap = new Map(buckets.map((b) => [b.id, b.baseAmount.toNumber()]));
+  const accountIdMap = new Map(buckets.map((b) => [b.id, b.accountId]));
 
   for (const id of bucketIds) {
     const transactions = await prisma.transaction.findMany({
       where: { bucketId: id, status: "COMPLETED" },
-      select: { amount: true, year: true, month: true },
+      select: { amount: true, year: true, month: true, accountId: true, destinationAccountId: true },
     });
     const base = baseAmountMap.get(id) ?? 0;
+    const bucketAccountId = accountIdMap.get(id);
     let currentSum = 0;
     let totalSum = 0;
     for (const t of transactions) {
       const amt = t.amount.toNumber();
-      totalSum += amt;
+      // Retrait du bucket (virement sortant depuis le compte du bucket) : signe direct
+      // Dépôt ou standalone : signe inversé (négatif = versement = solde augmente)
+      const isOutgoing = t.accountId === bucketAccountId && t.destinationAccountId !== null;
+      const effective = isOutgoing ? amt : -amt;
+      totalSum += effective;
       if (t.year < currentYear || (t.year === currentYear && t.month <= currentMonth)) {
-        currentSum += amt;
+        currentSum += effective;
       }
     }
-    // Signe inversé : négatif sur un compte épargne = versement (solde augmente)
     balances[id] = {
-      current: -currentSum + base,
-      forecast: -totalSum + base,
+      current: currentSum + base,
+      forecast: totalSum + base,
     };
   }
   return balances;

@@ -142,14 +142,20 @@ export async function deleteBucket(id: string) {
 }
 
 export async function getBucketBalance(bucketId: string): Promise<number> {
-  const [result, bucket] = await Promise.all([
-    prisma.transaction.aggregate({
+  const [transactions, bucket] = await Promise.all([
+    prisma.transaction.findMany({
       where: { bucketId, status: "COMPLETED" },
-      _sum: { amount: true },
+      select: { amount: true, accountId: true, destinationAccountId: true },
     }),
-    prisma.bucket.findUnique({ where: { id: bucketId }, select: { baseAmount: true } }),
+    prisma.bucket.findUnique({ where: { id: bucketId }, select: { baseAmount: true, accountId: true } }),
   ]);
-  // Signe inversé : les buckets sont sur des comptes épargne/investissement
-  const transactionBalance = -(result._sum.amount?.toNumber() ?? 0);
-  return transactionBalance + (bucket?.baseAmount.toNumber() ?? 0);
+  const base = bucket?.baseAmount.toNumber() ?? 0;
+  const bucketAccountId = bucket?.accountId;
+  let sum = 0;
+  for (const t of transactions) {
+    const amt = t.amount.toNumber();
+    const isOutgoing = t.accountId === bucketAccountId && t.destinationAccountId !== null;
+    sum += isOutgoing ? amt : -amt;
+  }
+  return sum + base;
 }
