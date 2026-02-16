@@ -53,7 +53,7 @@ export async function getSavingsTotals(year: number) {
 
   // Transactions dont le compte source est un compte épargne
   // + virements entrants vers un compte épargne (amount négatif → inversé = crédit)
-  const [completed, pending, incomingCompleted, incomingPending] = await Promise.all([
+  const [completed, pending, incomingCompleted, incomingPending, baseAmounts] = await Promise.all([
     prisma.transaction.aggregate({
       where: { year, status: "COMPLETED", accountId: { in: savingsIds } },
       _sum: { amount: true },
@@ -70,10 +70,17 @@ export async function getSavingsTotals(year: number) {
       where: { year, status: "PENDING", destinationAccountId: { in: savingsIds } },
       _sum: { amount: true },
     }),
+    // Somme des montants de base des buckets des comptes épargne/investissement
+    prisma.bucket.aggregate({
+      where: { accountId: { in: savingsIds } },
+      _sum: { baseAmount: true },
+    }),
   ]);
 
+  const baseTotal = baseAmounts._sum.baseAmount?.toNumber() ?? 0;
+
   // Virements entrants : amount est négatif (quitte la source), on inverse pour le crédit sur épargne
-  const realTotal = (completed._sum.amount?.toNumber() ?? 0) + -(incomingCompleted._sum.amount?.toNumber() ?? 0);
+  const realTotal = baseTotal + (completed._sum.amount?.toNumber() ?? 0) + -(incomingCompleted._sum.amount?.toNumber() ?? 0);
   const pendingTotal = (pending._sum.amount?.toNumber() ?? 0) + -(incomingPending._sum.amount?.toNumber() ?? 0);
 
   return {
