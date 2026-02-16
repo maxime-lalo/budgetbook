@@ -171,6 +171,10 @@ const exportApiTokenSchema = z.object({
   createdAt: z.string(),
 });
 
+const exportAppPreferencesSchema = z.object({
+  amexEnabled: z.boolean(),
+}).nullable().optional();
+
 export const comptesExportSchema = z.object({
   metadata: z.object({
     exportDate: z.string(),
@@ -185,6 +189,7 @@ export const comptesExportSchema = z.object({
     budgets: z.array(exportBudgetSchema),
     monthlyBalances: z.array(exportMonthlyBalanceSchema),
     apiTokens: z.array(exportApiTokenSchema),
+    appPreferences: exportAppPreferencesSchema,
   }),
 });
 

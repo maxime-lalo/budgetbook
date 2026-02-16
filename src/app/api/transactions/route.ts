@@ -37,6 +37,13 @@ export async function POST(request: Request) {
 
   const data = parsed.data;
 
+  // Forcer isAmex à false si le support AMEX est désactivé
+  const prefs = await prisma.appPreferences.findUnique({ where: { id: "singleton" } });
+  const amexEnabled = prefs?.amexEnabled ?? true;
+  if (!amexEnabled) {
+    data.isAmex = false;
+  }
+
   // Résoudre la date (défaut = aujourd'hui)
   const dateStr = data.date ?? new Date().toISOString().slice(0, 10);
   const date = new Date(dateStr + "T00:00:00");

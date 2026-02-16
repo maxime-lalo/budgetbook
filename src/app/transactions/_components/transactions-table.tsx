@@ -118,6 +118,7 @@ export function TransactionsTable({
   month,
   amexPendingCount,
   amexMonthlyTotal,
+  amexEnabled = true,
 }: {
   transactions: Transaction[];
   accounts: Account[];
@@ -128,6 +129,7 @@ export function TransactionsTable({
   month: number;
   amexPendingCount: number;
   amexMonthlyTotal: number;
+  amexEnabled?: boolean;
 }) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -221,6 +223,7 @@ export function TransactionsTable({
         transaction={t}
         accounts={accounts}
         categories={categories}
+        amexEnabled={amexEnabled}
       />
     ));
   } else {
@@ -258,6 +261,7 @@ export function TransactionsTable({
                   transaction={t}
                   accounts={accounts}
                   categories={categories}
+                  amexEnabled={amexEnabled}
                 />
               ))}
           </>
@@ -278,6 +282,7 @@ export function TransactionsTable({
             transaction={t}
             accounts={accounts}
             categories={categories}
+            amexEnabled={amexEnabled}
           />
         ))}
       </>
@@ -301,10 +306,10 @@ export function TransactionsTable({
           </SelectContent>
         </Select>
         <CopyRecurringButton year={year} month={month} />
-        {amexPendingCount > 0 && (
+        {amexEnabled && amexPendingCount > 0 && (
           <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
         )}
-        {amexMonthlyTotal !== 0 && (
+        {amexEnabled && amexMonthlyTotal !== 0 && (
           <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground border rounded-md h-9 px-3">
             <CreditCard className="h-4 w-4" />
             <span>AMEX</span>
@@ -347,6 +352,7 @@ export function TransactionsTable({
               categories={categories}
               year={year}
               month={month}
+              amexEnabled={amexEnabled}
             />
           </TableBody>
         </Table>

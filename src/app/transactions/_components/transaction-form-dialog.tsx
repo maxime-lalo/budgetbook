@@ -43,11 +43,13 @@ export function TransactionFormDialog({
   categories,
   year,
   month,
+  amexEnabled = true,
 }: {
   accounts: Account[];
   categories: Category[];
   year: number;
   month: number;
+  amexEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -69,7 +71,7 @@ export function TransactionFormDialog({
   const sourceHasBuckets = isSavingsType(selectedAccount);
   const destHasBuckets = isSavingsType(destinationAccount);
 
-  const showAmexToggle = !isTransfer && selectedAccount?.type === "CHECKING";
+  const showAmexToggle = amexEnabled && !isTransfer && selectedAccount?.type === "CHECKING";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

@@ -36,11 +36,13 @@ export function NewTransactionRow({
   categories,
   year,
   month,
+  amexEnabled = true,
 }: {
   accounts: Account[];
   categories: Category[];
   year: number;
   month: number;
+  amexEnabled?: boolean;
 }) {
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
@@ -218,7 +220,7 @@ export function NewTransactionRow({
       {/* Compte */}
       <TableCell className="p-1 whitespace-nowrap">
         <div className="flex items-center gap-1">
-          {selectedAccount?.type === "CHECKING" && (
+          {amexEnabled && selectedAccount?.type === "CHECKING" && (
             <button
               type="button"
               onClick={() => setIsAmex(!isAmex)}

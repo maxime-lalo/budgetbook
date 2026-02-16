@@ -216,6 +216,13 @@ async function main() {
     });
   }
 
+  // AppPreferences singleton
+  await prisma.appPreferences.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton", amexEnabled: true },
+  });
+
   console.log("Seed completed successfully!");
 }
 

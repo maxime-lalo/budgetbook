@@ -34,8 +34,27 @@ export async function regenerateApiToken() {
   };
 }
 
+export async function getAppPreferences() {
+  const prefs = await prisma.appPreferences.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton", amexEnabled: true },
+  });
+  return { amexEnabled: prefs.amexEnabled };
+}
+
+export async function updateAmexEnabled(enabled: boolean) {
+  await prisma.appPreferences.upsert({
+    where: { id: "singleton" },
+    update: { amexEnabled: enabled },
+    create: { id: "singleton", amexEnabled: enabled },
+  });
+  revalidatePath("/transactions");
+  revalidatePath("/settings");
+}
+
 export async function exportAllData(): Promise<string> {
-  const [accounts, categories, subCategories, buckets, transactions, budgets, monthlyBalances, apiTokens] =
+  const [accounts, categories, subCategories, buckets, transactions, budgets, monthlyBalances, apiTokens, appPreferences] =
     await Promise.all([
       prisma.account.findMany({ orderBy: { sortOrder: "asc" } }),
       prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -45,6 +64,7 @@ export async function exportAllData(): Promise<string> {
       prisma.budget.findMany({ orderBy: { createdAt: "asc" } }),
       prisma.monthlyBalance.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] }),
       prisma.apiToken.findMany({ orderBy: { createdAt: "asc" } }),
+      prisma.appPreferences.findUnique({ where: { id: "singleton" } }),
     ]);
 
   const serialize = <T extends Record<string, unknown>>(items: T[]) =>
@@ -76,6 +96,7 @@ export async function exportAllData(): Promise<string> {
       budgets: serialize(budgets),
       monthlyBalances: serialize(monthlyBalances),
       apiTokens: serialize(apiTokens),
+      appPreferences: appPreferences ? { amexEnabled: appPreferences.amexEnabled } : null,
     },
   };
 
@@ -268,7 +289,16 @@ export async function importAllData(
         }
         counts.apiTokens = data.apiTokens.length;
 
-        // 10. 2e passe : mettre à jour les linkedAccountId
+        // 10. Restaurer les préférences si présentes
+        if (data.appPreferences) {
+          await tx.appPreferences.upsert({
+            where: { id: "singleton" },
+            update: { amexEnabled: data.appPreferences.amexEnabled },
+            create: { id: "singleton", amexEnabled: data.appPreferences.amexEnabled },
+          });
+        }
+
+        // 11. 2e passe : mettre à jour les linkedAccountId
         const accountsWithLinked = data.accounts.filter((a) => a.linkedAccountId);
         for (const account of accountsWithLinked) {
           await tx.account.update({

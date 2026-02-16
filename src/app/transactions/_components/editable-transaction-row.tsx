@@ -71,10 +71,12 @@ export function EditableTransactionRow({
   transaction,
   accounts,
   categories,
+  amexEnabled = true,
 }: {
   transaction: Transaction;
   accounts: Account[];
   categories: Category[];
+  amexEnabled?: boolean;
 }) {
   const [label, setLabel] = useState(transaction.label);
   const [amount, setAmount] = useState(transaction.amount.toFixed(2));
@@ -441,7 +443,7 @@ export function EditableTransactionRow({
             </div>
           ) : (
             <div className="flex items-center gap-1">
-              {accounts.find((a) => a.id === accountId)?.type === "CHECKING" && (
+              {amexEnabled && accounts.find((a) => a.id === accountId)?.type === "CHECKING" && (
                 <button
                   type="button"
                   onClick={handleAmexToggle}
