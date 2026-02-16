@@ -16,7 +16,7 @@ export async function getTransactions(year: number, month: number) {
       bucket: true,
       destinationAccount: { select: { name: true, color: true } },
     },
-    orderBy: [{ date: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+    orderBy: [{ date: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }, { label: "asc" }],
   });
 
   return transactions.map((t) => ({
