@@ -42,6 +42,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.confi
 # node_modules for drizzle-kit push at runtime (pnpm nests deps, can't cherry-pick)
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
+# Rebuild better-sqlite3 native bindings for the target architecture
+RUN apk add --no-cache python3 make g++ && \
+    npm rebuild better-sqlite3 && \
+    apk del python3 make g++
+
 # Entrypoint script
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
