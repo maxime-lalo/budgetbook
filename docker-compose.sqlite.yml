@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        DB_PROVIDER: sqlite
+    restart: unless-stopped
+    environment:
+      DB_PROVIDER: "sqlite"
+      DATABASE_URL: "file:/app/data/comptes.db"
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    volumes:
+      - sqlite_data:/app/data
+
+volumes:
+  sqlite_data:

@@ -1,5 +1,13 @@
 # Prisma - Schéma et base de données
 
+## Workflow schéma dual-provider
+
+Le fichier source est `schema.base.prisma` (commité, syntaxe PostgreSQL). Le script `scripts/setup-db.ts` génère `schema.prisma` (gitignored) selon `DB_PROVIDER` :
+- **`postgresql`** (défaut) : copie telle quelle
+- **`sqlite`** : remplace le provider et supprime les annotations `@db.Decimal(...)` / `@db.Date`
+
+**Ne jamais éditer `schema.prisma` directement** — modifier `schema.base.prisma` puis relancer `pnpm db:setup`.
+
 ## Modèles
 
 ### Account (table: `accounts`)
@@ -140,8 +148,9 @@ Les IDs des comptes et buckets sont fixes (`checking-main`, `savings-main`, `buc
 ## Commandes
 
 ```bash
-pnpm db:migrate             # Créer/appliquer les migrations
-pnpm db:push                # Pousser le schéma sans migration
+pnpm db:setup               # Générer schema.prisma depuis schema.base.prisma
+pnpm db:migrate             # Créer/appliquer les migrations (PostgreSQL)
+pnpm db:push                # Pousser le schéma sans migration (PostgreSQL ou SQLite)
 pnpm db:seed                # Exécuter le seed (tsx prisma/seed.ts)
 pnpm db:generate            # Générer le client Prisma
 pnpm db:studio              # Interface graphique Prisma Studio

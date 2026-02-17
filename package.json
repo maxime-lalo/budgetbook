@@ -4,24 +4,24 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "prisma generate && next build",
+    "build": "tsx scripts/setup-db.ts && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
+    "db:setup": "tsx scripts/setup-db.ts",
+    "db:migrate": "tsx scripts/setup-db.ts && prisma migrate dev",
+    "db:push": "tsx scripts/setup-db.ts && prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:generate": "prisma generate",
+    "db:generate": "tsx scripts/setup-db.ts && prisma generate",
     "db:extract": "python3 prisma/extract-excel.py",
     "db:import": "tsx prisma/import-data.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "tsx scripts/setup-db.ts && prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^6.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -30,7 +30,6 @@
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
-    "pg": "^8.18.0",
     "prisma": "^6.8.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
@@ -45,7 +44,6 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -41,5 +41,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# generated prisma schema (built from schema.base.prisma)
+prisma/schema.prisma
+
+# SQLite database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
 # imported personal data
 prisma/data/

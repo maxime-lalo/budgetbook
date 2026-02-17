@@ -12,7 +12,7 @@ La migration Excel → BDD est un projet séparé ultérieur.
 |--------|-------------|
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Langage | TypeScript 5, React 19 |
-| Base de données | PostgreSQL 17 (dev + prod via Docker) |
+| Base de données | PostgreSQL 17 ou SQLite (via `DB_PROVIDER`) |
 | ORM | Prisma 6 |
 | Validation | Zod 4 |
 | UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
@@ -28,7 +28,7 @@ La migration Excel → BDD est un projet séparé ultérieur.
 ## Commandes
 
 ```bash
-# Développement
+# Développement (PostgreSQL — par défaut)
 docker compose up -d db          # Démarrer PostgreSQL
 pnpm install                     # Installer les dépendances
 pnpm db:generate                 # Générer le client Prisma
@@ -37,11 +37,20 @@ pnpm db:seed                     # Insérer données de démo
 pnpm dev                         # Lancer (localhost:3000)
 pnpm db:studio                   # Interface Prisma Studio
 
-# Production
+# Développement (SQLite)
+DB_PROVIDER=sqlite pnpm db:setup # Générer le schéma SQLite
+DB_PROVIDER=sqlite pnpm db:push  # Créer/synchroniser la base
+DB_PROVIDER=sqlite pnpm db:seed  # Insérer données de démo
+DB_PROVIDER=sqlite pnpm dev      # Lancer (localhost:3000)
+
+# Production PostgreSQL (2 containers)
 docker compose -f docker-compose.prod.yml up -d --build
 
+# Production SQLite (1 seul container)
+docker compose -f docker-compose.sqlite.yml up -d --build
+
 # Build
-pnpm build                       # prisma generate + next build
+pnpm build                       # setup-db + prisma generate + next build
 pnpm lint                        # ESLint
 
 # Import de données
@@ -63,41 +72,62 @@ pnpm db:import                   # Importer transactions en BDD (tsx)
 
 ```
 comptes/
-├── prisma/                  # Schéma, migrations, seed
-│   ├── data/                # Données importées (JSON BNP, catégories)
-│   ├── import-data.ts       # Script d'import BNP → BDD
-│   ├── extract-excel.py     # Extraction Excel → JSON
-│   └── categorize.py        # Auto-catégorisation des transactions
+├── prisma/
+│   ├── schema.base.prisma   # Schéma source (commité, syntaxe PostgreSQL)
+│   ├── schema.prisma         # Schéma généré (gitignored)
+│   ├── data/                 # Données importées (JSON BNP, catégories)
+│   ├── import-data.ts        # Script d'import BNP → BDD
+│   ├── extract-excel.py      # Extraction Excel → JSON
+│   └── categorize.py         # Auto-catégorisation des transactions
+├── scripts/
+│   ├── setup-db.ts           # Génération du schéma selon DB_PROVIDER
+│   └── docker-entrypoint.sh  # Entrypoint Docker (migrate ou db push)
 ├── src/
-│   ├── app/                 # Pages (App Router)
-│   │   ├── transactions/    # Vue principale mensuelle
-│   │   ├── budgets/         # Budgets mensuels par catégorie
-│   │   ├── categories/      # CRUD catégories/sous-catégories
-│   │   ├── accounts/        # Comptes, buckets, soldes
-│   │   ├── statistics/      # Graphiques Recharts
-│   │   ├── settings/        # Réglages (token API)
-│   │   └── api/             # API REST (transactions, categories, accounts)
+│   ├── app/                  # Pages (App Router)
+│   │   ├── transactions/     # Vue principale mensuelle
+│   │   ├── budgets/          # Budgets mensuels par catégorie
+│   │   ├── categories/       # CRUD catégories/sous-catégories
+│   │   ├── accounts/         # Comptes, buckets, soldes
+│   │   ├── statistics/       # Graphiques Recharts
+│   │   ├── settings/         # Réglages (token API)
+│   │   └── api/              # API REST (transactions, categories, accounts)
 │   ├── components/
-│   │   ├── ui/              # Shadcn/UI (auto-généré)
-│   │   └── layout/          # Sidebar, mobile-nav, theme
-│   └── lib/                 # Prisma singleton, validators, formatters, hooks
-├── docker-compose.yml       # Dev : Postgres seul
-├── docker-compose.prod.yml  # Prod : App + Postgres
-└── Dockerfile               # Multi-stage standalone
+│   │   ├── ui/               # Shadcn/UI (auto-généré)
+│   │   └── layout/           # Sidebar, mobile-nav, theme
+│   └── lib/                  # Prisma singleton, validators, formatters, hooks
+├── docker-compose.yml        # Dev : Postgres seul
+├── docker-compose.prod.yml   # Prod : App + Postgres (2 containers)
+├── docker-compose.sqlite.yml # Prod : App seule avec SQLite (1 container)
+└── Dockerfile                # Multi-stage standalone (dual provider)
 ```
 
 ## Variables d'environnement
 
 | Variable | Description | Exemple |
 |----------|-------------|---------|
-| `DATABASE_URL` | URL PostgreSQL | `postgresql://comptes:comptes_dev@localhost:5432/comptes` |
+| `DB_PROVIDER` | Provider BDD : `postgresql` (défaut) ou `sqlite` | `sqlite` |
+| `DATABASE_URL` | URL de connexion BDD | `postgresql://...` ou `file:./dev.db` |
 | `DB_PASSWORD` | Mot de passe DB prod | (dans docker-compose.prod.yml) |
+
+## Database Provider (PostgreSQL / SQLite)
+
+L'app supporte deux providers via `DB_PROVIDER` :
+- **`postgresql`** (défaut) : déploiement classique avec 2 containers Docker
+- **`sqlite`** : déploiement en 1 seul container avec un fichier `.db` (idéal pour backup simple)
+
+**Workflow schéma** : `prisma/schema.base.prisma` est le fichier source (commité). Le script `scripts/setup-db.ts` génère `prisma/schema.prisma` (gitignored) en ajustant le provider et supprimant les annotations `@db.*` pour SQLite.
+
+```
+prisma/schema.base.prisma  →  scripts/setup-db.ts  →  prisma/schema.prisma (généré)
+```
+
+**Toutes les commandes Prisma** (`db:generate`, `db:migrate`, `db:push`, `build`, `postinstall`) chaînent automatiquement `setup-db.ts` avant l'exécution.
 
 ## Conventions importantes
 
 - Les montants sont stockés en `Decimal(12,2)` (jamais de float)
 - Montant positif = rentrée d'argent, négatif = dépense
-- Les dates de transaction sont `@db.Date` (sans composante horaire) et **optionnelles** (`null` pour les transactions récurrentes)
+- Les dates de transaction sont `@db.Date` en PostgreSQL (sans composante horaire) et **optionnelles** (`null` pour les transactions récurrentes). En SQLite, l'annotation est absente mais date-fns gère le format transparemment
 - Chaque transaction a des champs `month` et `year` séparés de `date` pour le rattachement budgétaire
 - `isAmex` (Boolean) marque les transactions faites via carte AMEX ; elles vivent sur le compte courant, pas sur un compte CREDIT_CARD séparé
 - `onDelete: Cascade` pour Bucket/SubCategory sous leur parent
