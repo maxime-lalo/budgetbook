@@ -38,7 +38,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Drizzle schema files for runtime push/migrate
 COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db ./src/lib/db
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
 # node_modules for drizzle-kit push at runtime (pnpm nests deps, can't cherry-pick)
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
