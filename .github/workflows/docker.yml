@@ -6,6 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: budgetbook
 
 jobs:
   build-and-push:
@@ -13,14 +14,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      matrix:
-        include:
-          - db_provider: postgresql
-            image_name: budgetbook-postgre
-          - db_provider: sqlite
-            image_name: budgetbook-sqlite
 
     steps:
       - name: Checkout
@@ -37,7 +30,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
@@ -47,6 +40,5 @@ jobs:
         with:
           context: .
           push: true
-          build-args: DB_PROVIDER=${{ matrix.db_provider }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
