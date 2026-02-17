@@ -40,17 +40,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db ./src/lib/db
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
-# Drizzle Kit + deps for runtime migrations
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/postgres ./node_modules/postgres
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/esbuild ./node_modules/esbuild
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@esbuild ./node_modules/@esbuild
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-gyp-build ./node_modules/node-gyp-build
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prebuild-install ./node_modules/prebuild-install
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/bindings ./node_modules/bindings
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
+# node_modules for drizzle-kit push at runtime (pnpm nests deps, can't cherry-pick)
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 # Entrypoint script
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh
