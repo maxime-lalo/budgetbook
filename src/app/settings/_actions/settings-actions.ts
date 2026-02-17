@@ -1,79 +1,97 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { db, provider, accounts, categories, subCategories, buckets, transactions, budgets, monthlyBalances, apiTokens, appPreferences } from "@/lib/db";
+import { eq, asc, desc } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { comptesExportSchema } from "@/lib/validators";
+import { toNumber, toISOString } from "@/lib/db/helpers";
+
+// Helper: convertit une date ISO string en Date (PG) ou la laisse en string (SQLite)
+const toTimestamp = (isoString: string): Date | string =>
+  provider === "sqlite" ? isoString : new Date(isoString);
+
+const toDateCol = (isoString: string): Date | string =>
+  provider === "sqlite" ? isoString : new Date(isoString);
 
 export async function getApiToken() {
-  const token = await prisma.apiToken.findFirst({
-    orderBy: { createdAt: "desc" },
+  const token = await db.query.apiTokens.findFirst({
+    orderBy: [desc(apiTokens.createdAt)],
   });
 
   if (!token) return null;
 
   return {
     token: token.token,
-    createdAt: token.createdAt.toISOString(),
+    createdAt: toISOString(token.createdAt)!,
   };
 }
 
 export async function regenerateApiToken() {
-  await prisma.apiToken.deleteMany();
+  await db.delete(apiTokens);
 
-  const newToken = await prisma.apiToken.create({
-    data: {
-      token: randomUUID(),
-    },
+  const id = createId();
+  const token = randomUUID();
+  await db.insert(apiTokens).values({ id, token });
+
+  const created = await db.query.apiTokens.findFirst({
+    where: eq(apiTokens.id, id),
   });
 
   return {
-    token: newToken.token,
-    createdAt: newToken.createdAt.toISOString(),
+    token,
+    createdAt: toISOString(created!.createdAt)!,
   };
 }
 
 export async function getAppPreferences() {
-  const prefs = await prisma.appPreferences.upsert({
-    where: { id: "singleton" },
-    update: {},
-    create: { id: "singleton", amexEnabled: true },
+  let prefs = await db.query.appPreferences.findFirst({
+    where: eq(appPreferences.id, "singleton"),
   });
+
+  if (!prefs) {
+    await db.insert(appPreferences).values({ id: "singleton", amexEnabled: true });
+    prefs = { id: "singleton", amexEnabled: true, updatedAt: new Date().toISOString() as unknown as Date };
+  }
+
   return { amexEnabled: prefs.amexEnabled };
 }
 
 export async function updateAmexEnabled(enabled: boolean) {
-  await prisma.appPreferences.upsert({
-    where: { id: "singleton" },
-    update: { amexEnabled: enabled },
-    create: { id: "singleton", amexEnabled: enabled },
+  const existing = await db.query.appPreferences.findFirst({
+    where: eq(appPreferences.id, "singleton"),
   });
+
+  if (existing) {
+    await db.update(appPreferences).set({ amexEnabled: enabled }).where(eq(appPreferences.id, "singleton"));
+  } else {
+    await db.insert(appPreferences).values({ id: "singleton", amexEnabled: enabled });
+  }
+
   revalidatePath("/transactions");
   revalidatePath("/settings");
 }
 
 export async function exportAllData(): Promise<string> {
-  const [accounts, categories, subCategories, buckets, transactions, budgets, monthlyBalances, apiTokens, appPreferences] =
+  const [accs, cats, subs, bkts, txs, bdgs, mbs, tokens, prefs] =
     await Promise.all([
-      prisma.account.findMany({ orderBy: { sortOrder: "asc" } }),
-      prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
-      prisma.subCategory.findMany({ orderBy: { sortOrder: "asc" } }),
-      prisma.bucket.findMany({ orderBy: { sortOrder: "asc" } }),
-      prisma.transaction.findMany({ orderBy: { createdAt: "asc" } }),
-      prisma.budget.findMany({ orderBy: { createdAt: "asc" } }),
-      prisma.monthlyBalance.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] }),
-      prisma.apiToken.findMany({ orderBy: { createdAt: "asc" } }),
-      prisma.appPreferences.findUnique({ where: { id: "singleton" } }),
+      db.query.accounts.findMany({ orderBy: [asc(accounts.sortOrder)] }),
+      db.query.categories.findMany({ orderBy: [asc(categories.sortOrder)] }),
+      db.query.subCategories.findMany({ orderBy: [asc(subCategories.sortOrder)] }),
+      db.query.buckets.findMany({ orderBy: [asc(buckets.sortOrder)] }),
+      db.query.transactions.findMany({ orderBy: [asc(transactions.createdAt)] }),
+      db.query.budgets.findMany({ orderBy: [asc(budgets.createdAt)] }),
+      db.query.monthlyBalances.findMany({ orderBy: [asc(monthlyBalances.year), asc(monthlyBalances.month)] }),
+      db.query.apiTokens.findMany({ orderBy: [asc(apiTokens.createdAt)] }),
+      db.query.appPreferences.findFirst({ where: eq(appPreferences.id, "singleton") }),
     ]);
 
-  const serialize = <T extends Record<string, unknown>>(items: T[]) =>
+  const serialize = (items: Record<string, unknown>[]) =>
     items.map((item) => {
       const result: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(item)) {
-        if (value instanceof Prisma.Decimal) {
-          result[key] = value.toString();
-        } else if (value instanceof Date) {
+        if (value instanceof Date) {
           result[key] = value.toISOString();
         } else {
           result[key] = value;
@@ -88,38 +106,35 @@ export async function exportAllData(): Promise<string> {
       formatVersion: 1,
     },
     data: {
-      accounts: serialize(accounts),
-      categories: serialize(categories),
-      subCategories: serialize(subCategories),
-      buckets: serialize(buckets),
-      transactions: serialize(transactions),
-      budgets: serialize(budgets),
-      monthlyBalances: serialize(monthlyBalances),
-      apiTokens: serialize(apiTokens),
-      appPreferences: appPreferences ? { amexEnabled: appPreferences.amexEnabled } : null,
+      accounts: serialize(accs),
+      categories: serialize(cats),
+      subCategories: serialize(subs),
+      buckets: serialize(bkts),
+      transactions: serialize(txs),
+      budgets: serialize(bdgs),
+      monthlyBalances: serialize(mbs),
+      apiTokens: serialize(tokens),
+      appPreferences: prefs ? { amexEnabled: prefs.amexEnabled } : null,
     },
   };
 
   return JSON.stringify(exportData, null, 2);
 }
 
+async function clearAllTables() {
+  await db.delete(monthlyBalances);
+  await db.delete(budgets);
+  await db.delete(transactions);
+  await db.delete(subCategories);
+  await db.delete(categories);
+  await db.delete(buckets);
+  await db.update(accounts).set({ linkedAccountId: null });
+  await db.delete(accounts);
+}
+
 export async function clearAllData(): Promise<{ success: true } | { error: string }> {
   try {
-    await prisma.$transaction(
-      async (tx) => {
-        await tx.monthlyBalance.deleteMany();
-        await tx.budget.deleteMany();
-        await tx.transaction.deleteMany();
-        await tx.subCategory.deleteMany();
-        await tx.category.deleteMany();
-        await tx.bucket.deleteMany();
-        // Supprimer les linkedAccountId avant de supprimer les comptes
-        await tx.account.updateMany({ data: { linkedAccountId: null } });
-        await tx.account.deleteMany();
-      },
-      { timeout: 60000 }
-    );
-
+    await clearAllTables();
     revalidatePath("/");
     return { success: true };
   } catch (e) {
@@ -138,177 +153,149 @@ export async function importAllData(
 
     const counts: Record<string, number> = {};
 
-    await prisma.$transaction(
-      async (tx) => {
-        // 1. Clear toutes les données existantes
-        await tx.monthlyBalance.deleteMany();
-        await tx.budget.deleteMany();
-        await tx.transaction.deleteMany();
-        await tx.subCategory.deleteMany();
-        await tx.category.deleteMany();
-        await tx.bucket.deleteMany();
-        await tx.account.updateMany({ data: { linkedAccountId: null } });
-        await tx.account.deleteMany();
-        await tx.apiToken.deleteMany();
+    // 1. Clear toutes les données existantes
+    await clearAllTables();
+    await db.delete(apiTokens);
 
-        // 2. Insérer les comptes (sans linkedAccountId d'abord)
-        for (const account of data.accounts) {
-          await tx.account.create({
-            data: {
-              id: account.id,
-              name: account.name,
-              type: account.type,
-              color: account.color,
-              icon: account.icon,
-              sortOrder: account.sortOrder,
-              linkedAccountId: null,
-              createdAt: new Date(account.createdAt),
-              updatedAt: new Date(account.updatedAt),
-            },
-          });
-        }
-        counts.accounts = data.accounts.length;
+    // 2. Insérer les comptes (sans linkedAccountId d'abord)
+    for (const account of data.accounts) {
+      await db.insert(accounts).values({
+        id: account.id,
+        name: account.name,
+        type: account.type,
+        color: account.color,
+        icon: account.icon,
+        sortOrder: account.sortOrder,
+        linkedAccountId: null,
+        createdAt: toTimestamp(account.createdAt) as Date,
+        updatedAt: toTimestamp(account.updatedAt) as Date,
+      });
+    }
+    counts.accounts = data.accounts.length;
 
-        // 3. Insérer les catégories
-        for (const category of data.categories) {
-          await tx.category.create({
-            data: {
-              id: category.id,
-              name: category.name,
-              color: category.color,
-              icon: category.icon,
-              sortOrder: category.sortOrder,
-              createdAt: new Date(category.createdAt),
-              updatedAt: new Date(category.updatedAt),
-            },
-          });
-        }
-        counts.categories = data.categories.length;
+    // 3. Insérer les catégories
+    for (const category of data.categories) {
+      await db.insert(categories).values({
+        id: category.id,
+        name: category.name,
+        color: category.color,
+        icon: category.icon,
+        sortOrder: category.sortOrder,
+        createdAt: toTimestamp(category.createdAt) as Date,
+        updatedAt: toTimestamp(category.updatedAt) as Date,
+      });
+    }
+    counts.categories = data.categories.length;
 
-        // 4. Insérer les sous-catégories
-        for (const subCategory of data.subCategories) {
-          await tx.subCategory.create({
-            data: {
-              id: subCategory.id,
-              name: subCategory.name,
-              categoryId: subCategory.categoryId,
-              sortOrder: subCategory.sortOrder,
-              createdAt: new Date(subCategory.createdAt),
-              updatedAt: new Date(subCategory.updatedAt),
-            },
-          });
-        }
-        counts.subCategories = data.subCategories.length;
+    // 4. Insérer les sous-catégories
+    for (const subCategory of data.subCategories) {
+      await db.insert(subCategories).values({
+        id: subCategory.id,
+        name: subCategory.name,
+        categoryId: subCategory.categoryId,
+        sortOrder: subCategory.sortOrder,
+        createdAt: toTimestamp(subCategory.createdAt) as Date,
+        updatedAt: toTimestamp(subCategory.updatedAt) as Date,
+      });
+    }
+    counts.subCategories = data.subCategories.length;
 
-        // 5. Insérer les buckets
-        for (const bucket of data.buckets) {
-          await tx.bucket.create({
-            data: {
-              id: bucket.id,
-              name: bucket.name,
-              accountId: bucket.accountId,
-              color: bucket.color,
-              goal: bucket.goal ? new Prisma.Decimal(bucket.goal) : null,
-              baseAmount: new Prisma.Decimal(bucket.baseAmount),
-              sortOrder: bucket.sortOrder,
-              createdAt: new Date(bucket.createdAt),
-              updatedAt: new Date(bucket.updatedAt),
-            },
-          });
-        }
-        counts.buckets = data.buckets.length;
+    // 5. Insérer les buckets
+    for (const bucket of data.buckets) {
+      await db.insert(buckets).values({
+        id: bucket.id,
+        name: bucket.name,
+        accountId: bucket.accountId,
+        color: bucket.color,
+        goal: bucket.goal,
+        baseAmount: bucket.baseAmount,
+        sortOrder: bucket.sortOrder,
+        createdAt: toTimestamp(bucket.createdAt) as Date,
+        updatedAt: toTimestamp(bucket.updatedAt) as Date,
+      });
+    }
+    counts.buckets = data.buckets.length;
 
-        // 6. Insérer les transactions
-        for (const transaction of data.transactions) {
-          await tx.transaction.create({
-            data: {
-              id: transaction.id,
-              label: transaction.label,
-              amount: new Prisma.Decimal(transaction.amount),
-              date: transaction.date ? new Date(transaction.date) : null,
-              month: transaction.month,
-              year: transaction.year,
-              status: transaction.status,
-              note: transaction.note,
-              accountId: transaction.accountId,
-              destinationAccountId: transaction.destinationAccountId,
-              categoryId: transaction.categoryId,
-              subCategoryId: transaction.subCategoryId,
-              bucketId: transaction.bucketId,
-              isAmex: transaction.isAmex,
-              createdAt: new Date(transaction.createdAt),
-              updatedAt: new Date(transaction.updatedAt),
-            },
-          });
-        }
-        counts.transactions = data.transactions.length;
+    // 6. Insérer les transactions
+    for (const transaction of data.transactions) {
+      await db.insert(transactions).values({
+        id: transaction.id,
+        label: transaction.label,
+        amount: transaction.amount,
+        date: transaction.date ? toDateCol(transaction.date) as Date : null,
+        month: transaction.month,
+        year: transaction.year,
+        status: transaction.status,
+        note: transaction.note,
+        accountId: transaction.accountId,
+        destinationAccountId: transaction.destinationAccountId,
+        categoryId: transaction.categoryId,
+        subCategoryId: transaction.subCategoryId,
+        bucketId: transaction.bucketId,
+        isAmex: transaction.isAmex,
+        createdAt: toTimestamp(transaction.createdAt) as Date,
+        updatedAt: toTimestamp(transaction.updatedAt) as Date,
+      });
+    }
+    counts.transactions = data.transactions.length;
 
-        // 7. Insérer les budgets
-        for (const budget of data.budgets) {
-          await tx.budget.create({
-            data: {
-              id: budget.id,
-              categoryId: budget.categoryId,
-              month: budget.month,
-              year: budget.year,
-              amount: new Prisma.Decimal(budget.amount),
-              createdAt: new Date(budget.createdAt),
-              updatedAt: new Date(budget.updatedAt),
-            },
-          });
-        }
-        counts.budgets = data.budgets.length;
+    // 7. Insérer les budgets
+    for (const budget of data.budgets) {
+      await db.insert(budgets).values({
+        id: budget.id,
+        categoryId: budget.categoryId,
+        month: budget.month,
+        year: budget.year,
+        amount: budget.amount,
+        createdAt: toTimestamp(budget.createdAt) as Date,
+        updatedAt: toTimestamp(budget.updatedAt) as Date,
+      });
+    }
+    counts.budgets = data.budgets.length;
 
-        // 8. Insérer les monthly balances
-        for (const mb of data.monthlyBalances) {
-          await tx.monthlyBalance.create({
-            data: {
-              id: mb.id,
-              year: mb.year,
-              month: mb.month,
-              forecast: new Prisma.Decimal(mb.forecast),
-              committed: new Prisma.Decimal(mb.committed),
-              surplus: new Prisma.Decimal(mb.surplus),
-              createdAt: new Date(mb.createdAt),
-              updatedAt: new Date(mb.updatedAt),
-            },
-          });
-        }
-        counts.monthlyBalances = data.monthlyBalances.length;
+    // 8. Insérer les monthly balances
+    for (const mb of data.monthlyBalances) {
+      await db.insert(monthlyBalances).values({
+        id: mb.id,
+        year: mb.year,
+        month: mb.month,
+        forecast: mb.forecast,
+        committed: mb.committed,
+        surplus: mb.surplus,
+        createdAt: toTimestamp(mb.createdAt) as Date,
+        updatedAt: toTimestamp(mb.updatedAt) as Date,
+      });
+    }
+    counts.monthlyBalances = data.monthlyBalances.length;
 
-        // 9. Insérer les API tokens
-        for (const token of data.apiTokens) {
-          await tx.apiToken.create({
-            data: {
-              id: token.id,
-              token: token.token,
-              name: token.name,
-              createdAt: new Date(token.createdAt),
-            },
-          });
-        }
-        counts.apiTokens = data.apiTokens.length;
+    // 9. Insérer les API tokens
+    for (const token of data.apiTokens) {
+      await db.insert(apiTokens).values({
+        id: token.id,
+        token: token.token,
+        name: token.name,
+        createdAt: toTimestamp(token.createdAt) as Date,
+      });
+    }
+    counts.apiTokens = data.apiTokens.length;
 
-        // 10. Restaurer les préférences si présentes
-        if (data.appPreferences) {
-          await tx.appPreferences.upsert({
-            where: { id: "singleton" },
-            update: { amexEnabled: data.appPreferences.amexEnabled },
-            create: { id: "singleton", amexEnabled: data.appPreferences.amexEnabled },
-          });
-        }
+    // 10. Restaurer les préférences si présentes
+    if (data.appPreferences) {
+      const existingPrefs = await db.query.appPreferences.findFirst({
+        where: eq(appPreferences.id, "singleton"),
+      });
+      if (existingPrefs) {
+        await db.update(appPreferences).set({ amexEnabled: data.appPreferences.amexEnabled }).where(eq(appPreferences.id, "singleton"));
+      } else {
+        await db.insert(appPreferences).values({ id: "singleton", amexEnabled: data.appPreferences.amexEnabled });
+      }
+    }
 
-        // 11. 2e passe : mettre à jour les linkedAccountId
-        const accountsWithLinked = data.accounts.filter((a) => a.linkedAccountId);
-        for (const account of accountsWithLinked) {
-          await tx.account.update({
-            where: { id: account.id },
-            data: { linkedAccountId: account.linkedAccountId },
-          });
-        }
-      },
-      { timeout: 60000 }
-    );
+    // 11. 2e passe : mettre à jour les linkedAccountId
+    const accountsWithLinked = data.accounts.filter((a) => a.linkedAccountId);
+    for (const account of accountsWithLinked) {
+      await db.update(accounts).set({ linkedAccountId: account.linkedAccountId }).where(eq(accounts.id, account.id));
+    }
 
     revalidatePath("/");
     return { success: true, counts };

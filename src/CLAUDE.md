@@ -9,7 +9,12 @@ src/
 │   ├── ui/        # Shadcn/UI (ne pas modifier manuellement)
 │   └── layout/    # Sidebar, mobile-nav, theme
 └── lib/           # Utilitaires partagés
-    ├── prisma.ts          # Singleton Prisma
+    ├── db/                # Drizzle ORM (schéma, singleton, helpers)
+    │   ├── schema/pg.ts   # Schéma PostgreSQL
+    │   ├── schema/sqlite.ts # Schéma SQLite
+    │   ├── index.ts       # Singleton dual-provider
+    │   ├── helpers.ts     # toNumber(), toISOString()
+    │   └── seed.ts        # Données de démo
     ├── validators.ts      # Schémas Zod (toute la validation)
     ├── formatters.ts      # Formatage monnaie, dates, labels
     ├── monthly-balance.ts # Report cumulatif inter-mois (MonthlyBalance)
@@ -41,11 +46,11 @@ Le préfixe `_` empêche Next.js de traiter ces dossiers comme des routes.
 - Les fonctions de lecture (getXxx) sont aussi dans les fichiers actions pour la co-localisation
 - Retournent `{ success: true }` ou `{ error: ... }` pour les mutations
 - Appellent `revalidatePath()` après chaque mutation
-- Convertissent les `Decimal` Prisma en `number` et les `Date` en `string` avant de retourner
+- Convertissent les montants numériques en `number` via `toNumber()` et les `Date` en `string` via `toISOString()` avant de retourner
 
 ### Sérialisation Server → Client
-Les objets Prisma contiennent des types non-sérialisables (`Decimal`, potentiellement `Date` dans les relations).
-**Règle** : toujours construire des objets plain explicitement dans les server actions avant de les passer aux client components. Ne jamais faire de spread `...prismaObject` si l'objet contient des Decimal.
+Les requêtes Drizzle retournent des montants en `string` (PG numeric) ou `number` (SQLite real).
+**Règle** : toujours convertir via `toNumber()` de `@/lib/db/helpers` et construire des objets plain explicitement dans les server actions avant de les passer aux client components.
 
 ### Validation
 - Zod 4 pour toute la validation (côté serveur uniquement)

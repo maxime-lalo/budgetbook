@@ -1,29 +1,31 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { db, accounts, buckets, transactions } from "@/lib/db";
+import { eq, and, asc } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { accountSchema, bucketSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { toNumber } from "@/lib/db/helpers";
 
 export async function getAccounts() {
-  const accounts = await prisma.account.findMany({
-    include: {
-      buckets: { orderBy: { sortOrder: "asc" } },
+  const result = await db.query.accounts.findMany({
+    with: {
+      buckets: { orderBy: [asc(buckets.sortOrder)] },
       linkedAccount: true,
       linkedCards: true,
       transactions: {
-        where: { status: "COMPLETED" },
-        select: { amount: true, year: true, month: true, destinationAccountId: true },
+        where: eq(transactions.status, "COMPLETED"),
+        columns: { amount: true, year: true, month: true, destinationAccountId: true },
       },
       incomingTransfers: {
-        where: { status: "COMPLETED" },
-        select: { amount: true, year: true, month: true },
+        where: eq(transactions.status, "COMPLETED"),
+        columns: { amount: true, year: true, month: true },
       },
     },
-    orderBy: { sortOrder: "asc" },
+    orderBy: [asc(accounts.sortOrder)],
   });
 
-  return accounts.map((a) => ({
+  return result.map((a) => ({
     id: a.id,
     name: a.name,
     type: a.type,
@@ -38,18 +40,18 @@ export async function getAccounts() {
       name: b.name,
       accountId: b.accountId,
       color: b.color,
-      goal: b.goal?.toNumber() ?? null,
-      baseAmount: b.baseAmount.toNumber(),
+      goal: b.goal != null ? toNumber(b.goal) : null,
+      baseAmount: toNumber(b.baseAmount),
       sortOrder: b.sortOrder,
     })),
     transactions: a.transactions.map((t) => ({
-      amount: t.amount.toNumber(),
+      amount: toNumber(t.amount),
       year: t.year,
       month: t.month,
       destinationAccountId: t.destinationAccountId,
     })),
     incomingTransfers: a.incomingTransfers.map((t) => ({
-      amount: t.amount.toNumber(),
+      amount: toNumber(t.amount),
       year: t.year,
       month: t.month,
     })),
@@ -57,9 +59,9 @@ export async function getAccounts() {
 }
 
 export async function getCheckingAccounts() {
-  return prisma.account.findMany({
-    where: { type: "CHECKING" },
-    orderBy: { sortOrder: "asc" },
+  return db.query.accounts.findMany({
+    where: eq(accounts.type, "CHECKING"),
+    orderBy: [asc(accounts.sortOrder)],
   });
 }
 
@@ -69,11 +71,10 @@ export async function createAccount(formData: FormData) {
   const parsed = accountSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.account.create({
-    data: {
-      ...parsed.data,
-      linkedAccountId: parsed.data.linkedAccountId || null,
-    },
+  await db.insert(accounts).values({
+    id: createId(),
+    ...parsed.data,
+    linkedAccountId: parsed.data.linkedAccountId || null,
   });
   revalidatePath("/accounts");
   return { success: true };
@@ -85,19 +86,16 @@ export async function updateAccount(id: string, formData: FormData) {
   const parsed = accountSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.account.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      linkedAccountId: parsed.data.linkedAccountId || null,
-    },
-  });
+  await db.update(accounts).set({
+    ...parsed.data,
+    linkedAccountId: parsed.data.linkedAccountId || null,
+  }).where(eq(accounts.id, id));
   revalidatePath("/accounts");
   return { success: true };
 }
 
 export async function deleteAccount(id: string) {
-  await prisma.account.delete({ where: { id } });
+  await db.delete(accounts).where(eq(accounts.id, id));
   revalidatePath("/accounts");
   return { success: true };
 }
@@ -107,12 +105,11 @@ export async function createBucket(formData: FormData) {
   const parsed = bucketSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.bucket.create({
-    data: {
-      ...parsed.data,
-      goal: parsed.data.goal ? new Prisma.Decimal(parsed.data.goal) : null,
-      baseAmount: new Prisma.Decimal(parsed.data.baseAmount),
-    },
+  await db.insert(buckets).values({
+    id: createId(),
+    ...parsed.data,
+    goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
+    baseAmount: parsed.data.baseAmount.toString(),
   });
   revalidatePath("/accounts");
   return { success: true };
@@ -123,37 +120,37 @@ export async function updateBucket(id: string, formData: FormData) {
   const parsed = bucketSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.bucket.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      goal: parsed.data.goal ? new Prisma.Decimal(parsed.data.goal) : null,
-      baseAmount: new Prisma.Decimal(parsed.data.baseAmount),
-    },
-  });
+  await db.update(buckets).set({
+    ...parsed.data,
+    goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
+    baseAmount: parsed.data.baseAmount.toString(),
+  }).where(eq(buckets.id, id));
   revalidatePath("/accounts");
   return { success: true };
 }
 
 export async function deleteBucket(id: string) {
-  await prisma.bucket.delete({ where: { id } });
+  await db.delete(buckets).where(eq(buckets.id, id));
   revalidatePath("/accounts");
   return { success: true };
 }
 
 export async function getBucketBalance(bucketId: string): Promise<number> {
-  const [transactions, bucket] = await Promise.all([
-    prisma.transaction.findMany({
-      where: { bucketId, status: "COMPLETED" },
-      select: { amount: true, accountId: true, destinationAccountId: true },
+  const [txs, bucket] = await Promise.all([
+    db.query.transactions.findMany({
+      where: and(eq(transactions.bucketId, bucketId), eq(transactions.status, "COMPLETED")),
+      columns: { amount: true, accountId: true, destinationAccountId: true },
     }),
-    prisma.bucket.findUnique({ where: { id: bucketId }, select: { baseAmount: true, accountId: true } }),
+    db.query.buckets.findFirst({
+      where: eq(buckets.id, bucketId),
+      columns: { baseAmount: true, accountId: true },
+    }),
   ]);
-  const base = bucket?.baseAmount.toNumber() ?? 0;
+  const base = bucket ? toNumber(bucket.baseAmount) : 0;
   const bucketAccountId = bucket?.accountId;
   let sum = 0;
-  for (const t of transactions) {
-    const amt = t.amount.toNumber();
+  for (const t of txs) {
+    const amt = toNumber(t.amount);
     const isOutgoing = t.accountId === bucketAccountId && t.destinationAccountId !== null;
     sum += isOutgoing ? amt : -amt;
   }

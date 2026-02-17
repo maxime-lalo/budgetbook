@@ -122,4 +122,4 @@ Ce montant est :
 
 ## Point technique : sérialisation
 
-`getTransactions()` et `getFormData()` construisent des objets plain explicitement (pas de spread Prisma) pour éviter les erreurs `Decimal objects are not supported` de React.
+`getTransactions()` et `getFormData()` construisent des objets plain explicitement pour convertir les montants (string en PG, number en SQLite) en `number` via `toNumber()` avant passage aux Client Components.

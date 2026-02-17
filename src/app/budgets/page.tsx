@@ -29,11 +29,12 @@ export default async function BudgetsPage({
     getPreviousMonthBudgetRemaining(year, month),
   ]);
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
   const activeBudgets = budgets.filter((b) => b.budgeted > 0 || b.spent > 0);
-  const totalBudgeted = activeBudgets.reduce((sum, b) => sum + b.budgeted, 0);
-  const totalSpent = activeBudgets.reduce((sum, b) => sum + b.spent, 0);
-  const totalCommitted = activeBudgets.reduce((sum, b) => sum + Math.max(0, b.budgeted - b.spent), 0);
-  const totalRemaining = carryOver + totals.forecast - totalCommitted;
+  const totalBudgeted = round2(activeBudgets.reduce((sum, b) => sum + b.budgeted, 0));
+  const totalSpent = round2(activeBudgets.reduce((sum, b) => sum + b.spent, 0));
+  const totalCommitted = round2(activeBudgets.reduce((sum, b) => sum + Math.max(0, round2(b.budgeted - b.spent)), 0));
+  const totalRemaining = round2(carryOver + totals.forecast - totalCommitted);
   const hasOverBudget = budgets.some((b) => b.spent > b.budgeted && b.spent > 0);
 
   return (

@@ -1,29 +1,36 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { db, transactions, accounts, buckets, categories as categoriesTable } from "@/lib/db";
+import { eq, and, inArray, sql, asc, isNull } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { transactionSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 import { recomputeMonthlyBalance, getCarryOver } from "@/lib/monthly-balance";
+import { toNumber, toISOString, toDbDate, round2 } from "@/lib/db/helpers";
 
 export async function getTransactions(year: number, month: number) {
-  const transactions = await prisma.transaction.findMany({
-    where: { year, month },
-    include: {
+  const result = await db.query.transactions.findMany({
+    where: and(eq(transactions.year, year), eq(transactions.month, month)),
+    with: {
       account: true,
       category: true,
       subCategory: true,
       bucket: true,
-      destinationAccount: { select: { name: true, color: true } },
+      destinationAccount: { columns: { name: true, color: true } },
     },
-    orderBy: [{ date: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }, { label: "asc" }],
+    orderBy: [
+      sql`CASE WHEN ${transactions.date} IS NULL THEN 0 ELSE 1 END`,
+      asc(transactions.date),
+      asc(transactions.createdAt),
+      asc(transactions.label),
+    ],
   });
 
-  return transactions.map((t) => ({
+  return result.map((t) => ({
     id: t.id,
     label: t.label,
-    amount: t.amount.toNumber(),
-    date: t.date ? t.date.toISOString() : null,
+    amount: toNumber(t.amount),
+    date: t.date ? toISOString(t.date) : null,
     month: t.month,
     year: t.year,
     status: t.status,
@@ -43,41 +50,38 @@ export async function getTransactions(year: number, month: number) {
 }
 
 export async function getTransactionTotals(year: number, month: number) {
-  const checkingAccounts = await prisma.account.findMany({
-    where: { type: "CHECKING" },
-    select: { id: true },
-  });
+  const checkingAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.type, "CHECKING"));
   const checkingIds = checkingAccounts.map((a) => a.id);
 
-  // Transactions dont le compte source est un compte courant (dépenses, revenus, virements sortants)
-  // + virements entrants vers un compte courant (amount négatif → inversé = crédit)
+  if (checkingIds.length === 0) {
+    return { real: 0, pending: 0, forecast: 0 };
+  }
+
   const [completed, pending, incomingCompleted, incomingPending] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: { year, month, status: "COMPLETED", accountId: { in: checkingIds } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { year, month, status: "PENDING", accountId: { in: checkingIds } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { year, month, status: "COMPLETED", destinationAccountId: { in: checkingIds } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { year, month, status: "PENDING", destinationAccountId: { in: checkingIds } },
-      _sum: { amount: true },
-    }),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.accountId, checkingIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.accountId, checkingIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, checkingIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, checkingIds))),
   ]);
 
-  // Virements entrants : amount est négatif (quitte la source), on inverse pour le crédit sur checking
-  const realTotal = (completed._sum.amount?.toNumber() ?? 0) + -(incomingCompleted._sum.amount?.toNumber() ?? 0);
-  const pendingTotal = (pending._sum.amount?.toNumber() ?? 0) + -(incomingPending._sum.amount?.toNumber() ?? 0);
+  const realTotal = round2(toNumber(completed[0].total) + -(toNumber(incomingCompleted[0].total)));
+  const pendingTotal = round2(toNumber(pending[0].total) + -(toNumber(incomingPending[0].total)));
 
   return {
     real: realTotal,
     pending: pendingTotal,
-    forecast: realTotal + pendingTotal,
+    forecast: round2(realTotal + pendingTotal),
   };
 }
 
@@ -85,22 +89,21 @@ export async function createTransaction(data: Record<string, unknown>) {
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.transaction.create({
-    data: {
-      label: parsed.data.label,
-      amount: new Prisma.Decimal(parsed.data.amount),
-      date: parsed.data.date,
-      month: parsed.data.month,
-      year: parsed.data.year,
-      status: parsed.data.status,
-      note: parsed.data.note || null,
-      accountId: parsed.data.accountId,
-      categoryId: parsed.data.categoryId,
-      subCategoryId: parsed.data.subCategoryId || null,
-      bucketId: parsed.data.bucketId || null,
-      isAmex: parsed.data.isAmex,
-      destinationAccountId: parsed.data.destinationAccountId || null,
-    },
+  await db.insert(transactions).values({
+    id: createId(),
+    label: parsed.data.label,
+    amount: parsed.data.amount.toString(),
+    date: parsed.data.date ? toDbDate(parsed.data.date) : null,
+    month: parsed.data.month,
+    year: parsed.data.year,
+    status: parsed.data.status,
+    note: parsed.data.note || null,
+    accountId: parsed.data.accountId,
+    categoryId: parsed.data.categoryId,
+    subCategoryId: parsed.data.subCategoryId || null,
+    bucketId: parsed.data.bucketId || null,
+    isAmex: parsed.data.isAmex,
+    destinationAccountId: parsed.data.destinationAccountId || null,
   });
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
   revalidatePath("/transactions");
@@ -112,29 +115,26 @@ export async function updateTransaction(id: string, data: Record<string, unknown
   const parsed = transactionSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  const oldTransaction = await prisma.transaction.findUnique({
-    where: { id },
-    select: { year: true, month: true },
+  const oldTransaction = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+    columns: { year: true, month: true },
   });
 
-  await prisma.transaction.update({
-    where: { id },
-    data: {
-      label: parsed.data.label,
-      amount: new Prisma.Decimal(parsed.data.amount),
-      date: parsed.data.date,
-      month: parsed.data.month,
-      year: parsed.data.year,
-      status: parsed.data.status,
-      note: parsed.data.note || null,
-      accountId: parsed.data.accountId,
-      categoryId: parsed.data.categoryId,
-      subCategoryId: parsed.data.subCategoryId || null,
-      bucketId: parsed.data.bucketId || null,
-      isAmex: parsed.data.isAmex,
-      destinationAccountId: parsed.data.destinationAccountId || null,
-    },
-  });
+  await db.update(transactions).set({
+    label: parsed.data.label,
+    amount: parsed.data.amount.toString(),
+    date: parsed.data.date ? toDbDate(parsed.data.date) : null,
+    month: parsed.data.month,
+    year: parsed.data.year,
+    status: parsed.data.status,
+    note: parsed.data.note || null,
+    accountId: parsed.data.accountId,
+    categoryId: parsed.data.categoryId,
+    subCategoryId: parsed.data.subCategoryId || null,
+    bucketId: parsed.data.bucketId || null,
+    isAmex: parsed.data.isAmex,
+    destinationAccountId: parsed.data.destinationAccountId || null,
+  }).where(eq(transactions.id, id));
 
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
   if (oldTransaction && (oldTransaction.year !== parsed.data.year || oldTransaction.month !== parsed.data.month)) {
@@ -147,12 +147,12 @@ export async function updateTransaction(id: string, data: Record<string, unknown
 }
 
 export async function deleteTransaction(id: string) {
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
-    select: { year: true, month: true },
+  const transaction = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+    columns: { year: true, month: true },
   });
 
-  await prisma.transaction.delete({ where: { id } });
+  await db.delete(transactions).where(eq(transactions.id, id));
 
   if (transaction) {
     await recomputeMonthlyBalance(transaction.year, transaction.month);
@@ -164,15 +164,12 @@ export async function deleteTransaction(id: string) {
 }
 
 export async function markTransactionCompleted(id: string) {
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
-    select: { year: true, month: true },
+  const transaction = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+    columns: { year: true, month: true },
   });
 
-  await prisma.transaction.update({
-    where: { id },
-    data: { status: "COMPLETED" },
-  });
+  await db.update(transactions).set({ status: "COMPLETED" }).where(eq(transactions.id, id));
 
   if (transaction) {
     await recomputeMonthlyBalance(transaction.year, transaction.month);
@@ -184,34 +181,38 @@ export async function markTransactionCompleted(id: string) {
 }
 
 export async function completeAmexTransactions(year: number, month: number) {
-  const result = await prisma.transaction.updateMany({
-    where: {
-      year,
-      month,
-      status: "PENDING",
-      isAmex: true,
-    },
-    data: { status: "COMPLETED" },
-  });
+  const amexWhere = and(
+    eq(transactions.year, year),
+    eq(transactions.month, month),
+    eq(transactions.status, "PENDING"),
+    eq(transactions.isAmex, true)
+  );
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(amexWhere);
+
+  await db
+    .update(transactions)
+    .set({ status: "COMPLETED" })
+    .where(amexWhere);
 
   await recomputeMonthlyBalance(year, month);
   revalidatePath("/transactions");
   revalidatePath("/savings");
-  return { count: result.count };
+  return { count: Number(count) };
 }
 
 export async function cancelTransaction(id: string, note: string) {
   if (!note.trim()) return { error: "Une note est requise pour annuler" };
 
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
-    select: { year: true, month: true },
+  const transaction = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+    columns: { year: true, month: true },
   });
 
-  await prisma.transaction.update({
-    where: { id },
-    data: { status: "CANCELLED", note },
-  });
+  await db.update(transactions).set({ status: "CANCELLED", note }).where(eq(transactions.id, id));
 
   if (transaction) {
     await recomputeMonthlyBalance(transaction.year, transaction.month);
@@ -240,21 +241,21 @@ export async function updateTransactionField(
     destinationAccountId: string | null;
   }>
 ) {
-  const oldTransaction = await prisma.transaction.findUnique({
-    where: { id },
-    select: { year: true, month: true },
+  const oldTransaction = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+    columns: { year: true, month: true },
   });
 
   const data: Record<string, unknown> = {};
 
   if (fields.label !== undefined) data.label = fields.label;
-  if (fields.amount !== undefined) data.amount = new Prisma.Decimal(fields.amount);
+  if (fields.amount !== undefined) data.amount = fields.amount.toString();
   if (fields.date !== undefined) {
     if (fields.date === null) {
       data.date = null;
     } else {
       const d = new Date(fields.date);
-      data.date = d;
+      data.date = toDbDate(d);
       data.month = d.getMonth() + 1;
       data.year = d.getFullYear();
     }
@@ -270,14 +271,17 @@ export async function updateTransactionField(
   if (fields.isAmex !== undefined) data.isAmex = fields.isAmex;
   if (fields.destinationAccountId !== undefined) data.destinationAccountId = fields.destinationAccountId;
 
-  const updated = await prisma.transaction.update({
-    where: { id },
-    data,
-    select: { year: true, month: true },
+  await db.update(transactions).set(data).where(eq(transactions.id, id));
+
+  const updated = await db.query.transactions.findFirst({
+    where: eq(transactions.id, id),
+    columns: { year: true, month: true },
   });
 
-  await recomputeMonthlyBalance(updated.year, updated.month);
-  if (oldTransaction && (oldTransaction.year !== updated.year || oldTransaction.month !== updated.month)) {
+  if (updated) {
+    await recomputeMonthlyBalance(updated.year, updated.month);
+  }
+  if (oldTransaction && updated && (oldTransaction.year !== updated.year || oldTransaction.month !== updated.month)) {
     await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
   }
 
@@ -290,8 +294,12 @@ export async function copyRecurringTransactions(year: number, month: number) {
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
 
-  const previousRecurring = await prisma.transaction.findMany({
-    where: { year: prevYear, month: prevMonth, date: null },
+  const previousRecurring = await db.query.transactions.findMany({
+    where: and(
+      eq(transactions.year, prevYear),
+      eq(transactions.month, prevMonth),
+      isNull(transactions.date)
+    ),
   });
 
   if (previousRecurring.length === 0) {
@@ -299,28 +307,27 @@ export async function copyRecurringTransactions(year: number, month: number) {
   }
 
   // Supprimer les récurrentes existantes du mois cible
-  await prisma.transaction.deleteMany({
-    where: { year, month, date: null },
-  });
+  await db.delete(transactions).where(
+    and(eq(transactions.year, year), eq(transactions.month, month), isNull(transactions.date))
+  );
 
   // Copier avec status PENDING et sans note
   for (const t of previousRecurring) {
-    await prisma.transaction.create({
-      data: {
-        label: t.label,
-        amount: t.amount,
-        date: null,
-        month,
-        year,
-        status: "PENDING",
-        note: null,
-        accountId: t.accountId,
-        categoryId: t.categoryId,
-        subCategoryId: t.subCategoryId,
-        bucketId: t.bucketId,
-        isAmex: t.isAmex,
-        destinationAccountId: t.destinationAccountId,
-      },
+    await db.insert(transactions).values({
+      id: createId(),
+      label: t.label,
+      amount: t.amount,
+      date: null,
+      month,
+      year,
+      status: "PENDING",
+      note: null,
+      accountId: t.accountId,
+      categoryId: t.categoryId,
+      subCategoryId: t.subCategoryId,
+      bucketId: t.bucketId,
+      isAmex: t.isAmex,
+      destinationAccountId: t.destinationAccountId,
     });
   }
 
@@ -335,22 +342,21 @@ export async function getPreviousMonthBudgetRemaining(year: number, month: numbe
 }
 
 export async function getFormData() {
-  const [accounts, categories] = await Promise.all([
-    prisma.account.findMany({
-      include: {
-        buckets: { orderBy: { sortOrder: "asc" } },
+  const [accountList, categoryList] = await Promise.all([
+    db.query.accounts.findMany({
+      with: {
+        buckets: { orderBy: [asc(buckets.sortOrder)] },
         linkedCards: true,
       },
-      orderBy: { sortOrder: "asc" },
+      orderBy: [asc(accounts.sortOrder)],
     }),
-    prisma.category.findMany({
-      include: { subCategories: { orderBy: { name: "asc" } } },
-      orderBy: { name: "asc" },
+    db.query.categories.findMany({
+      with: { subCategories: true },
     }),
   ]);
 
   return {
-    accounts: accounts.map((a) => ({
+    accounts: accountList.map((a) => ({
       id: a.id,
       name: a.name,
       type: a.type,
@@ -363,7 +369,7 @@ export async function getFormData() {
         name: c.name,
       })),
     })),
-    categories: categories
+    categories: categoryList
       .sort((a, b) => a.name.localeCompare(b.name, "fr"))
       .map((c) => ({
         id: c.id,

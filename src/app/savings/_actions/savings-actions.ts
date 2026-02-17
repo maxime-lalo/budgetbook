@@ -1,31 +1,46 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { db, transactions, accounts, buckets } from "@/lib/db";
+import { eq, and, or, inArray, isNotNull, sql, asc, isNull } from "drizzle-orm";
+import { toNumber, toISOString, round2 } from "@/lib/db/helpers";
 
 export async function getSavingsTransactions(year: number) {
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      year,
-      OR: [
-        { account: { type: { in: ["SAVINGS", "INVESTMENT"] } } },
-        { destinationAccount: { type: { in: ["SAVINGS", "INVESTMENT"] } } },
-      ],
-    },
-    include: {
+  const savingsAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(inArray(accounts.type, ["SAVINGS", "INVESTMENT"]));
+  const savingsIds = savingsAccounts.map((a) => a.id);
+
+  if (savingsIds.length === 0) return [];
+
+  const result = await db.query.transactions.findMany({
+    where: and(
+      eq(transactions.year, year),
+      or(
+        inArray(transactions.accountId, savingsIds),
+        inArray(transactions.destinationAccountId, savingsIds)
+      )
+    ),
+    with: {
       account: true,
       category: true,
       subCategory: true,
       bucket: true,
-      destinationAccount: { select: { name: true, color: true } },
+      destinationAccount: { columns: { name: true, color: true } },
     },
-    orderBy: [{ date: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }, { label: "asc" }],
+    orderBy: [
+      sql`CASE WHEN ${transactions.date} IS NULL THEN 0 ELSE 1 END`,
+      asc(transactions.date),
+      asc(transactions.createdAt),
+      asc(transactions.label),
+    ],
   });
 
-  return transactions.map((t) => ({
+  return result.map((t) => ({
     id: t.id,
     label: t.label,
-    amount: t.amount.toNumber(),
-    date: t.date ? t.date.toISOString() : null,
+    amount: toNumber(t.amount),
+    date: t.date ? toISOString(t.date) : null,
     month: t.month,
     year: t.year,
     status: t.status,
@@ -45,47 +60,44 @@ export async function getSavingsTransactions(year: number) {
 }
 
 export async function getSavingsTotals(year: number) {
-  const savingsAccounts = await prisma.account.findMany({
-    where: { type: { in: ["SAVINGS", "INVESTMENT"] } },
-    select: { id: true },
-  });
+  const savingsAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(inArray(accounts.type, ["SAVINGS", "INVESTMENT"]));
   const savingsIds = savingsAccounts.map((a) => a.id);
 
-  // Transactions dont le compte source est un compte épargne
-  // + virements entrants vers un compte épargne (amount négatif → inversé = crédit)
+  if (savingsIds.length === 0) {
+    return { real: 0, pending: 0, forecast: 0 };
+  }
+
+  const statusFilter = ["COMPLETED", "PENDING"] as const;
+
   const [completed, pending, incomingCompleted, incomingPending, baseAmounts] = await Promise.all([
-    prisma.transaction.aggregate({
-      where: { year, status: "COMPLETED", accountId: { in: savingsIds } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { year, status: "PENDING", accountId: { in: savingsIds } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { year, status: "COMPLETED", destinationAccountId: { in: savingsIds } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { year, status: "PENDING", destinationAccountId: { in: savingsIds } },
-      _sum: { amount: true },
-    }),
-    // Somme des montants de base des buckets des comptes épargne/investissement
-    prisma.bucket.aggregate({
-      where: { accountId: { in: savingsIds } },
-      _sum: { baseAmount: true },
-    }),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.status, "COMPLETED"), inArray(transactions.accountId, savingsIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.status, "PENDING"), inArray(transactions.accountId, savingsIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, savingsIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, savingsIds))),
+    db.select({ total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)` })
+      .from(buckets)
+      .where(inArray(buckets.accountId, savingsIds)),
   ]);
 
-  const baseTotal = baseAmounts._sum.baseAmount?.toNumber() ?? 0;
+  const baseTotal = toNumber(baseAmounts[0].total);
 
-  // Virements entrants : amount est négatif (quitte la source), on inverse pour le crédit sur épargne
-  const realTotal = baseTotal + (completed._sum.amount?.toNumber() ?? 0) + -(incomingCompleted._sum.amount?.toNumber() ?? 0);
-  const pendingTotal = (pending._sum.amount?.toNumber() ?? 0) + -(incomingPending._sum.amount?.toNumber() ?? 0);
+  const realTotal = round2(baseTotal + toNumber(completed[0].total) + -(toNumber(incomingCompleted[0].total)));
+  const pendingTotal = round2(toNumber(pending[0].total) + -(toNumber(incomingPending[0].total)));
 
   return {
     real: realTotal,
     pending: pendingTotal,
-    forecast: realTotal + pendingTotal,
+    forecast: round2(realTotal + pendingTotal),
   };
 }

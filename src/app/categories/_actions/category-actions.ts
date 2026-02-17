@@ -1,14 +1,16 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { db, categories, subCategories } from "@/lib/db";
+import { eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
 import { categorySchema, subCategorySchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 
 export async function getCategories() {
-  const categories = await prisma.category.findMany({
-    include: { subCategories: true },
+  const result = await db.query.categories.findMany({
+    with: { subCategories: true },
   });
-  return categories
+  return result
     .sort((a, b) => a.name.localeCompare(b.name, "fr"))
     .map((c) => ({
       ...c,
@@ -21,7 +23,10 @@ export async function createCategory(formData: FormData) {
   const parsed = categorySchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.category.create({ data: parsed.data });
+  await db.insert(categories).values({
+    id: createId(),
+    ...parsed.data,
+  });
   revalidatePath("/categories");
   return { success: true };
 }
@@ -31,13 +36,13 @@ export async function updateCategory(id: string, formData: FormData) {
   const parsed = categorySchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.category.update({ where: { id }, data: parsed.data });
+  await db.update(categories).set(parsed.data).where(eq(categories.id, id));
   revalidatePath("/categories");
   return { success: true };
 }
 
 export async function deleteCategory(id: string) {
-  await prisma.category.delete({ where: { id } });
+  await db.delete(categories).where(eq(categories.id, id));
   revalidatePath("/categories");
   return { success: true };
 }
@@ -47,7 +52,10 @@ export async function createSubCategory(formData: FormData) {
   const parsed = subCategorySchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.subCategory.create({ data: parsed.data });
+  await db.insert(subCategories).values({
+    id: createId(),
+    ...parsed.data,
+  });
   revalidatePath("/categories");
   return { success: true };
 }
@@ -57,13 +65,13 @@ export async function updateSubCategory(id: string, formData: FormData) {
   const parsed = subCategorySchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await prisma.subCategory.update({ where: { id }, data: parsed.data });
+  await db.update(subCategories).set(parsed.data).where(eq(subCategories.id, id));
   revalidatePath("/categories");
   return { success: true };
 }
 
 export async function deleteSubCategory(id: string) {
-  await prisma.subCategory.delete({ where: { id } });
+  await db.delete(subCategories).where(eq(subCategories.id, id));
   revalidatePath("/categories");
   return { success: true };
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db, apiTokens } from "@/lib/db";
+import { eq } from "drizzle-orm";
 
 export async function validateApiToken(request: Request): Promise<boolean> {
   const authorization = request.headers.get("Authorization");
@@ -8,7 +9,9 @@ export async function validateApiToken(request: Request): Promise<boolean> {
   const token = authorization.slice(7);
   if (!token) return false;
 
-  const found = await prisma.apiToken.findUnique({ where: { token } });
+  const found = await db.query.apiTokens.findFirst({
+    where: eq(apiTokens.token, token),
+  });
   return !!found;
 }
 

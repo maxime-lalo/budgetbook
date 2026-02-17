@@ -1,9 +1,6 @@
 services:
   app:
-    build:
-      context: .
-      args:
-        DB_PROVIDER: sqlite
+    build: .
     restart: unless-stopped
     environment:
       DB_PROVIDER: "sqlite"

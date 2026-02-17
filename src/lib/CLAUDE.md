@@ -2,12 +2,19 @@
 
 ## Fichiers
 
-### prisma.ts
-Singleton Prisma Client utilisant le pattern `globalThis` pour éviter les connexions multiples en développement (hot reload).
+### db/ (Drizzle ORM)
+Module de base de données dual-provider (PostgreSQL / SQLite).
+
+- **`schema/pg.ts`** : Schéma PostgreSQL avec `pgTable`, `numeric(12,2)`, `date`, `timestamp`, `pgEnum`, relations, index
+- **`schema/sqlite.ts`** : Schéma SQLite avec `sqliteTable`, `real`, `text`, `integer({ mode: "boolean" })`, relations
+- **`index.ts`** : Singleton dual-provider utilisant le pattern `globalThis`. Lit `DB_PROVIDER` au runtime pour choisir le driver (postgres.js ou better-sqlite3). Exporte `db` et toutes les tables.
+- **`helpers.ts`** : `toNumber()` (string|number → number), `toISOString()` (Date|string → string), `toDecimal()`, `toDate()`
+- **`seed.ts`** : Script de seed standalone (14 catégories, 2 comptes, buckets, transactions d'exemple)
 
 ```typescript
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+import { db, accounts, transactions } from "@/lib/db";
+import { eq, and, asc } from "drizzle-orm";
+import { toNumber } from "@/lib/db/helpers";
 ```
 
 ### validators.ts

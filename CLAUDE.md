@@ -13,7 +13,7 @@ La migration Excel → BDD est un projet séparé ultérieur.
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Langage | TypeScript 5, React 19 |
 | Base de données | PostgreSQL 17 ou SQLite (via `DB_PROVIDER`) |
-| ORM | Prisma 6 |
+| ORM | Drizzle ORM (dual PostgreSQL / SQLite) |
 | Validation | Zod 4 |
 | UI | Shadcn/UI + Tailwind CSS 4 + Radix UI |
 | Graphiques | Recharts 2 |
@@ -31,14 +31,12 @@ La migration Excel → BDD est un projet séparé ultérieur.
 # Développement (PostgreSQL — par défaut)
 docker compose up -d db          # Démarrer PostgreSQL
 pnpm install                     # Installer les dépendances
-pnpm db:generate                 # Générer le client Prisma
-pnpm db:migrate                  # Appliquer les migrations
+pnpm db:push                     # Pousser le schéma en BDD
 pnpm db:seed                     # Insérer données de démo
 pnpm dev                         # Lancer (localhost:3000)
-pnpm db:studio                   # Interface Prisma Studio
+pnpm db:studio                   # Interface Drizzle Studio
 
 # Développement (SQLite)
-DB_PROVIDER=sqlite pnpm db:setup # Générer le schéma SQLite
 DB_PROVIDER=sqlite pnpm db:push  # Créer/synchroniser la base
 DB_PROVIDER=sqlite pnpm db:seed  # Insérer données de démo
 DB_PROVIDER=sqlite pnpm dev      # Lancer (localhost:3000)
@@ -50,7 +48,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.sqlite.yml up -d --build
 
 # Build
-pnpm build                       # setup-db + prisma generate + next build
+pnpm build                       # next build
 pnpm lint                        # ESLint
 
 # Import de données
@@ -64,7 +62,7 @@ pnpm db:import                   # Importer transactions en BDD (tsx)
 - **API REST** (`/api/*`) pour les intégrations externes (Tasker/n8n), sécurisée par Bearer token
 - **`_components/` et `_actions/`** co-localisés par route
 - **Navigation mensuelle** via searchParams URL (`?month=2026-02`) avec persistance localStorage
-- **Sérialisation explicite** des Decimal Prisma → number avant passage aux Client Components
+- **Sérialisation explicite** des montants (numeric/string) → number avant passage aux Client Components
 - **output: standalone** pour Docker
 - **Transactions récurrentes** : transactions sans date (`date: null`) avec `month`/`year` pour le rattachement budgétaire
 
@@ -73,15 +71,12 @@ pnpm db:import                   # Importer transactions en BDD (tsx)
 ```
 comptes/
 ├── prisma/
-│   ├── schema.base.prisma   # Schéma source (commité, syntaxe PostgreSQL)
-│   ├── schema.prisma         # Schéma généré (gitignored)
 │   ├── data/                 # Données importées (JSON BNP, catégories)
 │   ├── import-data.ts        # Script d'import BNP → BDD
 │   ├── extract-excel.py      # Extraction Excel → JSON
 │   └── categorize.py         # Auto-catégorisation des transactions
 ├── scripts/
-│   ├── setup-db.ts           # Génération du schéma selon DB_PROVIDER
-│   └── docker-entrypoint.sh  # Entrypoint Docker (migrate ou db push)
+│   └── docker-entrypoint.sh  # Entrypoint Docker (drizzle-kit push)
 ├── src/
 │   ├── app/                  # Pages (App Router)
 │   │   ├── transactions/     # Vue principale mensuelle
@@ -94,7 +89,19 @@ comptes/
 │   ├── components/
 │   │   ├── ui/               # Shadcn/UI (auto-généré)
 │   │   └── layout/           # Sidebar, mobile-nav, theme
-│   └── lib/                  # Prisma singleton, validators, formatters, hooks
+│   └── lib/
+│       ├── db/               # Drizzle ORM (schéma, singleton, helpers)
+│       │   ├── schema/pg.ts  # Schéma PostgreSQL (pgTable, numeric, pgEnum)
+│       │   ├── schema/sqlite.ts # Schéma SQLite (sqliteTable, real, text)
+│       │   ├── index.ts      # Singleton dual-provider (lit DB_PROVIDER)
+│       │   ├── helpers.ts    # toNumber(), toISOString()
+│       │   └── seed.ts       # Données de démo
+│       ├── validators.ts     # Schémas Zod
+│       ├── formatters.ts     # Formatage monnaie, dates
+│       ├── monthly-balance.ts # Report cumulatif inter-mois
+│       ├── api-auth.ts       # Validation Bearer token
+│       └── hooks/            # React hooks custom
+├── drizzle.config.ts         # Config Drizzle Kit (conditionnel PG/SQLite)
 ├── docker-compose.yml        # Dev : Postgres seul
 ├── docker-compose.prod.yml   # Prod : App + Postgres (2 containers)
 ├── docker-compose.sqlite.yml # Prod : App seule avec SQLite (1 container)
@@ -115,25 +122,19 @@ L'app supporte deux providers via `DB_PROVIDER` :
 - **`postgresql`** (défaut) : déploiement classique avec 2 containers Docker
 - **`sqlite`** : déploiement en 1 seul container avec un fichier `.db` (idéal pour backup simple)
 
-**Workflow schéma** : `prisma/schema.base.prisma` est le fichier source (commité). Le script `scripts/setup-db.ts` génère `prisma/schema.prisma` (gitignored) en ajustant le provider et supprimant les annotations `@db.*` pour SQLite.
-
-```
-prisma/schema.base.prisma  →  scripts/setup-db.ts  →  prisma/schema.prisma (généré)
-```
-
-**Toutes les commandes Prisma** (`db:generate`, `db:migrate`, `db:push`, `build`, `postinstall`) chaînent automatiquement `setup-db.ts` avant l'exécution.
+**Architecture Drizzle** : deux fichiers de schéma (`src/lib/db/schema/pg.ts` et `src/lib/db/schema/sqlite.ts`) avec les mêmes tables/colonnes mais des types adaptés au dialecte. Le singleton `src/lib/db/index.ts` choisit le provider au **runtime** via `DB_PROVIDER`. Une seule image Docker suffit pour les deux providers.
 
 ## Conventions importantes
 
-- Les montants sont stockés en `Decimal(12,2)` (jamais de float)
+- Les montants sont stockés en `numeric(12,2)` (PG) / `real` (SQLite)
 - Montant positif = rentrée d'argent, négatif = dépense
-- Les dates de transaction sont `@db.Date` en PostgreSQL (sans composante horaire) et **optionnelles** (`null` pour les transactions récurrentes). En SQLite, l'annotation est absente mais date-fns gère le format transparemment
+- Les dates de transaction sont `date` en PostgreSQL (sans composante horaire) et **optionnelles** (`null` pour les transactions récurrentes). En SQLite, stockées en `text`
 - Chaque transaction a des champs `month` et `year` séparés de `date` pour le rattachement budgétaire
 - `isAmex` (Boolean) marque les transactions faites via carte AMEX ; elles vivent sur le compte courant, pas sur un compte CREDIT_CARD séparé
 - `onDelete: Cascade` pour Bucket/SubCategory sous leur parent
 - `onDelete: Restrict` pour Transaction → Category (impossible de supprimer une catégorie utilisée par des transactions)
 - `categoryId` est **requis** (non nullable) sur les transactions ; seule `subCategoryId` est optionnelle
-- Tous les `Decimal` Prisma sont convertis en `number` avant d'être passés aux Client Components
+- Les montants numériques (string en PG, number en SQLite) sont convertis via `toNumber()` avant passage aux Client Components
 - Les formulaires utilisent `FormData` (categories, accounts) ou objets JSON (transactions)
 
 ## API REST externe

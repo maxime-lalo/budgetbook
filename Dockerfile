@@ -5,32 +5,18 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # --- Dependencies ---
 FROM base AS deps
-ARG DB_PROVIDER=postgresql
-ENV DB_PROVIDER=${DB_PROVIDER}
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY prisma/schema.base.prisma prisma/schema.base.prisma
-COPY scripts/setup-db.ts scripts/setup-db.ts
+# better-sqlite3 needs build tools
+RUN apk add --no-cache python3 make g++
 RUN pnpm install --frozen-lockfile
 
 # --- Build ---
 FROM base AS builder
-ARG DB_PROVIDER=postgresql
-ENV DB_PROVIDER=${DB_PROVIDER}
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Dummy URL pour le build — conditionnel selon le provider
-RUN if [ "$DB_PROVIDER" = "sqlite" ]; then \
-      DATABASE_URL="file:./dummy.db" pnpm build; \
-    else \
-      DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" pnpm build; \
-    fi
-
-# --- Prisma CLI ---
-FROM node:22-alpine AS prisma-cli
-WORKDIR /prisma-cli
-RUN npm init -y && npm install prisma@6
+RUN pnpm build
 
 # --- Runner ---
 FROM node:22-alpine AS runner
@@ -46,12 +32,25 @@ RUN adduser --system --uid 1001 nextjs
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma CLI for runtime migrations
-COPY --from=prisma-cli /prisma-cli/node_modules /prisma-cli/node_modules
+# Drizzle schema files for runtime push/migrate
+COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db ./src/lib/db
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
+
+# Drizzle Kit + deps for runtime migrations
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/postgres ./node_modules/postgres
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/esbuild ./node_modules/esbuild
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@esbuild ./node_modules/@esbuild
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-gyp-build ./node_modules/node-gyp-build
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prebuild-install ./node_modules/prebuild-install
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/bindings ./node_modules/bindings
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
 
 # Entrypoint script
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh

@@ -1,15 +1,41 @@
 /**
- * Import extracted JSON data into the database via Prisma.
+ * Import extracted JSON data into the database via Drizzle.
  * Only imports BNP account transactions and categories.
  *
  * Usage: pnpm db:import
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import postgres from "postgres";
+import Database from "better-sqlite3";
+import { eq, and, inArray, sql } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import * as pgSchema from "../src/lib/db/schema/pg";
+import * as sqliteSchema from "../src/lib/db/schema/sqlite";
+import { toNumber } from "../src/lib/db/helpers";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const prisma = new PrismaClient();
+const provider = process.env.DB_PROVIDER ?? "postgresql";
+
+function createDb() {
+  if (provider === "sqlite") {
+    const dbPath = (process.env.DATABASE_URL ?? "file:./dev.db").replace("file:", "");
+    const sqlite = new Database(dbPath);
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+    return drizzleSqlite(sqlite, { schema: sqliteSchema });
+  }
+  const connectionString = process.env.DATABASE_URL ?? "postgresql://comptes:comptes@localhost:5432/comptes";
+  const client = postgres(connectionString);
+  return drizzlePg(client, { schema: pgSchema });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db: any = createDb();
+const s = (provider === "sqlite" ? sqliteSchema : pgSchema) as typeof pgSchema;
+
 const DATA_DIR = join(__dirname, "data");
 
 interface CategoryData {
@@ -37,73 +63,52 @@ function readJSON<T>(filename: string): T {
 
 async function clearDatabase() {
   console.log("Clearing database...");
-  // Order matters: respect FK constraints
-  await prisma.monthlyBalance.deleteMany();
-  await prisma.budget.deleteMany();
-  await prisma.transaction.deleteMany();
-  await prisma.subCategory.deleteMany();
-  await prisma.category.deleteMany();
-  await prisma.bucket.deleteMany();
-  await prisma.account.deleteMany();
+  await db.delete(s.monthlyBalances);
+  await db.delete(s.budgets);
+  await db.delete(s.transactions);
+  await db.delete(s.subCategories);
+  await db.delete(s.categories);
+  await db.delete(s.buckets);
+  await db.delete(s.accounts);
   console.log("  All tables cleared.");
 }
 
 async function createAccounts() {
   console.log("Creating accounts...");
 
-  const bnp = await prisma.account.create({
-    data: {
-      id: "bnp-checking",
-      name: "BNP",
-      type: "CHECKING",
-      color: "#4f46e5",
-      icon: "Wallet",
-      sortOrder: 0,
-    },
+  await db.insert(s.accounts).values({
+    id: "bnp-checking", name: "BNP", type: "CHECKING", color: "#4f46e5", icon: "Wallet", sortOrder: 0,
   });
 
-  const livretA = await prisma.account.create({
-    data: {
-      id: "livret-a",
-      name: "Livret A",
-      type: "SAVINGS",
-      color: "#10b981",
-      icon: "PiggyBank",
-      sortOrder: 1,
-    },
+  await db.insert(s.accounts).values({
+    id: "livret-a", name: "Livret A", type: "SAVINGS", color: "#10b981", icon: "PiggyBank", sortOrder: 1,
   });
 
-  console.log(`  Created accounts: ${bnp.name}, ${livretA.name}`);
-  return { bnpId: bnp.id, livretAId: livretA.id };
+  console.log("  Created accounts: BNP, Livret A");
+  return { bnpId: "bnp-checking", livretAId: "livret-a" };
 }
 
 async function importCategories(categoriesData: CategoryData[]) {
   console.log(`Importing ${categoriesData.length} categories...`);
 
-  const categoryMap = new Map<string, string>(); // name → id
-  const subCategoryMap = new Map<string, string>(); // "cat|sub" → id
+  const categoryMap = new Map<string, string>();
+  const subCategoryMap = new Map<string, string>();
 
   for (let i = 0; i < categoriesData.length; i++) {
     const cat = categoriesData[i];
-    const created = await prisma.category.create({
-      data: {
-        name: cat.name,
-        color: cat.color,
-        sortOrder: i,
-      },
+    const catId = createId();
+    await db.insert(s.categories).values({
+      id: catId, name: cat.name, color: cat.color, sortOrder: i,
     });
-    categoryMap.set(cat.name, created.id);
+    categoryMap.set(cat.name, catId);
 
     for (let j = 0; j < cat.subcategories.length; j++) {
       const subName = cat.subcategories[j];
-      const sub = await prisma.subCategory.create({
-        data: {
-          name: subName,
-          categoryId: created.id,
-          sortOrder: j,
-        },
+      const subId = createId();
+      await db.insert(s.subCategories).values({
+        id: subId, name: subName, categoryId: catId, sortOrder: j,
       });
-      subCategoryMap.set(`${cat.name}|${subName}`, sub.id);
+      subCategoryMap.set(`${cat.name}|${subName}`, subId);
     }
   }
 
@@ -112,12 +117,12 @@ async function importCategories(categoriesData: CategoryData[]) {
 }
 
 async function importTransactions(
-  transactions: TransactionData[],
+  transactionsData: TransactionData[],
   accountIds: { bnpId: string; livretAId: string },
   categoryMap: Map<string, string>,
   subCategoryMap: Map<string, string>
 ) {
-  console.log(`Importing ${transactions.length} transactions...`);
+  console.log(`Importing ${transactionsData.length} transactions...`);
 
   const uncategorizedId = categoryMap.get("Non catégorisé");
   if (!uncategorizedId) {
@@ -126,66 +131,55 @@ async function importTransactions(
 
   let imported = 0;
   let amexCount = 0;
-  const BATCH_SIZE = 500;
 
-  for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
-    const batch = transactions.slice(i, i + BATCH_SIZE);
-    const data: Prisma.TransactionCreateManyInput[] = [];
+  for (const tx of transactionsData) {
+    const catName = tx.category || null;
+    const subName = tx.subcategory || null;
 
-    for (const tx of batch) {
-      const catName = tx.category || null;
-      const subName = tx.subcategory || null;
+    let categoryId = uncategorizedId;
+    let subCategoryId: string | undefined = undefined;
 
-      let categoryId = uncategorizedId;
-      let subCategoryId: string | undefined = undefined;
-
-      if (catName && categoryMap.has(catName)) {
-        categoryId = categoryMap.get(catName)!;
-        if (subName) {
-          const subKey = `${catName}|${subName}`;
-          if (subCategoryMap.has(subKey)) {
-            subCategoryId = subCategoryMap.get(subKey);
-          }
+    if (catName && categoryMap.has(catName)) {
+      categoryId = categoryMap.get(catName)!;
+      if (subName) {
+        const subKey = `${catName}|${subName}`;
+        if (subCategoryMap.has(subKey)) {
+          subCategoryId = subCategoryMap.get(subKey);
         }
       }
-
-      let status: "PENDING" | "COMPLETED" | "CANCELLED" = "PENDING";
-      if (tx.status === "COMPLETED") status = "COMPLETED";
-      else if (tx.status === "CANCELLED") status = "CANCELLED";
-
-      // Determine label and isAmex flag
-      let label = tx.label;
-      let isAmex = false;
-
-      // AMEX: transactions whose label starts with "AMEX "
-      if (tx.label.startsWith("AMEX ")) {
-        isAmex = true;
-        label = tx.label.slice(5); // Remove "AMEX " prefix
-        amexCount++;
-      }
-
-      const txData: Prisma.TransactionCreateManyInput = {
-        label,
-        amount: new Prisma.Decimal(tx.amount),
-        date: tx.date ? new Date(tx.date) : null,
-        month: tx.month,
-        year: tx.year,
-        status,
-        accountId: accountIds.bnpId,
-        categoryId,
-        subCategoryId,
-        note: status === "CANCELLED" ? "Annulé dans Excel" : undefined,
-        isAmex,
-      };
-
-      data.push(txData);
     }
 
-    await prisma.transaction.createMany({ data });
-    imported += data.length;
+    let status: "PENDING" | "COMPLETED" | "CANCELLED" = "PENDING";
+    if (tx.status === "COMPLETED") status = "COMPLETED";
+    else if (tx.status === "CANCELLED") status = "CANCELLED";
 
-    if (imported % 2000 === 0 || i + BATCH_SIZE >= transactions.length) {
-      console.log(`  ${imported}/${transactions.length} transactions imported...`);
+    let label = tx.label;
+    let isAmex = false;
+
+    if (tx.label.startsWith("AMEX ")) {
+      isAmex = true;
+      label = tx.label.slice(5);
+      amexCount++;
+    }
+
+    await db.insert(s.transactions).values({
+      id: createId(),
+      label,
+      amount: tx.amount.toString(),
+      date: tx.date ? new Date(tx.date) : null,
+      month: tx.month,
+      year: tx.year,
+      status,
+      accountId: accountIds.bnpId,
+      categoryId,
+      subCategoryId: subCategoryId ?? null,
+      note: status === "CANCELLED" ? "Annulé dans Excel" : null,
+      isAmex,
+    });
+
+    imported++;
+    if (imported % 2000 === 0) {
+      console.log(`  ${imported}/${transactionsData.length} transactions imported...`);
     }
   }
 
@@ -195,34 +189,34 @@ async function importTransactions(
 async function recomputeAllMonthlyBalances() {
   console.log("Recomputing MonthlyBalance for all months...");
 
-  const distinctMonths = await prisma.transaction.findMany({
-    select: { year: true, month: true },
-    distinct: ["year", "month"],
-    orderBy: [{ year: "asc" }, { month: "asc" }],
-  });
+  const distinctMonths = await db
+    .selectDistinct({ year: s.transactions.year, month: s.transactions.month })
+    .from(s.transactions)
+    .orderBy(s.transactions.year, s.transactions.month);
 
   for (const { year, month } of distinctMonths) {
-    const forecast = await prisma.transaction.aggregate({
-      where: { year, month, status: { in: ["COMPLETED", "PENDING"] } },
-      _sum: { amount: true },
+    const [forecastResult] = await db
+      .select({ total: sql<string>`coalesce(sum(${s.transactions.amount}), 0)` })
+      .from(s.transactions)
+      .where(and(eq(s.transactions.year, year), eq(s.transactions.month, month), inArray(s.transactions.status, ["COMPLETED", "PENDING"])));
+    const totalForecast = toNumber(forecastResult.total);
+
+    const spentByCategory = await db
+      .select({ categoryId: s.transactions.categoryId, total: sql<string>`coalesce(sum(${s.transactions.amount}), 0)` })
+      .from(s.transactions)
+      .where(and(eq(s.transactions.year, year), eq(s.transactions.month, month), inArray(s.transactions.status, ["COMPLETED", "PENDING"]), sql`${s.transactions.amount} < 0`))
+      .groupBy(s.transactions.categoryId);
+
+    const budgetsResult = await db.query.budgets.findMany({
+      where: and(eq(s.budgets.year, year), eq(s.budgets.month, month)),
     });
 
-    const totalForecast = forecast._sum.amount?.toNumber() ?? 0;
-
-    const spentByCategory = await prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: { year, month, status: { in: ["COMPLETED", "PENDING"] }, amount: { lt: 0 } },
-      _sum: { amount: true },
-    });
-
-    const budgets = await prisma.budget.findMany({ where: { year, month } });
-
-    const budgetMap = new Map(budgets.map((b) => [b.categoryId, b.amount.toNumber()]));
-    const spentMap = new Map(
-      spentByCategory.map((s) => [s.categoryId, Math.abs(s._sum.amount?.toNumber() ?? 0)])
+    const budgetMap = new Map<string, number>((budgetsResult as { categoryId: string; amount: string | number }[]).map((b) => [b.categoryId, toNumber(b.amount)]));
+    const spentMap = new Map<string, number>(
+      spentByCategory.map((sp: { categoryId: string; total: string }) => [sp.categoryId, Math.abs(toNumber(sp.total))])
     );
 
-    const allCategoryIds = new Set([...budgetMap.keys(), ...spentMap.keys()]);
+    const allCategoryIds = new Set<string>([...budgetMap.keys(), ...spentMap.keys()]);
     let totalCommitted = 0;
     for (const id of allCategoryIds) {
       const budgeted = budgetMap.get(id) ?? 0;
@@ -232,21 +226,25 @@ async function recomputeAllMonthlyBalances() {
 
     const surplus = totalForecast - totalCommitted;
 
-    await prisma.monthlyBalance.upsert({
-      where: { year_month: { year, month } },
-      update: {
-        forecast: new Prisma.Decimal(totalForecast),
-        committed: new Prisma.Decimal(totalCommitted),
-        surplus: new Prisma.Decimal(surplus),
-      },
-      create: {
-        year,
-        month,
-        forecast: new Prisma.Decimal(totalForecast),
-        committed: new Prisma.Decimal(totalCommitted),
-        surplus: new Prisma.Decimal(surplus),
-      },
+    const existingMb = await db.query.monthlyBalances.findFirst({
+      where: and(eq(s.monthlyBalances.year, year), eq(s.monthlyBalances.month, month)),
     });
+
+    if (existingMb) {
+      await db.update(s.monthlyBalances).set({
+        forecast: totalForecast.toString(),
+        committed: totalCommitted.toString(),
+        surplus: surplus.toString(),
+      }).where(eq(s.monthlyBalances.id, existingMb.id));
+    } else {
+      await db.insert(s.monthlyBalances).values({
+        id: createId(),
+        year, month,
+        forecast: totalForecast.toString(),
+        committed: totalCommitted.toString(),
+        surplus: surplus.toString(),
+      });
+    }
   }
 
   console.log(`  Computed ${distinctMonths.length} monthly balances.`);
@@ -255,47 +253,17 @@ async function recomputeAllMonthlyBalances() {
 async function main() {
   console.log("=== Starting data import ===\n");
 
-  // 1. Read JSON files
-  const categories = readJSON<CategoryData[]>("categories.json");
-  const transactions = readJSON<TransactionData[]>("transactions-bnp.json");
-  console.log(`Loaded: ${categories.length} categories, ${transactions.length} transactions\n`);
+  const categoriesFile = readJSON<CategoryData[]>("categories.json");
+  const transactionsFile = readJSON<TransactionData[]>("transactions-bnp.json");
+  console.log(`Loaded: ${categoriesFile.length} categories, ${transactionsFile.length} transactions\n`);
 
-  // 2. Clear existing data
   await clearDatabase();
-
-  // 3. Create accounts
   const accountIds = await createAccounts();
-
-  // 4. Import categories
-  const { categoryMap, subCategoryMap } = await importCategories(categories);
-
-  // 5. Import transactions
-  await importTransactions(transactions, accountIds, categoryMap, subCategoryMap);
-
-  // 6. Recompute MonthlyBalance
+  const { categoryMap, subCategoryMap } = await importCategories(categoriesFile);
+  await importTransactions(transactionsFile, accountIds, categoryMap, subCategoryMap);
   await recomputeAllMonthlyBalances();
 
-  // 7. Summary
-  const txCount = await prisma.transaction.count();
-  const catCount = await prisma.category.count();
-  const subCount = await prisma.subCategory.count();
-  const balCount = await prisma.monthlyBalance.count();
-  const accCount = await prisma.account.count();
-
-  const txByAccount = await prisma.transaction.groupBy({
-    by: ["accountId"],
-    _count: true,
-  });
-
   console.log("\n=== Import complete ===");
-  console.log(`  Accounts: ${accCount}`);
-  for (const entry of txByAccount) {
-    console.log(`    ${entry.accountId}: ${entry._count} transactions`);
-  }
-  console.log(`  Categories: ${catCount}`);
-  console.log(`  SubCategories: ${subCount}`);
-  console.log(`  Transactions: ${txCount}`);
-  console.log(`  MonthlyBalances: ${balCount}`);
 }
 
 main()
@@ -304,5 +272,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    process.exit(0);
   });

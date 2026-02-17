@@ -8,32 +8,35 @@ import { AccountFormDialog } from "./_components/account-form-dialog";
 import { BucketFormDialog } from "./_components/bucket-form-dialog";
 import { DeleteAccountButton, DeleteBucketButton } from "./_components/delete-buttons";
 import { formatCurrency, ACCOUNT_TYPE_LABELS } from "@/lib/formatters";
-import { prisma } from "@/lib/prisma";
+import { db, buckets as bucketsTable, transactions as transactionsTable } from "@/lib/db";
+import { eq, and, inArray } from "drizzle-orm";
+import { toNumber } from "@/lib/db/helpers";
 
 async function getBucketBalances(bucketIds: string[]) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
   const balances: Record<string, { current: number; forecast: number }> = {};
-  const buckets = await prisma.bucket.findMany({
-    where: { id: { in: bucketIds } },
-    select: { id: true, baseAmount: true, accountId: true },
+
+  if (bucketIds.length === 0) return balances;
+
+  const buckets = await db.query.buckets.findMany({
+    where: inArray(bucketsTable.id, bucketIds),
+    columns: { id: true, baseAmount: true, accountId: true },
   });
-  const baseAmountMap = new Map(buckets.map((b) => [b.id, b.baseAmount.toNumber()]));
-  const accountIdMap = new Map(buckets.map((b) => [b.id, b.accountId]));
+  const baseAmountMap = new Map<string, number>(buckets.map((b) => [b.id, toNumber(b.baseAmount)]));
+  const accountIdMap = new Map<string, string>(buckets.map((b) => [b.id, b.accountId]));
 
   for (const id of bucketIds) {
-    const transactions = await prisma.transaction.findMany({
-      where: { bucketId: id, status: "COMPLETED" },
-      select: { amount: true, year: true, month: true, accountId: true, destinationAccountId: true },
+    const txs = await db.query.transactions.findMany({
+      where: and(eq(transactionsTable.bucketId, id), eq(transactionsTable.status, "COMPLETED")),
+      columns: { amount: true, year: true, month: true, accountId: true, destinationAccountId: true },
     });
     const base = baseAmountMap.get(id) ?? 0;
     const bucketAccountId = accountIdMap.get(id);
     let currentSum = 0;
     let totalSum = 0;
-    for (const t of transactions) {
-      const amt = t.amount.toNumber();
-      // Retrait du bucket (virement sortant depuis le compte du bucket) : signe direct
-      // Dépôt ou standalone : signe inversé (négatif = versement = solde augmente)
+    for (const t of txs) {
+      const amt = toNumber(t.amount);
       const isOutgoing = t.accountId === bucketAccountId && t.destinationAccountId !== null;
       const effective = isOutgoing ? amt : -amt;
       totalSum += effective;

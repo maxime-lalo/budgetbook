@@ -71,7 +71,7 @@ Les boutons CopyBudgetsButton et CalibrateBudgetsButton sont positionnés juste 
 
 ## Calcul des dépenses par catégorie
 
-Les dépenses sont calculées via `prisma.transaction.groupBy` :
-- Filtré par mois, statut `COMPLETED` ou `PENDING`, montant négatif (`lt: 0`)
+Les dépenses sont calculées via `db.select().groupBy()` (Drizzle) :
+- Filtré par mois, statut `COMPLETED` ou `PENDING`
 - Groupé par `categoryId`
-- Le montant est passé en valeur absolue (`Math.abs`)
+- Le montant net est calculé, seules les catégories avec un total négatif comptent comme dépenses (`Math.abs`)

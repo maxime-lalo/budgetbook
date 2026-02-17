@@ -52,8 +52,8 @@
 | `getAccounts()` | Liste des comptes pour le filtre |
 
 ## Points techniques
-- Les agrégations utilisent `prisma.transaction.aggregate` et `groupBy`
-- Les `Decimal` sont convertis en `number` via `.toNumber()` côté serveur
+- Les agrégations utilisent `db.select().groupBy()` et `sql` template literals (Drizzle)
+- Les montants numériques sont convertis en `number` via `toNumber()` côté serveur
 - Le filtrage par compte est optionnel (si `accountId` est fourni, ajouté au `where`)
 - Les données sont fetchées en parallèle dans `page.tsx` (6 appels concurrents)
 - Le tri des catégories utilise `localeCompare('fr')` en JavaScript pour gérer les accents français

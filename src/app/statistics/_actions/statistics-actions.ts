@@ -1,48 +1,45 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { db, transactions, accounts, categories, subCategories, buckets } from "@/lib/db";
+import { eq, and, inArray, gt, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
+import { toNumber } from "@/lib/db/helpers";
+
+async function getAccountFilter(accountId?: string) {
+  if (accountId) return [accountId];
+  const realAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(inArray(accounts.type, ["CHECKING", "CREDIT_CARD"]));
+  return realAccounts.map((a) => a.id);
+}
 
 export async function getYearlyOverview(year: number, accountId?: string) {
-  // Exclure les comptes épargne/investissement pour avoir les vrais revenus vs dépenses
-  const realAccounts = accountId
-    ? undefined
-    : await prisma.account.findMany({
-        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
-        select: { id: true },
-      });
-  const accountFilter = accountId
-    ? { accountId }
-    : realAccounts
-      ? { accountId: { in: realAccounts.map((a) => a.id) } }
-      : {};
+  const accountIds = await getAccountFilter(accountId);
 
   const data = [];
-
   for (let month = 1; month <= 12; month++) {
-    const where = {
-      year,
-      month,
-      status: { in: ["COMPLETED" as const, "PENDING" as const] },
-      destinationAccountId: null,
-      ...accountFilter,
-    };
+    const baseWhere = and(
+      eq(transactions.year, year),
+      eq(transactions.month, month),
+      inArray(transactions.status, ["COMPLETED", "PENDING"]),
+      isNull(transactions.destinationAccountId),
+      inArray(transactions.accountId, accountIds)
+    );
 
     const [income, expenses] = await Promise.all([
-      prisma.transaction.aggregate({
-        where: { ...where, amount: { gt: 0 } },
-        _sum: { amount: true },
-      }),
-      prisma.transaction.aggregate({
-        where: { ...where, amount: { lt: 0 } },
-        _sum: { amount: true },
-      }),
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(baseWhere, gt(transactions.amount, "0"))),
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(baseWhere, lt(transactions.amount, "0"))),
     ]);
 
     data.push({
       month,
       monthLabel: new Date(year, month - 1).toLocaleDateString("fr-FR", { month: "short" }),
-      income: income._sum.amount?.toNumber() ?? 0,
-      expenses: Math.abs(expenses._sum.amount?.toNumber() ?? 0),
+      income: toNumber(income[0].total),
+      expenses: Math.abs(toNumber(expenses[0].total)),
     });
   }
 
@@ -50,34 +47,31 @@ export async function getYearlyOverview(year: number, accountId?: string) {
 }
 
 export async function getCategoryBreakdown(year: number, month: number, accountId?: string) {
-  const realAccounts = accountId
-    ? undefined
-    : await prisma.account.findMany({
-        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
-        select: { id: true },
-      });
-  const accountFilter = accountId
-    ? { accountId }
-    : realAccounts
-      ? { accountId: { in: realAccounts.map((a) => a.id) } }
-      : {};
+  const accountIds = await getAccountFilter(accountId);
 
-  const result = await prisma.transaction.groupBy({
-    by: ["categoryId"],
-    where: {
-      year,
-      month: { lte: month },
-      status: { in: ["COMPLETED", "PENDING"] },
-      ...accountFilter,
-    },
-    _sum: { amount: true },
+  const result = await db
+    .select({
+      categoryId: transactions.categoryId,
+      total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.year, year),
+        lte(transactions.month, month),
+        inArray(transactions.status, ["COMPLETED", "PENDING"]),
+        inArray(transactions.accountId, accountIds)
+      )
+    )
+    .groupBy(transactions.categoryId);
+
+  const catIds = result.map((r) => r.categoryId);
+  if (catIds.length === 0) return [];
+
+  const cats = await db.query.categories.findMany({
+    where: inArray(categories.id, catIds),
   });
-
-  const categories = await prisma.category.findMany({
-    where: { id: { in: result.map((r) => r.categoryId) } },
-  });
-
-  const catMap = new Map(categories.map((c) => [c.id, c]));
+  const catMap = new Map(cats.map((c) => [c.id, c]));
 
   return result
     .map((r) => {
@@ -85,56 +79,56 @@ export async function getCategoryBreakdown(year: number, month: number, accountI
       return {
         category: cat?.name ?? "Sans catégorie",
         color: cat?.color ?? "#6b7280",
-        amount: -(r._sum.amount?.toNumber() ?? 0),
+        amount: -(toNumber(r.total)),
       };
     })
     .sort((a, b) => b.amount - a.amount);
 }
 
 export async function getSubCategoryBreakdown(year: number, month: number, accountId?: string) {
-  const realAccounts = accountId
-    ? undefined
-    : await prisma.account.findMany({
-        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
-        select: { id: true },
-      });
-  const accountFilter = accountId
-    ? { accountId }
-    : realAccounts
-      ? { accountId: { in: realAccounts.map((a) => a.id) } }
-      : {};
+  const accountIds = await getAccountFilter(accountId);
 
-  const result = await prisma.transaction.groupBy({
-    by: ["categoryId", "subCategoryId"],
-    where: {
-      year,
-      month: { lte: month },
-      status: { in: ["COMPLETED", "PENDING"] },
-      subCategoryId: { not: null },
-      ...accountFilter,
-    },
-    _sum: { amount: true },
-  });
+  const result = await db
+    .select({
+      categoryId: transactions.categoryId,
+      subCategoryId: transactions.subCategoryId,
+      total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.year, year),
+        lte(transactions.month, month),
+        inArray(transactions.status, ["COMPLETED", "PENDING"]),
+        isNotNull(transactions.subCategoryId),
+        inArray(transactions.accountId, accountIds)
+      )
+    )
+    .groupBy(transactions.categoryId, transactions.subCategoryId);
 
   const categoryIds = [...new Set(result.map((r) => r.categoryId))];
   const subCategoryIds = result.map((r) => r.subCategoryId).filter((id): id is string => id !== null);
 
-  const [categories, subCategories] = await Promise.all([
-    prisma.category.findMany({ where: { id: { in: categoryIds } } }),
-    prisma.subCategory.findMany({ where: { id: { in: subCategoryIds } } }),
+  if (categoryIds.length === 0) return { items: [], categories: [] };
+
+  const [cats, subs] = await Promise.all([
+    db.query.categories.findMany({ where: inArray(categories.id, categoryIds) }),
+    subCategoryIds.length > 0
+      ? db.query.subCategories.findMany({ where: inArray(subCategories.id, subCategoryIds) })
+      : [],
   ]);
 
-  const catMap = new Map(categories.map((c) => [c.id, c]));
-  const subMap = new Map(subCategories.map((s) => [s.id, s]));
+  const catMap = new Map(cats.map((c) => [c.id, c]));
+  const subMap = new Map((subs as { id: string; name: string }[]).map((s) => [s.id, s]));
 
   const items = result.map((r) => {
     const cat = catMap.get(r.categoryId);
-    const sub = subMap.get(r.subCategoryId!);
+    const sub = r.subCategoryId ? subMap.get(r.subCategoryId) : null;
     return {
       categoryId: r.categoryId,
       subCategory: sub?.name ?? "?",
       color: cat?.color ?? "#6b7280",
-      amount: -(r._sum.amount?.toNumber() ?? 0),
+      amount: -(toNumber(r.total)),
     };
   });
 
@@ -145,45 +139,24 @@ export async function getSubCategoryBreakdown(year: number, month: number, accou
   return { items, categories: availableCategories };
 }
 
-export async function getCategoryYearComparison(
-  year: number,
-  month: number,
-  accountId?: string
-) {
-  // Exclure les comptes épargne/investissement pour éviter le double comptage des transferts
-  const realAccounts = accountId
-    ? undefined
-    : await prisma.account.findMany({
-        where: { type: { in: ["CHECKING", "CREDIT_CARD"] } },
-        select: { id: true },
-      });
-  const accountFilter = accountId
-    ? { accountId }
-    : realAccounts
-      ? { accountId: { in: realAccounts.map((a) => a.id) } }
-      : {};
+export async function getCategoryYearComparison(year: number, month: number, accountId?: string) {
+  const accountIds = await getAccountFilter(accountId);
 
-  const baseWhere = {
-    status: { in: ["COMPLETED" as const, "PENDING" as const] },
-    ...accountFilter,
-  };
+  const baseWhere = and(
+    inArray(transactions.status, ["COMPLETED", "PENDING"]),
+    inArray(transactions.accountId, accountIds)
+  );
 
   const [currentMonthData, currentYearData, prevYearData] = await Promise.all([
-    prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: { ...baseWhere, year, month },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: { ...baseWhere, year, month: { lte: month } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: { ...baseWhere, year: year - 1 },
-      _sum: { amount: true },
-    }),
+    db.select({ categoryId: transactions.categoryId, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions).where(and(baseWhere, eq(transactions.year, year), eq(transactions.month, month)))
+      .groupBy(transactions.categoryId),
+    db.select({ categoryId: transactions.categoryId, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions).where(and(baseWhere, eq(transactions.year, year), lte(transactions.month, month)))
+      .groupBy(transactions.categoryId),
+    db.select({ categoryId: transactions.categoryId, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions).where(and(baseWhere, eq(transactions.year, year - 1)))
+      .groupBy(transactions.categoryId),
   ]);
 
   const allCatIds = [
@@ -194,27 +167,29 @@ export async function getCategoryYearComparison(
     ]),
   ];
 
-  const categories = await prisma.category.findMany({
-    where: { id: { in: allCatIds } },
-  });
-  const catMap = new Map(categories.map((c) => [c.id, c]));
+  if (allCatIds.length === 0) {
+    return { rows: [], totals: { currentMonth: 0, yearlyTotal: 0, prevYearTotal: 0 }, month };
+  }
 
-  // Négation : dépenses (négatif en BDD) → positif, rentrées (positif en BDD) → négatif
+  const cats = await db.query.categories.findMany({
+    where: inArray(categories.id, allCatIds),
+  });
+  const catMap = new Map(cats.map((c) => [c.id, c]));
+
   const currentMonthMap = new Map(
-    currentMonthData.map((r) => [r.categoryId, -(r._sum.amount?.toNumber() ?? 0)])
+    currentMonthData.map((r) => [r.categoryId, -(toNumber(r.total))])
   );
   const currentYearMap = new Map(
-    currentYearData.map((r) => [r.categoryId, -(r._sum.amount?.toNumber() ?? 0)])
+    currentYearData.map((r) => [r.categoryId, -(toNumber(r.total))])
   );
   const prevYearMap = new Map(
-    prevYearData.map((r) => [r.categoryId, -(r._sum.amount?.toNumber() ?? 0)])
+    prevYearData.map((r) => [r.categoryId, -(toNumber(r.total))])
   );
 
-  // Totaux en valeur absolue pour les pourcentages
   const currentYearAbsTotal = [...currentYearMap.values()].reduce((a, b) => a + Math.abs(b), 0);
   const currentMonthAbsTotal = [...currentMonthMap.values()].reduce((a, b) => a + Math.abs(b), 0);
 
-  const rows = categories.map((c) => c.id)
+  const rows = cats.map((c) => c.id)
     .map((catId) => {
       const cat = catMap.get(catId);
       const thisMonth = currentMonthMap.get(catId) ?? 0;
@@ -239,7 +214,6 @@ export async function getCategoryYearComparison(
     })
     .sort((a, b) => a.category.localeCompare(b.category, "fr"));
 
-  // Totaux : uniquement les catégories de dépenses (valeurs > 0), pas les revenus
   const sumPositive = (values: IterableIterator<number>) =>
     [...values].filter((v) => v > 0).reduce((a, b) => a + b, 0);
   const totals = {
@@ -252,12 +226,12 @@ export async function getCategoryYearComparison(
 }
 
 export async function getSavingsOverview(year: number) {
-  const savingsAccounts = await prisma.account.findMany({
-    where: { type: { in: ["SAVINGS", "INVESTMENT"] } },
-    select: { id: true },
-  });
-
+  const savingsAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(inArray(accounts.type, ["SAVINGS", "INVESTMENT"]));
   const accountIds = savingsAccounts.map((a) => a.id);
+
   if (accountIds.length === 0) {
     return Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
@@ -266,90 +240,48 @@ export async function getSavingsOverview(year: number) {
     }));
   }
 
-  const statusFilter = { in: ["COMPLETED" as const, "PENDING" as const] };
+  const statusFilter = ["COMPLETED", "PENDING"] as const;
 
-  // Cumul des années précédentes
   const [prevStandalone, prevIncoming, prevOutgoing, totalBaseAmount] = await Promise.all([
-    // Transactions standalone sur comptes épargne (pas de destination) → signe inversé
-    prisma.transaction.aggregate({
-      where: {
-        accountId: { in: accountIds },
-        destinationAccountId: null,
-        status: statusFilter,
-        year: { lt: year },
-      },
-      _sum: { amount: true },
-    }),
-    // Virements entrants vers comptes épargne → negate (négatif → crédit positif)
-    prisma.transaction.aggregate({
-      where: {
-        destinationAccountId: { in: accountIds },
-        status: statusFilter,
-        year: { lt: year },
-      },
-      _sum: { amount: true },
-    }),
-    // Virements sortants depuis comptes épargne → montant direct (négatif = débit)
-    prisma.transaction.aggregate({
-      where: {
-        accountId: { in: accountIds },
-        destinationAccountId: { not: null },
-        status: statusFilter,
-        year: { lt: year },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.bucket.aggregate({
-      where: { accountId: { in: accountIds } },
-      _sum: { baseAmount: true },
-    }),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
+    db.select({ total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)` })
+      .from(buckets)
+      .where(inArray(buckets.accountId, accountIds)),
   ]);
 
   let cumulative =
-    -(prevStandalone._sum.amount?.toNumber() ?? 0) +
-    -(prevIncoming._sum.amount?.toNumber() ?? 0) +
-    (prevOutgoing._sum.amount?.toNumber() ?? 0) +
-    (totalBaseAmount._sum.baseAmount?.toNumber() ?? 0);
+    -(toNumber(prevStandalone[0].total)) +
+    -(toNumber(prevIncoming[0].total)) +
+    toNumber(prevOutgoing[0].total) +
+    toNumber(totalBaseAmount[0].total);
 
   const data = [];
 
   for (let month = 1; month <= 12; month++) {
     const [standalone, incoming, outgoing] = await Promise.all([
-      prisma.transaction.aggregate({
-        where: {
-          accountId: { in: accountIds },
-          destinationAccountId: null,
-          status: statusFilter,
-          year,
-          month,
-        },
-        _sum: { amount: true },
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          destinationAccountId: { in: accountIds },
-          status: statusFilter,
-          year,
-          month,
-        },
-        _sum: { amount: true },
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          accountId: { in: accountIds },
-          destinationAccountId: { not: null },
-          status: statusFilter,
-          year,
-          month,
-        },
-        _sum: { amount: true },
-      }),
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year), eq(transactions.month, month))),
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), eq(transactions.year, year), eq(transactions.month, month))),
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year), eq(transactions.month, month))),
     ]);
 
     cumulative +=
-      -(standalone._sum.amount?.toNumber() ?? 0) +
-      -(incoming._sum.amount?.toNumber() ?? 0) +
-      (outgoing._sum.amount?.toNumber() ?? 0);
+      -(toNumber(standalone[0].total)) +
+      -(toNumber(incoming[0].total)) +
+      toNumber(outgoing[0].total);
 
     data.push({
       month,
@@ -362,5 +294,7 @@ export async function getSavingsOverview(year: number) {
 }
 
 export async function getAccounts() {
-  return prisma.account.findMany({ orderBy: { sortOrder: "asc" } });
+  return db.query.accounts.findMany({
+    orderBy: [asc(accounts.sortOrder)],
+  });
 }

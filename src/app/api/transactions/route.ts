@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { db, transactions, accounts, appPreferences } from "@/lib/db";
+import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
+import { createId } from "@paralleldrive/cuid2";
 import { validateApiToken, unauthorizedResponse } from "@/lib/api-auth";
 import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
 import { revalidatePath } from "next/cache";
+import { toNumber, toDbDate } from "@/lib/db/helpers";
 
 const apiTransactionSchema = z.object({
   label: z.string().min(1, "Le libellé est requis"),
@@ -38,7 +40,9 @@ export async function POST(request: Request) {
   const data = parsed.data;
 
   // Forcer isAmex à false si le support AMEX est désactivé
-  const prefs = await prisma.appPreferences.findUnique({ where: { id: "singleton" } });
+  const prefs = await db.query.appPreferences.findFirst({
+    where: eq(appPreferences.id, "singleton"),
+  });
   const amexEnabled = prefs?.amexEnabled ?? true;
   if (!amexEnabled) {
     data.isAmex = false;
@@ -53,9 +57,9 @@ export async function POST(request: Request) {
   // Résoudre le compte (défaut = premier CHECKING)
   let accountId = data.accountId;
   if (!accountId) {
-    const defaultAccount = await prisma.account.findFirst({
-      where: { type: "CHECKING" },
-      orderBy: { sortOrder: "asc" },
+    const defaultAccount = await db.query.accounts.findFirst({
+      where: eq(accounts.type, "CHECKING"),
+      orderBy: asc(accounts.sortOrder),
     });
     if (!defaultAccount) {
       return NextResponse.json({ error: "Aucun compte courant trouvé" }, { status: 400 });
@@ -63,19 +67,19 @@ export async function POST(request: Request) {
     accountId = defaultAccount.id;
   }
 
-  const transaction = await prisma.transaction.create({
-    data: {
-      label: data.label,
-      amount: new Prisma.Decimal(data.amount),
-      date,
-      month,
-      year,
-      status: data.status ?? "PENDING",
-      accountId,
-      categoryId: data.categoryId,
-      subCategoryId: data.subCategoryId ?? null,
-      isAmex: data.isAmex ?? false,
-    },
+  const id = createId();
+  await db.insert(transactions).values({
+    id,
+    label: data.label,
+    amount: data.amount.toString(),
+    date: toDbDate(date),
+    month,
+    year,
+    status: data.status ?? "PENDING",
+    accountId,
+    categoryId: data.categoryId,
+    subCategoryId: data.subCategoryId ?? null,
+    isAmex: data.isAmex ?? false,
   });
 
   await recomputeMonthlyBalance(year, month);
@@ -83,15 +87,15 @@ export async function POST(request: Request) {
 
   return NextResponse.json(
     {
-      id: transaction.id,
-      label: transaction.label,
-      amount: transaction.amount.toNumber(),
+      id,
+      label: data.label,
+      amount: data.amount,
       date: dateStr,
       month,
       year,
-      status: transaction.status,
-      categoryId: transaction.categoryId,
-      accountId: transaction.accountId,
+      status: data.status ?? "PENDING",
+      categoryId: data.categoryId,
+      accountId,
     },
     { status: 201 }
   );
