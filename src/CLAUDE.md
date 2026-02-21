@@ -45,7 +45,7 @@ Le préfixe `_` empêche Next.js de traiter ces dossiers comme des routes.
 - **Exception** : les routes `/api/*` sont des API REST pour les intégrations externes (Tasker/n8n), sécurisées par Bearer token
 - Les fonctions de lecture (getXxx) sont aussi dans les fichiers actions pour la co-localisation
 - Retournent `{ success: true }` ou `{ error: ... }` pour les mutations
-- Appellent `revalidatePath()` après chaque mutation
+- Appellent `revalidatePath()` après chaque mutation (les mutations de transactions et de transferts invalident `/transactions`, `/transfers` et `/savings`)
 - Convertissent les montants numériques en `number` via `toNumber()` et les `Date` en `string` via `toISOString()` avant de retourner
 
 ### Sérialisation Server → Client

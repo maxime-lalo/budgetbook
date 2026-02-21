@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  Home,
   LayoutDashboard,
   Tags,
   Wallet,
   PiggyBank,
+  Repeat,
   BarChart3,
   Settings,
   Menu,
@@ -18,7 +20,9 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 const navItems = [
+  { href: "/", label: "Accueil", icon: Home },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/transfers", label: "Virements", icon: Repeat },
   { href: "/budgets", label: "Budgets", icon: LayoutDashboard },
   { href: "/categories", label: "Catégories", icon: Tags },
   { href: "/accounts", label: "Comptes", icon: Wallet },
@@ -32,7 +36,7 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex md:hidden items-center h-14 border-b px-4 gap-4">
+    <div className="flex md:hidden items-center h-14 border-b px-4 gap-4 print:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon">
@@ -50,7 +54,7 @@ export function MobileNav() {
           </div>
           <nav className="flex-1 space-y-1 p-4">
             {navItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
+              const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}

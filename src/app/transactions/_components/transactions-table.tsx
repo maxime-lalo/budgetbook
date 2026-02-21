@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useTransition } from "react";
 import {
   Table,
   TableBody,
@@ -9,18 +9,14 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 import { EditableTransactionRow } from "./editable-transaction-row";
 import { NewTransactionRow } from "./new-transaction-row";
 import { CopyRecurringButton } from "./copy-recurring-button";
 import { CompleteAmexButton } from "./complete-amex-button";
+import { TransactionFilters, type TransactionFilterValues } from "./transaction-filters";
+import { CrossMonthResults } from "./cross-month-results";
+import { searchTransactionsAcrossMonths } from "../_actions/transaction-actions";
 import { formatCurrency } from "@/lib/formatters";
 
 type Transaction = {
@@ -67,6 +63,18 @@ const STATUS_ORDER: Record<string, number> = {
   COMPLETED: 0,
   PENDING: 1,
   CANCELLED: 2,
+};
+
+type CrossMonthResult = {
+  id: string;
+  label: string;
+  amount: number;
+  date: string | null;
+  month: number;
+  year: number;
+  status: string;
+  category: { name: string; color: string | null };
+  account: { name: string };
 };
 
 function SortableHeader({
@@ -141,8 +149,44 @@ export function TransactionsTable({
 }) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [categoryFilter, setCategoryFilter] = useState<string>(initialCategory ?? "__all__");
   const [recurringOpen, setRecurringOpen] = useState(false);
+  const [filters, setFilters] = useState<TransactionFilterValues>({
+    search: "",
+    categoryId: initialCategory ?? "__all__",
+    accountId: "__all__",
+    status: "__all__",
+    amountMin: "",
+    amountMax: "",
+    crossMonth: false,
+  });
+  const [crossMonthResults, setCrossMonthResults] = useState<CrossMonthResult[]>([]);
+  const [isPending, startTransition] = useTransition();
+
+  const handleFilterChange = useCallback(
+    (newFilters: TransactionFilterValues) => {
+      setFilters(newFilters);
+
+      // Trigger cross-month search
+      if (newFilters.crossMonth && newFilters.search.trim()) {
+        startTransition(async () => {
+          const results = await searchTransactionsAcrossMonths(
+            newFilters.search,
+            {
+              categoryId: newFilters.categoryId !== "__all__" ? newFilters.categoryId : undefined,
+              accountId: newFilters.accountId !== "__all__" ? newFilters.accountId : undefined,
+              status: newFilters.status !== "__all__" ? newFilters.status : undefined,
+              amountMin: newFilters.amountMin ? parseFloat(newFilters.amountMin) : undefined,
+              amountMax: newFilters.amountMax ? parseFloat(newFilters.amountMax) : undefined,
+            }
+          );
+          setCrossMonthResults(results);
+        });
+      } else if (!newFilters.crossMonth || !newFilters.search.trim()) {
+        setCrossMonthResults([]);
+      }
+    },
+    []
+  );
 
   function toggleSort(column: SortColumn) {
     if (sortColumn !== column) {
@@ -156,13 +200,30 @@ export function TransactionsTable({
     }
   }
 
-  // 1. Filtrer
-  const filtered =
-    categoryFilter !== "__all__"
-      ? transactions.filter((t) => t.categoryId === categoryFilter)
-      : transactions;
+  // Apply all filters
+  const filtered = transactions.filter((t) => {
+    if (filters.categoryId !== "__all__" && t.categoryId !== filters.categoryId) return false;
+    if (filters.accountId !== "__all__" && t.accountId !== filters.accountId) return false;
+    if (filters.status !== "__all__" && t.status !== filters.status) return false;
+    if (filters.amountMin) {
+      const min = parseFloat(filters.amountMin);
+      if (!isNaN(min) && t.amount < min) return false;
+    }
+    if (filters.amountMax) {
+      const max = parseFloat(filters.amountMax);
+      if (!isNaN(max) && t.amount > max) return false;
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      const matchLabel = t.label.toLowerCase().includes(q);
+      const matchNote = t.note?.toLowerCase().includes(q);
+      const matchAmount = formatCurrency(t.amount).includes(q);
+      if (!matchLabel && !matchNote && !matchAmount) return false;
+    }
+    return true;
+  });
 
-  // 2. Trier (si actif)
+  // Sort
   function compareFn(a: Transaction, b: Transaction): number {
     const dir = sortDirection === "asc" ? 1 : -1;
 
@@ -206,9 +267,9 @@ export function TransactionsTable({
     </TableRow>
   );
 
-  const noFilterResults = filtered.length === 0 && categoryFilter !== "__all__";
+  const noFilterResults = filtered.length === 0 && (filters.categoryId !== "__all__" || filters.search || filters.accountId !== "__all__" || filters.status !== "__all__");
 
-  // Rendu des lignes de transactions
+  // Render transaction rows
   let transactionRows: React.ReactNode;
 
   if (noFilterResults) {
@@ -218,12 +279,11 @@ export function TransactionsTable({
           colSpan={6}
           className="text-center py-8 text-muted-foreground"
         >
-          Aucune transaction pour cette catégorie.
+          Aucune transaction ne correspond aux filtres.
         </TableCell>
       </TableRow>
     );
   } else if (sortColumn) {
-    // Tri actif : liste plate, pas de sections
     const sorted = [...filtered].sort(compareFn);
     transactionRows = sorted.map((t) => (
       <EditableTransactionRow
@@ -235,7 +295,6 @@ export function TransactionsTable({
       />
     ));
   } else if (flatLayout) {
-    // Liste plate sans sections
     transactionRows = filtered.map((t) => (
       <EditableTransactionRow
         key={t.id}
@@ -246,7 +305,6 @@ export function TransactionsTable({
       />
     ));
   } else {
-    // Pas de tri : layout par sections
     const dateless = filtered.filter((t) => t.date === null);
     const dated = filtered.filter((t) => t.date !== null);
     const hasBothSections = dateless.length > 0 && dated.length > 0;
@@ -308,22 +366,19 @@ export function TransactionsTable({
     );
   }
 
+  const showCrossMonth = filters.crossMonth && filters.search.trim();
+
   return (
     <>
+      <TransactionFilters
+        categories={categories}
+        accounts={accounts}
+        initialCategory={initialCategory}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+      />
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2">
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full h-9 text-sm">
-            <SelectValue placeholder="Toutes les catégories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Toutes les catégories</SelectItem>
-            {[...categories].sort((a, b) => a.name.localeCompare(b.name, "fr")).map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         {!hideCopyRecurring && <CopyRecurringButton year={year} month={month} />}
         {amexEnabled && amexPendingCount > 0 && (
           <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
@@ -338,6 +393,11 @@ export function TransactionsTable({
           </div>
         )}
       </div>
+
+      {showCrossMonth && (
+        <CrossMonthResults results={crossMonthResults} loading={isPending} />
+      )}
+
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>

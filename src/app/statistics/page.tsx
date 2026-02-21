@@ -6,6 +6,7 @@ import {
   getCategoryYearComparison,
   getSavingsOverview,
   getAccounts,
+  getCategoryMonthlyHeatmap,
 } from "./_actions/statistics-actions";
 import {
   YearlyOverviewChart,
@@ -14,6 +15,7 @@ import {
   CategoryComparisonTable,
   SavingsOverviewChart,
 } from "./_components/statistics-charts";
+import { CategoryHeatmap } from "./_components/category-heatmap";
 import { StatisticsFilters } from "./_components/statistics-filters";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -29,13 +31,14 @@ export default async function StatisticsPage({
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
   const comparisonMonth = year === currentYear ? currentMonth : 12;
-  const [yearlyData, categoryData, subCategoryData, comparisonData, savingsData, accounts] = await Promise.all([
+  const [yearlyData, categoryData, subCategoryData, comparisonData, savingsData, accounts, heatmapData] = await Promise.all([
     getYearlyOverview(year, accountId),
     getCategoryBreakdown(year, comparisonMonth, accountId),
     getSubCategoryBreakdown(year, comparisonMonth, accountId),
     getCategoryYearComparison(year, comparisonMonth, accountId),
     getSavingsOverview(year),
     getAccounts(),
+    getCategoryMonthlyHeatmap(year, accountId),
   ]);
 
   return (
@@ -60,6 +63,7 @@ export default async function StatisticsPage({
         <CategoryBreakdownChart data={categoryData} />
         <SubCategoryBreakdownChart data={subCategoryData} />
         <CategoryComparisonTable data={comparisonData} year={year} />
+        <CategoryHeatmap data={heatmapData} year={year} />
       </div>
     </div>
   );

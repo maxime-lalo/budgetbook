@@ -36,12 +36,13 @@ Dialog modal avec les champs (dans cet ordre) :
 - **Libellé** (requis)
 - **Dépense/Rentrée** : boutons toggle qui inversent le signe du montant (AMEX force "Dépense")
 - **Montant** (min 0.01) + **Date** (désactivé si Récurrent)
-- **Récurrent** (toggle qui désactive le champ date — transaction sans date rattachée au mois)
-- **Toggle AMEX** : switch visible uniquement si le compte sélectionné est CHECKING
+- **Toggle AMEX** + **Récurrent** (toggle qui désactive le champ date — transaction sans date rattachée au mois)
 - **Catégorie** (requis) → **Sous-catégorie** (optionnel, peuplé dynamiquement)
-- **Compte** + **Statut** (sur la même ligne)
+- **Compte** + **Statut** (sur la même ligne, grid 2 colonnes)
 - **Bucket** (visible uniquement si le compte est SAVINGS ou INVESTMENT et a des buckets)
-- **Note** (obligatoire si CANCELLED, optionnel sinon)
+- **Note** (visible uniquement si statut CANCELLED, obligatoire)
+
+Pas de champ destination (les virements inter-comptes passent par `/transfers`).
 
 ### Actions en ligne (EditableTransactionRow)
 Édition inline de chaque champ avec sauvegarde au blur :
@@ -114,7 +115,7 @@ surplus(M) = forecast(M) − Σ max(budgété, dépensé) par catégorie
 carryOver(M) = Σ surplus(i) pour tous les mois i < M
 ```
 
-La table `MonthlyBalance` est mise à jour automatiquement après chaque mutation de transaction (create, update, delete, mark completed, cancel, update field, copy recurring).
+La table `MonthlyBalance` est mise à jour automatiquement après chaque mutation de transaction (create, update, delete, mark completed, cancel, update field, copy recurring). Toutes les mutations appellent `revalidatePath` sur `/transactions`, `/transfers` et `/savings`.
 
 Ce montant est :
 - Affiché en première ligne du tableau des transactions du mois courant ("Report mois précédent")

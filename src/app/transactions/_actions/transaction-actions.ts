@@ -1,7 +1,7 @@
 "use server";
 
-import { db, transactions, accounts, buckets, categories as categoriesTable } from "@/lib/db";
-import { eq, and, inArray, sql, asc, isNull } from "drizzle-orm";
+import { db, transactions, accounts, buckets } from "@/lib/db";
+import { eq, and, inArray, sql, asc, desc, isNull, gte, lte, or } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { transactionSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
@@ -107,6 +107,7 @@ export async function createTransaction(data: Record<string, unknown>) {
   });
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true };
 }
@@ -142,6 +143,7 @@ export async function updateTransaction(id: string, data: Record<string, unknown
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true };
 }
@@ -159,6 +161,7 @@ export async function deleteTransaction(id: string) {
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true };
 }
@@ -176,6 +179,7 @@ export async function markTransactionCompleted(id: string) {
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true };
 }
@@ -200,6 +204,7 @@ export async function completeAmexTransactions(year: number, month: number) {
 
   await recomputeMonthlyBalance(year, month);
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { count: Number(count) };
 }
@@ -219,6 +224,7 @@ export async function cancelTransaction(id: string, note: string) {
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true };
 }
@@ -286,6 +292,7 @@ export async function updateTransactionField(
   }
 
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true };
 }
@@ -333,12 +340,74 @@ export async function copyRecurringTransactions(year: number, month: number) {
 
   await recomputeMonthlyBalance(year, month);
   revalidatePath("/transactions");
+  revalidatePath("/transfers");
   revalidatePath("/savings");
   return { success: true, count: previousRecurring.length };
 }
 
 export async function getPreviousMonthBudgetRemaining(year: number, month: number) {
   return getCarryOver(year, month);
+}
+
+export async function searchTransactionsAcrossMonths(
+  query: string,
+  filters: {
+    categoryId?: string;
+    accountId?: string;
+    status?: string;
+    amountMin?: number;
+    amountMax?: number;
+  }
+) {
+  const conditions = [];
+
+  if (query) {
+    const pattern = `%${query.toLowerCase()}%`;
+    conditions.push(
+      or(
+        sql`lower(${transactions.label}) like ${pattern}`,
+        sql`lower(${transactions.note}) like ${pattern}`
+      )
+    );
+  }
+
+  if (filters.categoryId) {
+    conditions.push(eq(transactions.categoryId, filters.categoryId));
+  }
+  if (filters.accountId) {
+    conditions.push(eq(transactions.accountId, filters.accountId));
+  }
+  if (filters.status) {
+    conditions.push(eq(transactions.status, filters.status as "PENDING" | "COMPLETED" | "CANCELLED"));
+  }
+  if (filters.amountMin !== undefined) {
+    conditions.push(gte(transactions.amount, filters.amountMin.toString()));
+  }
+  if (filters.amountMax !== undefined) {
+    conditions.push(lte(transactions.amount, filters.amountMax.toString()));
+  }
+
+  const result = await db.query.transactions.findMany({
+    where: conditions.length > 0 ? and(...conditions) : undefined,
+    with: {
+      category: true,
+      account: true,
+    },
+    orderBy: [desc(transactions.year), desc(transactions.month), desc(transactions.date)],
+    limit: 50,
+  });
+
+  return result.map((t) => ({
+    id: t.id,
+    label: t.label,
+    amount: toNumber(t.amount),
+    date: t.date ? toISOString(t.date) : null,
+    month: t.month,
+    year: t.year,
+    status: t.status,
+    category: { name: t.category.name, color: t.category.color },
+    account: { name: t.account.name },
+  }));
 }
 
 export async function getFormData() {
