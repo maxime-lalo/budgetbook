@@ -81,6 +81,9 @@ export type BudgetInput = z.infer<typeof budgetSchema>;
 
 // --- Schéma de validation pour l'import/export complet ---
 
+const numericString = z.union([z.string(), z.number()]).transform(String);
+const nullableNumericString = z.union([z.string(), z.number(), z.null()]).transform((v) => v === null ? null : String(v));
+
 const exportAccountSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -98,8 +101,8 @@ const exportBucketSchema = z.object({
   name: z.string(),
   accountId: z.string(),
   color: z.string().nullable(),
-  goal: z.string().nullable(),
-  baseAmount: z.string(),
+  goal: nullableNumericString,
+  baseAmount: numericString,
   sortOrder: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -127,7 +130,7 @@ const exportSubCategorySchema = z.object({
 const exportTransactionSchema = z.object({
   id: z.string(),
   label: z.string(),
-  amount: z.string(),
+  amount: numericString,
   date: z.string().nullable(),
   month: z.number(),
   year: z.number(),
@@ -148,7 +151,7 @@ const exportBudgetSchema = z.object({
   categoryId: z.string(),
   month: z.number(),
   year: z.number(),
-  amount: z.string(),
+  amount: numericString,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -157,9 +160,9 @@ const exportMonthlyBalanceSchema = z.object({
   id: z.string(),
   year: z.number(),
   month: z.number(),
-  forecast: z.string(),
-  committed: z.string(),
-  surplus: z.string(),
+  forecast: numericString,
+  committed: numericString,
+  surplus: numericString,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
