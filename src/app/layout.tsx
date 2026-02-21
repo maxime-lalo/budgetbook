@@ -32,11 +32,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <div className="flex h-screen overflow-hidden">
+          <div className="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
             <Sidebar />
             <div className="flex flex-1 flex-col overflow-hidden">
               <MobileNav />
-              <main className="flex-1 overflow-y-auto p-6">{children}</main>
+              <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-4">{children}</main>
             </div>
           </div>
           <Toaster richColors position="bottom-right" />

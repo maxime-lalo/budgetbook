@@ -80,6 +80,7 @@ comptes/
 ├── src/
 │   ├── app/                  # Pages (App Router)
 │   │   ├── transactions/     # Vue principale mensuelle
+│   │   ├── transfers/        # Virements inter-comptes
 │   │   ├── budgets/          # Budgets mensuels par catégorie
 │   │   ├── categories/       # CRUD catégories/sous-catégories
 │   │   ├── accounts/         # Comptes, buckets, soldes
@@ -127,7 +128,7 @@ L'app supporte deux providers via `DB_PROVIDER` :
 ## Conventions importantes
 
 - Les montants sont stockés en `numeric(12,2)` (PG) / `real` (SQLite)
-- Montant positif = rentrée d'argent, négatif = dépense
+- Montant positif = rentrée d'argent, négatif = dépense (les virements sont toujours négatifs côté source)
 - Les dates de transaction sont `date` en PostgreSQL (sans composante horaire) et **optionnelles** (`null` pour les transactions récurrentes). En SQLite, stockées en `text`
 - Chaque transaction a des champs `month` et `year` séparés de `date` pour le rattachement budgétaire
 - `isAmex` (Boolean) marque les transactions faites via carte AMEX ; elles vivent sur le compte courant, pas sur un compte CREDIT_CARD séparé
@@ -168,6 +169,9 @@ Le report pour un mois M = `SUM(surplus)` de tous les mois antérieurs (via `get
 - `getPreviousMonthBudgetRemaining()` délègue à `getCarryOver()` (report cumulé, pas juste M-1)
 - Ce report apparaît en première ligne du tableau des transactions et est inclus dans le "Total actuel" de la TotalsBar
 - Sur la page budgets, le "Total restant" inclut le carry-over des mois précédents
+
+### Virements inter-comptes
+Les transferts entre comptes utilisent le champ `destinationAccountId` (nullable) sur la table `transactions`. Un seul enregistrement par transfert, `amount` toujours négatif côté source. La page `/transfers` offre un formulaire épuré (source → destination → montant) et un historique en cards. Les mutations depuis `/transfers` invalident aussi `/transactions` et `/savings`, et inversement.
 
 ### Navigation inter-pages
 - Les cards de `/categories` et `/budgets` sont cliquables et redirigent vers `/transactions?category=<id>` avec le filtre pré-sélectionné.

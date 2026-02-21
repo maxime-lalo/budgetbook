@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { parseMonthParam } from "@/lib/formatters";
+import Link from "next/link";
+import { parseMonthParam, toMonthParam } from "@/lib/formatters";
 import { getTransactions, getTransactionTotals, getFormData, getPreviousMonthBudgetRemaining } from "./_actions/transaction-actions";
 import { getAppPreferences } from "@/app/settings/_actions/settings-actions";
 import { MonthNavigator } from "./_components/month-navigator";
@@ -7,6 +8,8 @@ import { TotalsBar } from "./_components/totals-bar";
 import { TransactionsTable } from "./_components/transactions-table";
 import { TransactionFormDialog } from "./_components/transaction-form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Printer } from "lucide-react";
 
 export default async function TransactionsPage({
   searchParams,
@@ -49,6 +52,11 @@ export default async function TransactionsPage({
             month={month}
             amexEnabled={amexEnabled}
           />
+          <Button variant="outline" size="icon" asChild>
+            <Link href={`/transactions/print?month=${toMonthParam(year, month)}`} target="_blank" title="Imprimer">
+              <Printer className="h-4 w-4" />
+            </Link>
+          </Button>
           <Suspense fallback={<Skeleton className="h-10 w-[250px]" />}>
             <MonthNavigator />
           </Suspense>

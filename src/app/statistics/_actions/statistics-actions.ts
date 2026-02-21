@@ -298,3 +298,43 @@ export async function getAccounts() {
     orderBy: [asc(accounts.sortOrder)],
   });
 }
+
+export async function getCategoryMonthlyHeatmap(year: number, accountId?: string) {
+  const accountIds = await getAccountFilter(accountId);
+
+  const result = await db
+    .select({
+      categoryId: transactions.categoryId,
+      month: transactions.month,
+      total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.year, year),
+        inArray(transactions.status, ["COMPLETED", "PENDING"]),
+        lt(transactions.amount, "0"),
+        inArray(transactions.accountId, accountIds)
+      )
+    )
+    .groupBy(transactions.categoryId, transactions.month);
+
+  const catIds = [...new Set(result.map((r) => r.categoryId))];
+  if (catIds.length === 0) return { categories: [], data: {} };
+
+  const cats = await db.query.categories.findMany({
+    where: inArray(categories.id, catIds),
+  });
+
+  const sortedCats = cats
+    .map((c) => ({ id: c.id, name: c.name, color: c.color }))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+
+  const data: Record<string, Record<number, number>> = {};
+  for (const r of result) {
+    if (!data[r.categoryId]) data[r.categoryId] = {};
+    data[r.categoryId][r.month] = Math.abs(toNumber(r.total));
+  }
+
+  return { categories: sortedCats, data };
+}

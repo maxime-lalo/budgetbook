@@ -10,13 +10,14 @@
 
 ## Page d'accueil (page.tsx)
 
-Redirect immédiat vers `/transactions` (la vue principale).
+Dashboard avec cards de synthèse (reste à vivre, dépenses, revenus), liste des comptes avec solde (les comptes SAVINGS/INVESTMENT incluent les `baseAmount` des buckets), alertes de dépassement budget, dernières transactions et derniers virements.
 
 ## Routes
 
 | Route | Description | Paramètres URL |
 |-------|-------------|----------------|
 | `/transactions` | Vue mensuelle des transactions | `?month=2026-02&category=<id>` |
+| `/transfers` | Virements inter-comptes du mois | `?month=2026-02` |
 | `/budgets` | Budgets mensuels par catégorie | `?month=2026-02` |
 | `/categories` | CRUD catégories et sous-catégories | - |
 | `/accounts` | CRUD comptes et buckets | - |
@@ -37,9 +38,9 @@ Auth : header `Authorization: Bearer <token>`. Token géré depuis `/settings`.
 
 ## Navigation
 
-- **Sidebar** (desktop, >= md) : 6 liens + toggle thème en bas
+- **Sidebar** (desktop, >= md) : 9 liens (Accueil, Transactions, Virements, Budgets, Catégories, Comptes, Économies, Statistiques, Réglages) + toggle thème en bas
 - **MobileNav** (mobile, < md) : Sheet latéral avec les mêmes liens
-- **MonthNavigator** : composant dans `transactions/_components/` réutilisé par `/budgets`, avec :
+- **MonthNavigator** : composant dans `transactions/_components/` réutilisé par `/budgets` et `/transfers`, avec :
   - Flèches gauche/droite
   - Sélecteur de mois (dropdown 12 mois en français)
   - Sélecteur d'année (dropdown 2017 → année courante)
