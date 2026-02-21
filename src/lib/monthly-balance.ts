@@ -1,5 +1,6 @@
 import { db, transactions, budgets, monthlyBalances } from "@/lib/db";
-import { eq, and, or, inArray, sql, lt } from "drizzle-orm";
+import { eq, and, or, inArray, lt } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { toNumber, round2 } from "@/lib/db/helpers";
 
@@ -17,8 +18,9 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
     );
   const totalForecast = toNumber(forecastResult.total);
 
-  // 2. Dépenses par catégorie (montant < 0)
-  const spentByCategory = await db
+  // 2. Montant NET par catégorie (inclut remboursements)
+  // Même logique que getBudgetsWithSpent : net < 0 → dépense, sinon 0
+  const netByCategory = await db
     .select({
       categoryId: transactions.categoryId,
       total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
@@ -28,8 +30,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
-        inArray(transactions.status, ["COMPLETED", "PENDING"]),
-        sql`${transactions.amount} < 0`
+        inArray(transactions.status, ["COMPLETED", "PENDING"])
       )
     )
     .groupBy(transactions.categoryId);
@@ -39,10 +40,13 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
     where: and(eq(budgets.year, year), eq(budgets.month, month)),
   });
 
-  // 4. committed = Σ max(0, budgété - dépensé) par catégorie
+  // 4. committed = Σ max(0, budgété - dépensé_net) par catégorie
   const budgetMap = new Map(monthBudgets.map((b) => [b.categoryId, toNumber(b.amount)]));
   const spentMap = new Map(
-    spentByCategory.map((s) => [s.categoryId, Math.abs(toNumber(s.total))])
+    netByCategory.map((s) => {
+      const net = toNumber(s.total);
+      return [s.categoryId, net < 0 ? round2(Math.abs(net)) : 0];
+    })
   );
 
   const allCategoryIds = new Set([...budgetMap.keys(), ...spentMap.keys()]);
