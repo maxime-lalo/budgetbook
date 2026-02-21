@@ -158,7 +158,7 @@ async function getOverBudgetCategories(year: number, month: number) {
         remaining: round2(budgeted - spentAmount),
       };
     })
-    .filter((c) => c.budgeted > 0 && c.spent > c.budgeted)
+    .filter((c) => c.spent > c.budgeted && c.spent > 0)
     .sort((a, b) => a.remaining - b.remaining);
 }
 
