@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { comptesExportSchema } from "@/lib/validators";
 import { toNumber, toISOString } from "@/lib/db/helpers";
+import { backfillAllMonthlyBalances } from "@/lib/monthly-balance";
 
 // Helper: convertit une date ISO string en Date (PG) ou la laisse en string (SQLite)
 const toTimestamp = (isoString: string): Date | string =>
@@ -253,20 +254,10 @@ export async function importAllData(
     }
     counts.budgets = data.budgets.length;
 
-    // 8. Insérer les monthly balances
-    for (const mb of data.monthlyBalances) {
-      await db.insert(monthlyBalances).values({
-        id: mb.id,
-        year: mb.year,
-        month: mb.month,
-        forecast: mb.forecast,
-        committed: mb.committed,
-        surplus: mb.surplus,
-        createdAt: toTimestamp(mb.createdAt) as Date,
-        updatedAt: toTimestamp(mb.updatedAt) as Date,
-      });
-    }
-    counts.monthlyBalances = data.monthlyBalances.length;
+    // 8. Recalculer les monthly balances depuis les données réelles
+    await backfillAllMonthlyBalances();
+    const recalculated = await db.query.monthlyBalances.findMany();
+    counts.monthlyBalances = recalculated.length;
 
     // 9. Insérer les API tokens
     for (const token of data.apiTokens) {
@@ -308,5 +299,18 @@ export async function importAllData(
       return { error: "Le format du fichier est invalide" };
     }
     return { error: "Erreur lors de l'import des données" };
+  }
+}
+
+export async function recalculateAllBalances(): Promise<{ success: true; count: number } | { error: string }> {
+  try {
+    await db.delete(monthlyBalances);
+    await backfillAllMonthlyBalances();
+    const recalculated = await db.query.monthlyBalances.findMany();
+    revalidatePath("/");
+    return { success: true, count: recalculated.length };
+  } catch (e) {
+    console.error("Erreur lors du recalcul des soldes:", e);
+    return { error: "Erreur lors du recalcul des soldes mensuels" };
   }
 }

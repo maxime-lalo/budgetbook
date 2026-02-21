@@ -6,6 +6,7 @@ import { ApiTokenCard } from "@/app/settings/_components/api-token-card";
 import { ExportDataCard } from "@/app/settings/_components/export-data-card";
 import { ImportDataCard } from "@/app/settings/_components/import-data-card";
 import { ClearDataCard } from "@/app/settings/_components/clear-data-card";
+import { RecalculateBalancesCard } from "@/app/settings/_components/recalculate-balances-card";
 
 export default async function SettingsPage() {
   const [token, prefs] = await Promise.all([
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
       <h1 className="text-3xl font-bold">Réglages</h1>
       <AmexToggleCard initialEnabled={prefs.amexEnabled} />
       <ApiTokenCard initialToken={token} />
+      <RecalculateBalancesCard />
       <ExportDataCard />
       <ImportDataCard />
       <ClearDataCard />

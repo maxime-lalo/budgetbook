@@ -1,5 +1,5 @@
 import { db, transactions, budgets, monthlyBalances } from "@/lib/db";
-import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
+import { eq, and, or, inArray, sql, lt } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { toNumber, round2 } from "@/lib/db/helpers";
 
@@ -29,7 +29,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
         eq(transactions.year, year),
         eq(transactions.month, month),
         inArray(transactions.status, ["COMPLETED", "PENDING"]),
-        lt(transactions.amount, "0")
+        sql`${transactions.amount} < 0`
       )
     )
     .groupBy(transactions.categoryId);

@@ -1,7 +1,7 @@
 "use server";
 
 import { db, transactions, accounts, buckets, budgets } from "@/lib/db";
-import { eq, and, inArray, lt, gt, sql, desc, asc, isNotNull } from "drizzle-orm";
+import { eq, and, inArray, sql, desc, asc, isNotNull } from "drizzle-orm";
 import { toNumber, toISOString, round2 } from "@/lib/db/helpers";
 import { getCarryOver } from "@/lib/monthly-balance";
 
@@ -56,7 +56,7 @@ async function getTotals(year: number, month: number, checkingIds: string[]) {
 }
 
 async function getIncomeExpenses(year: number, month: number, type: "income" | "expenses") {
-  const condition = type === "income" ? gt(transactions.amount, "0") : lt(transactions.amount, "0");
+  const condition = type === "income" ? sql`${transactions.amount} > 0` : sql`${transactions.amount} < 0`;
   const [result] = await db
     .select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
     .from(transactions)

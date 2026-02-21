@@ -1,7 +1,7 @@
 "use server";
 
 import { db, transactions, accounts, categories, subCategories, buckets } from "@/lib/db";
-import { eq, and, inArray, gt, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
+import { eq, and, inArray, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
 import { toNumber } from "@/lib/db/helpers";
 
 async function getAccountFilter(accountId?: string) {
@@ -29,10 +29,10 @@ export async function getYearlyOverview(year: number, accountId?: string) {
     const [income, expenses] = await Promise.all([
       db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
         .from(transactions)
-        .where(and(baseWhere, gt(transactions.amount, "0"))),
+        .where(and(baseWhere, sql`${transactions.amount} > 0`)),
       db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
         .from(transactions)
-        .where(and(baseWhere, lt(transactions.amount, "0"))),
+        .where(and(baseWhere, sql`${transactions.amount} < 0`)),
     ]);
 
     data.push({
@@ -313,7 +313,7 @@ export async function getCategoryMonthlyHeatmap(year: number, accountId?: string
       and(
         eq(transactions.year, year),
         inArray(transactions.status, ["COMPLETED", "PENDING"]),
-        lt(transactions.amount, "0"),
+        sql`${transactions.amount} < 0`,
         inArray(transactions.accountId, accountIds)
       )
     )
