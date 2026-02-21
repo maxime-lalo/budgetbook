@@ -302,29 +302,48 @@ export async function getAccounts() {
 export async function getCategoryMonthlyHeatmap(year: number, accountId?: string) {
   const accountIds = await getAccountFilter(accountId);
 
-  const result = await db
-    .select({
-      categoryId: transactions.categoryId,
-      month: transactions.month,
-      total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
-    })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.year, year),
-        inArray(transactions.status, ["COMPLETED", "PENDING"]),
-        sql`${transactions.amount} < 0`,
-        inArray(transactions.accountId, accountIds)
-      )
-    )
-    .groupBy(transactions.categoryId, transactions.month);
+  const baseWhere = and(
+    eq(transactions.year, year),
+    inArray(transactions.status, ["COMPLETED", "PENDING"]),
+    sql`${transactions.amount} < 0`,
+    inArray(transactions.accountId, accountIds)
+  );
+
+  const [result, subResult] = await Promise.all([
+    db
+      .select({
+        categoryId: transactions.categoryId,
+        month: transactions.month,
+        total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
+      })
+      .from(transactions)
+      .where(baseWhere)
+      .groupBy(transactions.categoryId, transactions.month),
+    db
+      .select({
+        categoryId: transactions.categoryId,
+        subCategoryId: transactions.subCategoryId,
+        month: transactions.month,
+        total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
+      })
+      .from(transactions)
+      .where(and(baseWhere, isNotNull(transactions.subCategoryId)))
+      .groupBy(transactions.categoryId, transactions.subCategoryId, transactions.month),
+  ]);
 
   const catIds = [...new Set(result.map((r) => r.categoryId))];
-  if (catIds.length === 0) return { categories: [], data: {} };
+  if (catIds.length === 0) return { categories: [], data: {}, subCategoryData: {} };
 
-  const cats = await db.query.categories.findMany({
-    where: inArray(categories.id, catIds),
-  });
+  const subCatIds = [...new Set(subResult.map((r) => r.subCategoryId).filter((id): id is string => id !== null))];
+
+  const [cats, subs] = await Promise.all([
+    db.query.categories.findMany({
+      where: inArray(categories.id, catIds),
+    }),
+    subCatIds.length > 0
+      ? db.query.subCategories.findMany({ where: inArray(subCategories.id, subCatIds) })
+      : [],
+  ]);
 
   const sortedCats = cats
     .map((c) => ({ id: c.id, name: c.name, color: c.color }))
@@ -336,5 +355,33 @@ export async function getCategoryMonthlyHeatmap(year: number, accountId?: string
     data[r.categoryId][r.month] = Math.abs(toNumber(r.total));
   }
 
-  return { categories: sortedCats, data };
+  // Build sub-category data keyed by categoryId
+  const subMap = new Map((subs as { id: string; name: string }[]).map((s) => [s.id, s]));
+  const subCategoryData: Record<string, {
+    subCategories: { id: string; name: string }[];
+    data: Record<string, Record<number, number>>;
+  }> = {};
+
+  for (const r of subResult) {
+    const subId = r.subCategoryId;
+    if (!subId) continue;
+
+    if (!subCategoryData[r.categoryId]) {
+      subCategoryData[r.categoryId] = { subCategories: [], data: {} };
+    }
+    if (!subCategoryData[r.categoryId].data[subId]) {
+      subCategoryData[r.categoryId].data[subId] = {};
+    }
+    subCategoryData[r.categoryId].data[subId][r.month] = Math.abs(toNumber(r.total));
+  }
+
+  // Populate sub-category names and sort
+  for (const catId of Object.keys(subCategoryData)) {
+    const subIds = Object.keys(subCategoryData[catId].data);
+    subCategoryData[catId].subCategories = subIds
+      .map((id) => ({ id, name: subMap.get(id)?.name ?? "?" }))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }
+
+  return { categories: sortedCats, data, subCategoryData };
 }
