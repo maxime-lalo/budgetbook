@@ -2,6 +2,8 @@ import { parseMonthParam, formatMonthYear } from "@/lib/formatters";
 import { getDashboardData } from "./_actions/dashboard-actions";
 import { SummaryCards, AccountsList, BudgetAlerts, RecentTransactions, RecentTransfers } from "./_components/dashboard";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const { year, month } = parseMonthParam();
   const data = await getDashboardData(year, month);
