@@ -25,6 +25,14 @@ if [ "$DB_PROVIDER" = "sqlite" ]; then
       }
       if (indexes.length > 0) console.log('Dropped', indexes.length, 'custom indexes');
 
+      // Manual schema migrations — add missing columns so drizzle-kit push
+      // detects 'No changes' and skips table rebuilds (which fail on FK checks)
+      const columns = db.prepare(\"PRAGMA table_info('api_tokens')\").all();
+      if (!columns.find(c => c.name === 'tokenPrefix')) {
+        db.prepare(\"ALTER TABLE api_tokens ADD COLUMN tokenPrefix text NOT NULL DEFAULT ''\").run();
+        console.log('Added tokenPrefix column to api_tokens');
+      }
+
       // Fix orphaned FK references (data predating FK enforcement)
       const violations = db.pragma('foreign_key_check');
       if (violations.length > 0) {
