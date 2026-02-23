@@ -12,12 +12,6 @@ if [ "$DB_PROVIDER" = "sqlite" ]; then
       const db = new Database(dbPath);
       db.pragma('foreign_keys = OFF');
 
-      // Migrate PRÉVUE → PLANNED
-      try {
-        const r = db.prepare(\"UPDATE transactions SET status = 'PLANNED' WHERE status = 'PRÉVUE'\").run();
-        if (r.changes > 0) console.log('Migrated', r.changes, 'PRÉVUE → PLANNED');
-      } catch(e) { /* table may not exist yet */ }
-
       // Drop custom indexes (drizzle-kit 0.31.x generates duplicate CREATE INDEX for SQLite)
       const indexes = db.prepare(\"SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'\").all();
       for (const idx of indexes) {
@@ -25,17 +19,9 @@ if [ "$DB_PROVIDER" = "sqlite" ]; then
       }
       if (indexes.length > 0) console.log('Dropped', indexes.length, 'custom indexes');
 
-      // Add missing columns manually (avoids drizzle-kit table rebuild)
-      const apiCols = db.prepare(\"PRAGMA table_info('api_tokens')\").all();
-      if (!apiCols.find(c => c.name === 'tokenPrefix')) {
-        db.prepare(\"ALTER TABLE api_tokens ADD COLUMN tokenPrefix text NOT NULL DEFAULT ''\").run();
-        console.log('Added tokenPrefix column to api_tokens');
-      }
-
-      // Clean orphaned FK references against INTENDED schema
-      // (existing tables may lack FK constraints, so PRAGMA foreign_key_check finds nothing)
+      // Clean orphaned FK references against intended schema
+      // (tables created before FK enforcement may have orphaned references)
       const fkChecks = [
-        // [table, column, parentTable, parentColumn, nullable]
         ['transactions', 'accountId',            'accounts',       'id', false],
         ['transactions', 'destinationAccountId', 'accounts',       'id', true],
         ['transactions', 'categoryId',           'categories',     'id', true],
@@ -66,21 +52,11 @@ if [ "$DB_PROVIDER" = "sqlite" ]; then
       }
       if (totalFixed > 0) console.log('Total FK fixes: ' + totalFixed);
 
-      // Debug: show current schema for each table (FK presence)
-      const tables = ['accounts','buckets','categories','sub_categories','transactions','budgets','monthly_balances','api_tokens','app_preferences'];
-      for (const t of tables) {
-        try {
-          const fks = db.pragma('foreign_key_list(\"' + t + '\")');
-          const cols = db.prepare(\"PRAGMA table_info('\" + t + \"')\").all().map(c => c.name);
-          console.log('[DEBUG] ' + t + ': ' + cols.length + ' cols, ' + fks.length + ' FKs');
-        } catch(e) {}
-      }
-
       db.close();
-    } catch(e) { console.log('Pre-push error:', e.message); }
+    } catch(e) { /* DB may not exist yet on first run */ }
   " || true
   echo "SQLite mode: pushing schema..."
-  npx drizzle-kit push --force 2>&1 || echo "drizzle-kit push failed (exit $?)"
+  npx drizzle-kit push --force
 else
   echo "PostgreSQL mode: pushing schema..."
   npx drizzle-kit push --force
