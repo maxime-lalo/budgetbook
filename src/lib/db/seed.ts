@@ -7,6 +7,7 @@ import { createId } from "@paralleldrive/cuid2";
 import * as pgSchema from "./schema/pg";
 import * as sqliteSchema from "./schema/sqlite";
 import { toNumber } from "./helpers";
+import { logger } from "@/lib/logger";
 
 const provider = process.env.DB_PROVIDER ?? "postgresql";
 
@@ -246,12 +247,12 @@ async function main() {
     await db.insert(s.appPreferences).values({ id: "singleton", amexEnabled: true });
   }
 
-  console.log("Seed completed successfully!");
+  logger.info("Seed completed successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    logger.error("Seed failed", { error: e instanceof Error ? e.message : String(e) });
     process.exit(1);
   })
   .finally(async () => {

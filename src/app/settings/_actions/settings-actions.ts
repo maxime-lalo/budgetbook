@@ -62,7 +62,7 @@ export async function getAppPreferences() {
 
   if (!prefs) {
     await db.insert(appPreferences).values({ id: "singleton", amexEnabled: true, separateRecurring: true });
-    prefs = { id: "singleton", amexEnabled: true, separateRecurring: true, updatedAt: new Date().toISOString() as unknown as Date };
+    prefs = { id: "singleton", amexEnabled: true, separateRecurring: true, updatedAt: new Date() };
   }
 
   // Migrer les lignes existantes sans separateRecurring

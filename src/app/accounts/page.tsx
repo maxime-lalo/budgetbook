@@ -26,11 +26,21 @@ async function getBucketBalances(bucketIds: string[]) {
   const baseAmountMap = new Map<string, number>(buckets.map((b) => [b.id, toNumber(b.baseAmount)]));
   const accountIdMap = new Map<string, string>(buckets.map((b) => [b.id, b.accountId]));
 
+  const allTxs = await db.query.transactions.findMany({
+    where: and(inArray(transactionsTable.bucketId, bucketIds), eq(transactionsTable.status, "COMPLETED")),
+    columns: { bucketId: true, amount: true, year: true, month: true, accountId: true, destinationAccountId: true },
+  });
+
+  const txsByBucket = new Map<string, typeof allTxs>();
+  for (const tx of allTxs) {
+    if (!tx.bucketId) continue;
+    const group = txsByBucket.get(tx.bucketId) ?? [];
+    group.push(tx);
+    txsByBucket.set(tx.bucketId, group);
+  }
+
   for (const id of bucketIds) {
-    const txs = await db.query.transactions.findMany({
-      where: and(eq(transactionsTable.bucketId, id), eq(transactionsTable.status, "COMPLETED")),
-      columns: { amount: true, year: true, month: true, accountId: true, destinationAccountId: true },
-    });
+    const txs = txsByBucket.get(id) ?? [];
     const base = baseAmountMap.get(id) ?? 0;
     const bucketAccountId = accountIdMap.get(id);
     let currentSum = 0;

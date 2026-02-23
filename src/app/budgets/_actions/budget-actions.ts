@@ -95,10 +95,14 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
       return { error: "Aucun budget trouvé pour le mois précédent" };
     }
 
+    // Batch-fetch all existing budgets for the target month to avoid N+1 queries
+    const existingBudgets = await db.query.budgets.findMany({
+      where: and(eq(budgets.year, year), eq(budgets.month, month)),
+    });
+    const existingByCategory = new Map(existingBudgets.map((b) => [b.categoryId, b]));
+
     for (const budget of previousBudgets) {
-      const existing = await db.query.budgets.findFirst({
-        where: and(eq(budgets.categoryId, budget.categoryId), eq(budgets.year, year), eq(budgets.month, month)),
-      });
+      const existing = existingByCategory.get(budget.categoryId);
 
       if (existing) {
         await db.update(budgets).set({ amount: budget.amount }).where(eq(budgets.id, existing.id));
@@ -121,20 +125,19 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
 
 export async function calibrateBudgets(year: number, month: number) {
   return safeAction(async () => {
-    const budgetData: { id: string; spent: number; budgeted: number }[] = await getBudgetsWithSpent(year, month);
+    const budgetData: { id: string; budgetId: string | null; spent: number; budgeted: number }[] =
+      await getBudgetsWithSpent(year, month);
     const overBudget = budgetData.filter((b) => b.spent > b.budgeted && b.spent > 0);
 
     if (overBudget.length === 0) {
       return { error: "Aucun dépassement de budget à calibrer" };
     }
 
+    // getBudgetsWithSpent already returns budgetId — use it directly for O(1) lookups
+    // without any additional DB queries inside the loop
     for (const b of overBudget) {
-      const existing = await db.query.budgets.findFirst({
-        where: and(eq(budgets.categoryId, b.id), eq(budgets.year, year), eq(budgets.month, month)),
-      });
-
-      if (existing) {
-        await db.update(budgets).set({ amount: b.spent.toString() }).where(eq(budgets.id, existing.id));
+      if (b.budgetId) {
+        await db.update(budgets).set({ amount: b.spent.toString() }).where(eq(budgets.id, b.budgetId));
       } else {
         await db.insert(budgets).values({
           id: createId(),

@@ -30,23 +30,25 @@ export async function getDashboardData(year: number, month: number) {
 async function getTotals(year: number, month: number, checkingIds: string[]) {
   if (checkingIds.length === 0) return { real: 0, pending: 0, forecast: 0 };
 
-  const [completed, pending, incomingCompleted, incomingPending] = await Promise.all([
-    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+  const baseWhere = and(eq(transactions.year, year), eq(transactions.month, month));
+
+  const [[outgoing], [incoming]] = await Promise.all([
+    db.select({
+      completed: sql<string>`coalesce(sum(case when ${transactions.status} = 'COMPLETED' then ${transactions.amount} end), 0)`,
+      pending:   sql<string>`coalesce(sum(case when ${transactions.status} = 'PENDING'   then ${transactions.amount} end), 0)`,
+    })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.accountId, checkingIds))),
-    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .where(and(baseWhere, inArray(transactions.accountId, checkingIds))),
+    db.select({
+      completed: sql<string>`coalesce(sum(case when ${transactions.status} = 'COMPLETED' then ${transactions.amount} end), 0)`,
+      pending:   sql<string>`coalesce(sum(case when ${transactions.status} = 'PENDING'   then ${transactions.amount} end), 0)`,
+    })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.accountId, checkingIds))),
-    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-      .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, checkingIds))),
-    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-      .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, checkingIds))),
+      .where(and(baseWhere, inArray(transactions.destinationAccountId, checkingIds))),
   ]);
 
-  const realTotal = round2(toNumber(completed[0].total) + -(toNumber(incomingCompleted[0].total)));
-  const pendingTotal = round2(toNumber(pending[0].total) + -(toNumber(incomingPending[0].total)));
+  const realTotal = round2(toNumber(outgoing.completed) + -(toNumber(incoming.completed)));
+  const pendingTotal = round2(toNumber(outgoing.pending) + -(toNumber(incoming.pending)));
 
   return {
     real: realTotal,
@@ -103,7 +105,7 @@ async function getAccountsWithBalance() {
   ]);
 
   const outgoingMap = new Map(outgoingByAccount.map((r) => [r.accountId, toNumber(r.total)]));
-  const incomingMap = new Map(incomingByAccount.map((r) => [r.accountId!, toNumber(r.total)]));
+  const incomingMap = new Map(incomingByAccount.filter((r) => r.accountId !== null).map((r) => [r.accountId, toNumber(r.total)]));
   const baseMap = new Map(baseByAccount.map((r) => [r.accountId, toNumber(r.total)]));
 
   return allAccounts.map((a) => {
