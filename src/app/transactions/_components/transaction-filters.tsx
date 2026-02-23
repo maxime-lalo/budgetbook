@@ -114,6 +114,7 @@ export function TransactionFilters({
             <SelectItem value="__all__">Tous les statuts</SelectItem>
             <SelectItem value="PENDING">En attente</SelectItem>
             <SelectItem value="COMPLETED">Réalisé</SelectItem>
+            <SelectItem value="PRÉVUE">Prévu</SelectItem>
             <SelectItem value="CANCELLED">Annulé</SelectItem>
           </SelectContent>
         </Select>
