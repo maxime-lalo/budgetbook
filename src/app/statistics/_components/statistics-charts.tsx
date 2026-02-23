@@ -22,7 +22,7 @@ import {
   Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, DEFAULT_COLOR } from "@/lib/formatters";
 
 type YearlyData = {
   month: number;
@@ -153,7 +153,7 @@ export function SubCategoryBreakdownChart({ data }: { data: SubCategoryData }) {
                 <div className="flex items-center gap-1.5">
                   <span
                     className="h-2 w-2 rounded-full shrink-0"
-                    style={{ backgroundColor: c.color ?? "#6b7280" }}
+                    style={{ backgroundColor: c.color ?? DEFAULT_COLOR }}
                   />
                   {c.name}
                 </div>
@@ -176,7 +176,7 @@ export function SubCategoryBreakdownChart({ data }: { data: SubCategoryData }) {
               <Tooltip formatter={tooltipFormatter} />
               <Bar dataKey="amount" name="Dépensé" radius={[0, 4, 4, 0]}>
                 {filtered.map((_, index) => (
-                  <Cell key={index} fill={selectedCategory?.color ?? "#6b7280"} />
+                  <Cell key={index} fill={selectedCategory?.color ?? DEFAULT_COLOR} />
                 ))}
               </Bar>
             </BarChart>

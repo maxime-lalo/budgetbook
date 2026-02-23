@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { ChevronRight, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, DEFAULT_COLOR } from "@/lib/formatters";
 
 type HeatmapData = {
   categories: { id: string; name: string; color: string | null }[];
@@ -59,7 +59,6 @@ export function CategoryHeatmap({ data, year }: { data: HeatmapData; year: numbe
     }
   };
 
-  // Compute max per category for opacity scaling
   const maxPerCategory = new Map<string, number>();
   for (const cat of data.categories) {
     const months = data.data[cat.id] ?? {};
@@ -101,12 +100,22 @@ export function CategoryHeatmap({ data, year }: { data: HeatmapData; year: numbe
                 const hasSubCategories = subData && subData.subCategories.length > 0;
                 const isExpanded = expanded.has(cat.id);
 
+                function handleRowKeyDown(e: React.KeyboardEvent) {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleExpand(cat.id);
+                  }
+                }
+
                 return (
-                  <>
+                  <Fragment key={cat.id}>
                     <tr
-                      key={cat.id}
                       className={`border-b last:border-0 ${hasSubCategories ? "cursor-pointer hover:bg-muted/40" : ""}`}
                       onClick={hasSubCategories ? () => toggleExpand(cat.id) : undefined}
+                      role={hasSubCategories ? "button" : undefined}
+                      tabIndex={hasSubCategories ? 0 : undefined}
+                      onKeyDown={hasSubCategories ? handleRowKeyDown : undefined}
+                      aria-label={hasSubCategories ? `${cat.name}, ${isExpanded ? "replier" : "déplier"}` : undefined}
                     >
                       <td className="p-2">
                         <div className="flex items-center gap-2">
@@ -121,7 +130,8 @@ export function CategoryHeatmap({ data, year }: { data: HeatmapData; year: numbe
                           )}
                           <div
                             className="h-3 w-3 rounded-full shrink-0"
-                            style={{ backgroundColor: cat.color ?? "#6b7280" }}
+                            style={{ backgroundColor: cat.color ?? DEFAULT_COLOR }}
+                            aria-label={cat.name}
                           />
                           <span className="truncate">{cat.name}</span>
                         </div>
@@ -137,14 +147,14 @@ export function CategoryHeatmap({ data, year }: { data: HeatmapData; year: numbe
                               <div
                                 className="rounded px-1 py-1.5 text-center tabular-nums"
                                 style={{
-                                  backgroundColor: hexToRgba(cat.color ?? "#6b7280", opacity),
+                                  backgroundColor: hexToRgba(cat.color ?? DEFAULT_COLOR, opacity),
                                   color: textDark ? "white" : undefined,
                                 }}
                               >
                                 {formatCurrency(amount)}
                               </div>
                             ) : (
-                              <div className="text-center text-muted-foreground/30 py-1.5">–</div>
+                              <div className="text-center text-muted-foreground/30 py-1.5">&ndash;</div>
                             )}
                           </td>
                         );
@@ -175,14 +185,14 @@ export function CategoryHeatmap({ data, year }: { data: HeatmapData; year: numbe
                                   <div
                                     className="rounded px-1 py-1.5 text-center tabular-nums text-[11px]"
                                     style={{
-                                      backgroundColor: hexToRgba(cat.color ?? "#6b7280", opacity),
+                                      backgroundColor: hexToRgba(cat.color ?? DEFAULT_COLOR, opacity),
                                       color: textDark ? "white" : undefined,
                                     }}
                                   >
                                     {formatCurrency(amount)}
                                   </div>
                                 ) : (
-                                  <div className="text-center text-muted-foreground/20 py-1.5 text-[11px]">–</div>
+                                  <div className="text-center text-muted-foreground/20 py-1.5 text-[11px]">&ndash;</div>
                                 )}
                               </td>
                             );
@@ -193,7 +203,7 @@ export function CategoryHeatmap({ data, year }: { data: HeatmapData; year: numbe
                         </tr>
                       );
                     })}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

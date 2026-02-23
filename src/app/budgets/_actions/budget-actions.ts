@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
 import { toNumber, round2 } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
+import { budgetSchema } from "@/lib/validators";
+import { revalidateTransactionPages } from "@/lib/revalidate";
 
 export async function getBudgetsWithSpent(year: number, month: number) {
   const allCategories = await db.query.categories.findMany({
@@ -59,25 +61,29 @@ export async function getBudgetsWithSpent(year: number, month: number) {
 }
 
 export async function upsertBudget(categoryId: string, year: number, month: number, amount: number) {
+  const parsed = budgetSchema.safeParse({ categoryId, year, month, amount });
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+
   return safeAction(async () => {
     const existing = await db.query.budgets.findFirst({
-      where: and(eq(budgets.categoryId, categoryId), eq(budgets.year, year), eq(budgets.month, month)),
+      where: and(eq(budgets.categoryId, parsed.data.categoryId), eq(budgets.year, parsed.data.year), eq(budgets.month, parsed.data.month)),
     });
 
     if (existing) {
-      await db.update(budgets).set({ amount: amount.toString() }).where(eq(budgets.id, existing.id));
+      await db.update(budgets).set({ amount: parsed.data.amount.toString() }).where(eq(budgets.id, existing.id));
     } else {
       await db.insert(budgets).values({
         id: createId(),
-        categoryId,
-        year,
-        month,
-        amount: amount.toString(),
+        categoryId: parsed.data.categoryId,
+        year: parsed.data.year,
+        month: parsed.data.month,
+        amount: parsed.data.amount.toString(),
       });
     }
 
-    await recomputeMonthlyBalance(year, month);
+    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
     revalidatePath("/budgets");
+    revalidateTransactionPages();
     return { success: true };
   }, "Erreur lors de la mise à jour du budget");
 }
@@ -119,6 +125,7 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
 
     await recomputeMonthlyBalance(year, month);
     revalidatePath("/budgets");
+    revalidateTransactionPages();
     return { success: true, count: previousBudgets.length };
   }, "Erreur lors de la copie des budgets");
 }
@@ -151,6 +158,7 @@ export async function calibrateBudgets(year: number, month: number) {
 
     await recomputeMonthlyBalance(year, month);
     revalidatePath("/budgets");
+    revalidateTransactionPages();
     return { success: true, count: overBudget.length };
   }, "Erreur lors de la calibration des budgets");
 }

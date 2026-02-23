@@ -3,6 +3,7 @@
 import { db, transactions, accounts, categories, subCategories, buckets } from "@/lib/db";
 import { eq, and, inArray, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
 import { toNumber } from "@/lib/db/helpers";
+import { DEFAULT_COLOR } from "@/lib/formatters";
 
 async function getAccountFilter(accountId?: string) {
   if (accountId) return [accountId];
@@ -79,7 +80,7 @@ export async function getCategoryBreakdown(year: number, month: number, accountI
       const cat = r.categoryId ? catMap.get(r.categoryId) : null;
       return {
         category: cat?.name ?? "Sans catégorie",
-        color: cat?.color ?? "#6b7280",
+        color: cat?.color ?? DEFAULT_COLOR,
         amount: -(toNumber(r.total)),
       };
     })
@@ -128,7 +129,7 @@ export async function getSubCategoryBreakdown(year: number, month: number, accou
     return {
       categoryId: r.categoryId ?? "__uncategorized",
       subCategory: sub?.name ?? "?",
-      color: cat?.color ?? "#6b7280",
+      color: cat?.color ?? DEFAULT_COLOR,
       amount: -(toNumber(r.total)),
     };
   });
@@ -203,7 +204,7 @@ export async function getCategoryYearComparison(year: number, month: number, acc
 
       return {
         category: cat?.name ?? "Sans catégorie",
-        color: cat?.color ?? "#6b7280",
+        color: cat?.color ?? DEFAULT_COLOR,
         currentMonth: thisMonth,
         currentAvg,
         yearlyTotal: thisYear,

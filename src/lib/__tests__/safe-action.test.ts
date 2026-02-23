@@ -79,4 +79,28 @@ describe("safeAction", () => {
     await safeAction(() => Promise.resolve("ok"));
     expect(logger.error).not.toHaveBeenCalled();
   });
+
+  it("handles function that throws null", async () => {
+    const result = await safeAction(() => {
+      throw null;
+    }, "Null thrown");
+
+    expect(result).toEqual({ error: "Null thrown" });
+    expect(logger.error).toHaveBeenCalledWith("Null thrown", {
+      error: "null",
+      stack: undefined,
+    });
+  });
+
+  it("handles function that throws undefined", async () => {
+    const result = await safeAction(() => {
+      throw undefined;
+    }, "Undefined thrown");
+
+    expect(result).toEqual({ error: "Undefined thrown" });
+    expect(logger.error).toHaveBeenCalledWith("Undefined thrown", {
+      error: "undefined",
+      stack: undefined,
+    });
+  });
 });

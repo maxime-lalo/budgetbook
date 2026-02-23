@@ -101,6 +101,26 @@ describe("validateApiToken", () => {
     expect(JSON.stringify(callArgs)).not.toContain(plainToken);
     expect(JSON.stringify(callArgs)).not.toContain("plain-token");
   });
+
+  it("returns false when header is 'Bearer' with no space and no token", async () => {
+    const result = await validateApiToken(makeRequest("Bearer"));
+    expect(result).toBe(false);
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns false when header uses lowercase 'bearer' prefix", async () => {
+    const result = await validateApiToken(makeRequest("bearer valid-token"));
+    expect(result).toBe(false);
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns false when token is empty after Bearer prefix", async () => {
+    // "Bearer " — space present but no actual token value
+    mockFindFirst.mockResolvedValueOnce(undefined);
+    const result = await validateApiToken(makeRequest("Bearer "));
+    // The slice(7) yields "" which is falsy, so it should return false early
+    expect(result).toBe(false);
+  });
 });
 
 describe("unauthorizedResponse", () => {

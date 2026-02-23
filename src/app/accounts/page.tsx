@@ -7,7 +7,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { AccountFormDialog } from "./_components/account-form-dialog";
 import { BucketFormDialog } from "./_components/bucket-form-dialog";
 import { DeleteAccountButton, DeleteBucketButton } from "./_components/delete-buttons";
-import { formatCurrency, ACCOUNT_TYPE_LABELS } from "@/lib/formatters";
+import { formatCurrency, ACCOUNT_TYPE_LABELS, DEFAULT_COLOR } from "@/lib/formatters";
 import { db, buckets as bucketsTable, transactions as transactionsTable } from "@/lib/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { toNumber } from "@/lib/db/helpers";
@@ -126,7 +126,7 @@ export default async function AccountsPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className="h-4 w-4 rounded-full"
-                    style={{ backgroundColor: account.color ?? "#6b7280" }}
+                    style={{ backgroundColor: account.color ?? DEFAULT_COLOR }}
                   />
                   <div>
                     <CardTitle className="text-lg">{account.name}</CardTitle>
@@ -178,7 +178,7 @@ export default async function AccountsPage() {
                             <div className="flex items-center gap-2">
                               <span
                                 className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: bucket.color ?? "#6b7280" }}
+                                style={{ backgroundColor: bucket.color ?? DEFAULT_COLOR }}
                               />
                               <span className="text-sm font-medium">{bucket.name}</span>
                             </div>

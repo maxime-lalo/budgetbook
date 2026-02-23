@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, DEFAULT_COLOR } from "@/lib/formatters";
 import { deleteTransfer } from "../_actions/transfer-actions";
 import { TransferFormDialog } from "./transfer-form-dialog";
 import { toast } from "sonner";
@@ -76,7 +76,7 @@ export function TransferList({
                       <span className="flex items-center gap-1">
                         <span
                           className="h-2 w-2 rounded-full inline-block"
-                          style={{ backgroundColor: t.account?.color ?? "#6b7280" }}
+                          style={{ backgroundColor: t.account?.color ?? DEFAULT_COLOR }}
                         />
                         {t.account?.name ?? "—"}
                       </span>
@@ -85,7 +85,7 @@ export function TransferList({
                         <span className="flex items-center gap-1">
                           <span
                             className="h-2 w-2 rounded-full inline-block"
-                            style={{ backgroundColor: t.destinationAccount.color ?? "#6b7280" }}
+                            style={{ backgroundColor: t.destinationAccount.color ?? DEFAULT_COLOR }}
                           />
                           {t.destinationAccount.name}
                         </span>

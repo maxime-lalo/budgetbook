@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Eye, EyeOff, Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { regenerateApiToken } from "@/app/settings/_actions/settings-actions";
+import { regenerateApiToken } from "../_actions/settings-actions";
 
 interface ApiTokenCardProps {
   initialToken: { tokenPrefix: string; createdAt: string } | null;

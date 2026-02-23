@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, DEFAULT_COLOR } from "@/lib/formatters";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { upsertBudget } from "../_actions/budget-actions";
 import { toast } from "sonner";
@@ -73,7 +73,7 @@ export function BudgetRow({
         <div className="flex items-center gap-2">
           <span
             className="h-2.5 w-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: color ?? "#6b7280" }}
+            style={{ backgroundColor: color ?? DEFAULT_COLOR }}
           />
           <span className="font-medium text-sm">{name}</span>
         </div>

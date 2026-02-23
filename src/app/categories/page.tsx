@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { CategoryFormDialog } from "./_components/category-form-dialog";
 import { SubCategoryFormDialog } from "./_components/sub-category-form-dialog";
 import { DeleteCategoryButton, DeleteSubCategoryButton } from "./_components/delete-category-button";
+import { DEFAULT_COLOR } from "@/lib/formatters";
 
 export default async function CategoriesPage() {
   const categories = await getCategories();
@@ -33,7 +34,7 @@ export default async function CategoriesPage() {
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <span
                   className="h-3 w-3 rounded-full inline-block"
-                  style={{ backgroundColor: category.color ?? "#6b7280" }}
+                  style={{ backgroundColor: category.color ?? DEFAULT_COLOR }}
                 />
                 {category.name}
               </CardTitle>

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { importAllData } from "@/app/settings/_actions/settings-actions";
+import { importAllData } from "../_actions/settings-actions";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 

@@ -54,3 +54,15 @@ export const STATUS_COLORS: Record<string, string> = {
   PLANNED: "bg-purple-500",
   CANCELLED: "bg-red-500",
 };
+
+export const STATUS_ORDER: Record<string, number> = {
+  PENDING: 0,
+  PLANNED: 1,
+  COMPLETED: 2,
+  CANCELLED: 3,
+};
+
+export const DEFAULT_COLOR = "#6b7280";
+
+export const FILTER_ALL = "__all__";
+export const FILTER_NONE = "__none__";

@@ -17,18 +17,11 @@ import { CompleteAmexButton } from "./complete-amex-button";
 import { TransactionFilters, type TransactionFilterValues } from "./transaction-filters";
 import { CrossMonthResults } from "./cross-month-results";
 import { searchTransactionsAcrossMonths } from "../_actions/transaction-actions";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, STATUS_ORDER, FILTER_ALL } from "@/lib/formatters";
 import { type SerializedTransaction, type FormAccount, type FormCategory } from "@/lib/types";
 
 type SortColumn = "date" | "status" | "amount";
 type SortDirection = "asc" | "desc";
-
-const STATUS_ORDER: Record<string, number> = {
-  COMPLETED: 0,
-  PENDING: 1,
-  PLANNED: 2,
-  CANCELLED: 3,
-};
 
 type CrossMonthResult = {
   id: string;
@@ -119,9 +112,9 @@ export function TransactionsTable({
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [filters, setFilters] = useState<TransactionFilterValues>({
     search: "",
-    categoryId: initialCategory ?? "__all__",
-    accountId: "__all__",
-    status: "__all__",
+    categoryId: initialCategory ?? FILTER_ALL,
+    accountId: FILTER_ALL,
+    status: FILTER_ALL,
     amountMin: "",
     amountMax: "",
     crossMonth: false,
@@ -139,9 +132,9 @@ export function TransactionsTable({
           const results = await searchTransactionsAcrossMonths(
             newFilters.search,
             {
-              categoryId: newFilters.categoryId !== "__all__" ? newFilters.categoryId : undefined,
-              accountId: newFilters.accountId !== "__all__" ? newFilters.accountId : undefined,
-              status: newFilters.status !== "__all__" ? newFilters.status : undefined,
+              categoryId: newFilters.categoryId !== FILTER_ALL ? newFilters.categoryId : undefined,
+              accountId: newFilters.accountId !== FILTER_ALL ? newFilters.accountId : undefined,
+              status: newFilters.status !== FILTER_ALL ? newFilters.status : undefined,
               amountMin: newFilters.amountMin ? parseFloat(newFilters.amountMin) : undefined,
               amountMax: newFilters.amountMax ? parseFloat(newFilters.amountMax) : undefined,
             }
@@ -169,9 +162,9 @@ export function TransactionsTable({
 
   // Apply all filters
   const filtered = transactions.filter((t) => {
-    if (filters.categoryId !== "__all__" && t.categoryId !== filters.categoryId) return false;
-    if (filters.accountId !== "__all__" && t.accountId !== filters.accountId) return false;
-    if (filters.status !== "__all__" && t.status !== filters.status) return false;
+    if (filters.categoryId !== FILTER_ALL && t.categoryId !== filters.categoryId) return false;
+    if (filters.accountId !== FILTER_ALL && t.accountId !== filters.accountId) return false;
+    if (filters.status !== FILTER_ALL && t.status !== filters.status) return false;
     if (filters.amountMin) {
       const min = parseFloat(filters.amountMin);
       if (!isNaN(min) && t.amount < min) return false;
@@ -241,7 +234,7 @@ export function TransactionsTable({
     </TableRow>
   );
 
-  const noFilterResults = filtered.length === 0 && (filters.categoryId !== "__all__" || filters.search || filters.accountId !== "__all__" || filters.status !== "__all__");
+  const noFilterResults = filtered.length === 0 && (filters.categoryId !== FILTER_ALL || filters.search || filters.accountId !== FILTER_ALL || filters.status !== FILTER_ALL);
 
   // Render transaction rows
   let transactionRows: React.ReactNode;
@@ -294,6 +287,13 @@ export function TransactionsTable({
     const nonRecurring = filtered.filter((t) => t.recurring !== true);
     const hasBothSections = recurring.length > 0 && nonRecurring.length > 0;
 
+    function handleRecurringKeyDown(e: React.KeyboardEvent) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setRecurringOpen((o) => !o);
+      }
+    }
+
     transactionRows = (
       <>
         {recurring.length > 0 && (
@@ -301,6 +301,10 @@ export function TransactionsTable({
             <TableRow
               className="bg-muted/50 cursor-pointer select-none"
               onClick={() => setRecurringOpen((o) => !o)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={handleRecurringKeyDown}
+              aria-label={`Récurrentes (${recurring.length}), ${recurringOpen ? "replier" : "déplier"}`}
             >
               <TableCell
                 colSpan={7}

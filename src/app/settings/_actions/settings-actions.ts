@@ -11,6 +11,7 @@ import { backfillAllMonthlyBalances } from "@/lib/monthly-balance";
 import { logger } from "@/lib/logger";
 import { hashToken } from "@/lib/api-auth";
 import { safeAction } from "@/lib/safe-action";
+import { revalidateTransactionPages } from "@/lib/revalidate";
 
 // Helper: convertit une date ISO string en Date (PG) ou la laisse en string (SQLite)
 const toTimestamp = (isoString: string): Date | string =>
@@ -86,7 +87,7 @@ export async function updateAmexEnabled(enabled: boolean) {
       await db.insert(appPreferences).values({ id: "singleton", amexEnabled: enabled });
     }
 
-    revalidatePath("/transactions");
+    revalidateTransactionPages();
     revalidatePath("/settings");
     return { success: true };
   }, "Erreur lors de la mise à jour de la préférence AMEX");
@@ -104,7 +105,7 @@ export async function updateSeparateRecurring(enabled: boolean) {
       await db.insert(appPreferences).values({ id: "singleton", separateRecurring: enabled });
     }
 
-    revalidatePath("/transactions");
+    revalidateTransactionPages();
     revalidatePath("/settings");
     return { success: true };
   }, "Erreur lors de la mise à jour de la préférence récurrentes");
@@ -158,26 +159,21 @@ export async function exportAllData(): Promise<string> {
   return JSON.stringify(exportData, null, 2);
 }
 
-async function clearAllTables() {
-  await db.delete(monthlyBalances);
-  await db.delete(budgets);
-  await db.delete(transactions);
-  await db.delete(subCategories);
-  await db.delete(categories);
-  await db.delete(buckets);
-  await db.update(accounts).set({ linkedAccountId: null });
-  await db.delete(accounts);
-}
-
-export async function clearAllData(): Promise<{ success: true } | { error: string }> {
-  try {
-    await clearAllTables();
+export async function clearAllData() {
+  return safeAction(async () => {
+    await db.transaction(async (tx) => {
+      await tx.delete(monthlyBalances);
+      await tx.delete(budgets);
+      await tx.delete(transactions);
+      await tx.delete(subCategories);
+      await tx.delete(categories);
+      await tx.delete(buckets);
+      await tx.update(accounts).set({ linkedAccountId: null });
+      await tx.delete(accounts);
+    });
     revalidatePath("/");
     return { success: true };
-  } catch (e) {
-    logger.error("Erreur lors de la suppression des données", { error: e instanceof Error ? e.message : String(e) });
-    return { error: "Erreur lors de la suppression des données" };
-  }
+  }, "Erreur lors de la suppression des données");
 }
 
 export async function importAllData(
@@ -190,142 +186,154 @@ export async function importAllData(
 
     const counts: Record<string, number> = {};
 
-    // 1. Clear toutes les données existantes
-    await clearAllTables();
-    await db.delete(apiTokens);
+    // Toutes les suppressions + insertions dans une seule transaction
+    await db.transaction(async (tx) => {
+      // 1. Clear toutes les données existantes
+      await tx.delete(monthlyBalances);
+      await tx.delete(budgets);
+      await tx.delete(transactions);
+      await tx.delete(subCategories);
+      await tx.delete(categories);
+      await tx.delete(buckets);
+      await tx.update(accounts).set({ linkedAccountId: null });
+      await tx.delete(accounts);
+      await tx.delete(apiTokens);
 
-    // 2. Insérer les comptes (sans linkedAccountId d'abord)
-    for (const account of data.accounts) {
-      await db.insert(accounts).values({
-        id: account.id,
-        name: account.name,
-        type: account.type,
-        color: account.color,
-        icon: account.icon,
-        sortOrder: account.sortOrder,
-        linkedAccountId: null,
-        createdAt: toTimestamp(account.createdAt) as Date,
-        updatedAt: toTimestamp(account.updatedAt) as Date,
-      });
-    }
+      // 2. Insérer les comptes (sans linkedAccountId d'abord)
+      for (const account of data.accounts) {
+        await tx.insert(accounts).values({
+          id: account.id,
+          name: account.name,
+          type: account.type,
+          color: account.color,
+          icon: account.icon,
+          sortOrder: account.sortOrder,
+          linkedAccountId: null,
+          createdAt: toTimestamp(account.createdAt) as Date,
+          updatedAt: toTimestamp(account.updatedAt) as Date,
+        });
+      }
+
+      // 3. Insérer les catégories
+      for (const category of data.categories) {
+        await tx.insert(categories).values({
+          id: category.id,
+          name: category.name,
+          color: category.color,
+          icon: category.icon,
+          sortOrder: category.sortOrder,
+          createdAt: toTimestamp(category.createdAt) as Date,
+          updatedAt: toTimestamp(category.updatedAt) as Date,
+        });
+      }
+
+      // 4. Insérer les sous-catégories
+      for (const subCategory of data.subCategories) {
+        await tx.insert(subCategories).values({
+          id: subCategory.id,
+          name: subCategory.name,
+          categoryId: subCategory.categoryId,
+          sortOrder: subCategory.sortOrder,
+          createdAt: toTimestamp(subCategory.createdAt) as Date,
+          updatedAt: toTimestamp(subCategory.updatedAt) as Date,
+        });
+      }
+
+      // 5. Insérer les buckets
+      for (const bucket of data.buckets) {
+        await tx.insert(buckets).values({
+          id: bucket.id,
+          name: bucket.name,
+          accountId: bucket.accountId,
+          color: bucket.color,
+          goal: bucket.goal,
+          baseAmount: bucket.baseAmount,
+          sortOrder: bucket.sortOrder,
+          createdAt: toTimestamp(bucket.createdAt) as Date,
+          updatedAt: toTimestamp(bucket.updatedAt) as Date,
+        });
+      }
+
+      // 6. Insérer les transactions
+      for (const transaction of data.transactions) {
+        await tx.insert(transactions).values({
+          id: transaction.id,
+          label: transaction.label,
+          amount: transaction.amount,
+          date: transaction.date ? toDateCol(transaction.date) as Date : null,
+          month: transaction.month,
+          year: transaction.year,
+          status: transaction.status,
+          note: transaction.note,
+          accountId: transaction.accountId,
+          destinationAccountId: transaction.destinationAccountId,
+          categoryId: transaction.categoryId,
+          subCategoryId: transaction.subCategoryId,
+          bucketId: transaction.bucketId,
+          isAmex: transaction.isAmex,
+          recurring: transaction.recurring ?? false,
+          createdAt: toTimestamp(transaction.createdAt) as Date,
+          updatedAt: toTimestamp(transaction.updatedAt) as Date,
+        });
+      }
+
+      // 7. Insérer les budgets
+      for (const budget of data.budgets) {
+        await tx.insert(budgets).values({
+          id: budget.id,
+          categoryId: budget.categoryId,
+          month: budget.month,
+          year: budget.year,
+          amount: budget.amount,
+          createdAt: toTimestamp(budget.createdAt) as Date,
+          updatedAt: toTimestamp(budget.updatedAt) as Date,
+        });
+      }
+
+      // 8. Insérer les API tokens
+      for (const token of data.apiTokens) {
+        await tx.insert(apiTokens).values({
+          id: token.id,
+          token: token.token,
+          tokenPrefix: token.tokenPrefix || token.token.slice(0, 8),
+          name: token.name,
+          createdAt: toTimestamp(token.createdAt) as Date,
+        });
+      }
+
+      // 9. Restaurer les préférences si présentes
+      if (data.appPreferences) {
+        const existingPrefs = await tx.query.appPreferences.findFirst({
+          where: eq(appPreferences.id, "singleton"),
+        });
+        const prefsData = { amexEnabled: data.appPreferences.amexEnabled, separateRecurring: data.appPreferences.separateRecurring ?? true };
+        if (existingPrefs) {
+          await tx.update(appPreferences).set(prefsData).where(eq(appPreferences.id, "singleton"));
+        } else {
+          await tx.insert(appPreferences).values({ id: "singleton", ...prefsData });
+        }
+      }
+
+      // 10. 2e passe : mettre à jour les linkedAccountId
+      const accountsWithLinked = data.accounts.filter((a) => a.linkedAccountId);
+      for (const account of accountsWithLinked) {
+        await tx.update(accounts).set({ linkedAccountId: account.linkedAccountId }).where(eq(accounts.id, account.id));
+      }
+    });
+
+    // Compteurs depuis les données validées
     counts.accounts = data.accounts.length;
-
-    // 3. Insérer les catégories
-    for (const category of data.categories) {
-      await db.insert(categories).values({
-        id: category.id,
-        name: category.name,
-        color: category.color,
-        icon: category.icon,
-        sortOrder: category.sortOrder,
-        createdAt: toTimestamp(category.createdAt) as Date,
-        updatedAt: toTimestamp(category.updatedAt) as Date,
-      });
-    }
     counts.categories = data.categories.length;
-
-    // 4. Insérer les sous-catégories
-    for (const subCategory of data.subCategories) {
-      await db.insert(subCategories).values({
-        id: subCategory.id,
-        name: subCategory.name,
-        categoryId: subCategory.categoryId,
-        sortOrder: subCategory.sortOrder,
-        createdAt: toTimestamp(subCategory.createdAt) as Date,
-        updatedAt: toTimestamp(subCategory.updatedAt) as Date,
-      });
-    }
     counts.subCategories = data.subCategories.length;
-
-    // 5. Insérer les buckets
-    for (const bucket of data.buckets) {
-      await db.insert(buckets).values({
-        id: bucket.id,
-        name: bucket.name,
-        accountId: bucket.accountId,
-        color: bucket.color,
-        goal: bucket.goal,
-        baseAmount: bucket.baseAmount,
-        sortOrder: bucket.sortOrder,
-        createdAt: toTimestamp(bucket.createdAt) as Date,
-        updatedAt: toTimestamp(bucket.updatedAt) as Date,
-      });
-    }
     counts.buckets = data.buckets.length;
-
-    // 6. Insérer les transactions
-    for (const transaction of data.transactions) {
-      await db.insert(transactions).values({
-        id: transaction.id,
-        label: transaction.label,
-        amount: transaction.amount,
-        date: transaction.date ? toDateCol(transaction.date) as Date : null,
-        month: transaction.month,
-        year: transaction.year,
-        status: transaction.status,
-        note: transaction.note,
-        accountId: transaction.accountId,
-        destinationAccountId: transaction.destinationAccountId,
-        categoryId: transaction.categoryId,
-        subCategoryId: transaction.subCategoryId,
-        bucketId: transaction.bucketId,
-        isAmex: transaction.isAmex,
-        recurring: transaction.recurring ?? false,
-        createdAt: toTimestamp(transaction.createdAt) as Date,
-        updatedAt: toTimestamp(transaction.updatedAt) as Date,
-      });
-    }
     counts.transactions = data.transactions.length;
-
-    // 7. Insérer les budgets
-    for (const budget of data.budgets) {
-      await db.insert(budgets).values({
-        id: budget.id,
-        categoryId: budget.categoryId,
-        month: budget.month,
-        year: budget.year,
-        amount: budget.amount,
-        createdAt: toTimestamp(budget.createdAt) as Date,
-        updatedAt: toTimestamp(budget.updatedAt) as Date,
-      });
-    }
     counts.budgets = data.budgets.length;
+    counts.apiTokens = data.apiTokens.length;
 
-    // 8. Recalculer les monthly balances depuis les données réelles
+    // Recalculer les monthly balances (hors transaction — récupérable via Recalculer)
     await backfillAllMonthlyBalances();
     const recalculated = await db.query.monthlyBalances.findMany();
     counts.monthlyBalances = recalculated.length;
-
-    // 9. Insérer les API tokens
-    for (const token of data.apiTokens) {
-      await db.insert(apiTokens).values({
-        id: token.id,
-        token: token.token,
-        tokenPrefix: token.tokenPrefix || token.token.slice(0, 8),
-        name: token.name,
-        createdAt: toTimestamp(token.createdAt) as Date,
-      });
-    }
-    counts.apiTokens = data.apiTokens.length;
-
-    // 10. Restaurer les préférences si présentes
-    if (data.appPreferences) {
-      const existingPrefs = await db.query.appPreferences.findFirst({
-        where: eq(appPreferences.id, "singleton"),
-      });
-      const prefsData = { amexEnabled: data.appPreferences.amexEnabled, separateRecurring: data.appPreferences.separateRecurring ?? true };
-      if (existingPrefs) {
-        await db.update(appPreferences).set(prefsData).where(eq(appPreferences.id, "singleton"));
-      } else {
-        await db.insert(appPreferences).values({ id: "singleton", ...prefsData });
-      }
-    }
-
-    // 11. 2e passe : mettre à jour les linkedAccountId
-    const accountsWithLinked = data.accounts.filter((a) => a.linkedAccountId);
-    for (const account of accountsWithLinked) {
-      await db.update(accounts).set({ linkedAccountId: account.linkedAccountId }).where(eq(accounts.id, account.id));
-    }
 
     revalidatePath("/");
     return { success: true, counts };
@@ -341,15 +349,12 @@ export async function importAllData(
   }
 }
 
-export async function recalculateAllBalances(): Promise<{ success: true; count: number } | { error: string }> {
-  try {
+export async function recalculateAllBalances() {
+  return safeAction(async () => {
     await db.delete(monthlyBalances);
     await backfillAllMonthlyBalances();
     const recalculated = await db.query.monthlyBalances.findMany();
     revalidatePath("/");
     return { success: true, count: recalculated.length };
-  } catch (e) {
-    logger.error("Erreur lors du recalcul des soldes", { error: e instanceof Error ? e.message : String(e) });
-    return { error: "Erreur lors du recalcul des soldes mensuels" };
-  }
+  }, "Erreur lors du recalcul des soldes mensuels");
 }

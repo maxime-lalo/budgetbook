@@ -330,6 +330,52 @@ describe("recomputeMonthlyBalance", () => {
     expect(vals.surplus).toBe("0");
   });
 
+  it("excludes CANCELLED transactions from forecast (only COMPLETED + PENDING + PLANNED counted)", async () => {
+    // The statusFilter in recomputeMonthlyBalance uses inArray with ["COMPLETED", "PENDING", "PLANNED"]
+    // which implicitly excludes CANCELLED. Here we verify that the forecast only includes
+    // the non-cancelled total. The mock returns values as if the DB already filtered.
+    setupSelectSequence([
+      [{ total: "800" }],   // onChecking (only COMPLETED+PENDING+PLANNED)
+      [{ total: "0" }],     // incomingToChecking
+      [],                   // netByCategory
+    ]);
+    mockDb.query.budgets.findMany.mockResolvedValue([]);
+    mockDb.query.monthlyBalances.findFirst.mockResolvedValue(null);
+
+    await recomputeMonthlyBalance(2026, 2);
+
+    const vals = mockDb.insert.mock.results[0].value.values.mock.calls[0][0];
+    // Forecast should be 800 (CANCELLED transactions are excluded by the SQL filter)
+    expect(vals.forecast).toBe("800");
+    expect(vals.surplus).toBe("800");
+  });
+
+  it("aggregates forecast correctly with multiple CHECKING accounts", async () => {
+    getCheckingIdsMock.mockResolvedValue(["acc_checking_1", "acc_checking_2"]);
+
+    // The DB query uses inArray(accountId, checkingIds) so both accounts
+    // are aggregated in a single SUM. The mock returns the combined total.
+    setupSelectSequence([
+      [{ total: "2500" }],  // onChecking: sum from both acc_checking_1 and acc_checking_2
+      [{ total: "-300" }],  // incomingToChecking: transfers arriving on either checking account
+      [{ categoryId: "cat_1", total: "-400" }],
+    ]);
+    mockDb.query.budgets.findMany.mockResolvedValue([
+      { categoryId: "cat_1", amount: "500" },
+    ]);
+    mockDb.query.monthlyBalances.findFirst.mockResolvedValue(null);
+
+    await recomputeMonthlyBalance(2026, 3);
+
+    const vals = mockDb.insert.mock.results[0].value.values.mock.calls[0][0];
+    // forecast = 2500 + -(-300) = 2800
+    expect(vals.forecast).toBe("2800");
+    // committed = max(0, 500 - 400) = 100
+    expect(vals.committed).toBe("100");
+    // surplus = 2800 - 100 = 2700
+    expect(vals.surplus).toBe("2700");
+  });
+
   it("rounds monetary values to 2 decimal places", async () => {
     setupSelectSequence([
       [{ total: "100.1" }],

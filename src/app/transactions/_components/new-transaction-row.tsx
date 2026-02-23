@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Check, CreditCard } from "lucide-react";
-import { STATUS_LABELS, STATUS_COLORS } from "@/lib/formatters";
+import { STATUS_LABELS, STATUS_COLORS, DEFAULT_COLOR, FILTER_NONE } from "@/lib/formatters";
 import { createTransaction } from "../_actions/transaction-actions";
 import { toast } from "sonner";
 import { type FormAccount, type FormCategory } from "@/lib/types";
@@ -120,7 +120,6 @@ export function NewTransactionRow({
 
   return (
     <TableRow className="border-t border-dashed border-muted-foreground/30 bg-muted/20">
-      {/* Libellé */}
       <TableCell className="p-1">
         <Input
           ref={labelRef}
@@ -133,7 +132,6 @@ export function NewTransactionRow({
         />
       </TableCell>
 
-      {/* Date */}
       <TableCell className="p-1 whitespace-nowrap text-center">
         <Input
           type="date"
@@ -144,7 +142,6 @@ export function NewTransactionRow({
         />
       </TableCell>
 
-      {/* Montant */}
       <TableCell className="p-1 whitespace-nowrap">
         <Input
           type="number"
@@ -159,7 +156,6 @@ export function NewTransactionRow({
         />
       </TableCell>
 
-      {/* Catégorie + Sous-catégorie */}
       <TableCell className="p-1 whitespace-nowrap">
         <div className="flex items-center gap-1">
           <Select value={categoryId} onValueChange={handleCategoryChange}>
@@ -172,7 +168,8 @@ export function NewTransactionRow({
                   <div className="flex items-center gap-1.5">
                     <span
                       className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: c.color ?? "#6b7280" }}
+                      style={{ backgroundColor: c.color ?? DEFAULT_COLOR }}
+                      aria-label={c.name}
                     />
                     {c.name}
                   </div>
@@ -181,12 +178,12 @@ export function NewTransactionRow({
             </SelectContent>
           </Select>
           {selectedCategory && selectedCategory.subCategories.length > 0 && (
-            <Select value={subCategoryId || "__none__"} onValueChange={(v) => setSubCategoryId(v === "__none__" ? "" : v)}>
+            <Select value={subCategoryId || FILTER_NONE} onValueChange={(v) => setSubCategoryId(v === FILTER_NONE ? "" : v)}>
               <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!subCategoryId ? "border-orange-500" : "border-transparent"}`}>
                 <SelectValue placeholder="Sous-cat." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">Aucune</SelectItem>
+                <SelectItem value={FILTER_NONE}>Aucune</SelectItem>
                 {selectedCategory.subCategories.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
@@ -198,7 +195,6 @@ export function NewTransactionRow({
         </div>
       </TableCell>
 
-      {/* Statut */}
       <TableCell className="p-1 whitespace-nowrap">
         <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
           <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
@@ -217,13 +213,13 @@ export function NewTransactionRow({
         </Select>
       </TableCell>
 
-      {/* Compte */}
       <TableCell className="p-1 whitespace-nowrap">
         <div className="flex items-center gap-1">
           {amexEnabled && selectedAccount?.type === "CHECKING" && (
             <button
               type="button"
               onClick={() => setIsAmex(!isAmex)}
+              aria-label={isAmex ? "AMEX activé" : "AMEX désactivé"}
               title={isAmex ? "AMEX activé" : "Activer AMEX"}
               className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
             >
@@ -245,7 +241,6 @@ export function NewTransactionRow({
         </div>
       </TableCell>
 
-      {/* Actions */}
       <TableCell className="p-1">
         <div className="flex items-center gap-1">
           <Button
@@ -254,6 +249,7 @@ export function NewTransactionRow({
             className="h-7 w-7 text-green-600 hover:text-green-700 disabled:opacity-30"
             onClick={handleSubmit}
             disabled={!canSubmit || isSubmitting}
+            aria-label="Créer la transaction"
             title="Créer la transaction"
           >
             <Check className="h-3.5 w-3.5" />

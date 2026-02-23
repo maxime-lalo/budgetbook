@@ -1,4 +1,4 @@
-import { parseMonthParam, formatMonthYear, formatCurrency, formatDate, STATUS_LABELS } from "@/lib/formatters";
+import { parseMonthParam, formatMonthYear, formatCurrency, formatDate, STATUS_LABELS, DEFAULT_COLOR } from "@/lib/formatters";
 import { getTransactions, getTransactionTotals, getPreviousMonthBudgetRemaining } from "../_actions/transaction-actions";
 import { getBudgetsWithSpent } from "@/app/budgets/_actions/budget-actions";
 import { PrintButton } from "./_components/print-button";
@@ -140,7 +140,7 @@ export default async function PrintPage({
                     <div className="flex items-center gap-2">
                       <div
                         className="h-2.5 w-2.5 rounded-full shrink-0 print:border print:border-gray-400"
-                        style={{ backgroundColor: b.color ?? "#6b7280" }}
+                        style={{ backgroundColor: b.color ?? DEFAULT_COLOR }}
                       />
                       {b.name}
                     </div>
@@ -188,7 +188,7 @@ function TransactionPrintRow({ transaction: t }: { transaction: {
         <div className="flex items-center gap-1.5">
           <div
             className="h-2 w-2 rounded-full shrink-0 print:border print:border-gray-400"
-            style={{ backgroundColor: t.category?.color ?? "#6b7280" }}
+            style={{ backgroundColor: t.category?.color ?? DEFAULT_COLOR }}
           />
           <span className="text-xs">{t.category?.name ?? "Sans catégorie"}</span>
         </div>

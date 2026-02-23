@@ -22,7 +22,7 @@ import { createTransfer, updateTransfer } from "../_actions/transfer-actions";
 import { toast } from "sonner";
 import { ArrowUpDown, Plus } from "lucide-react";
 import { format } from "date-fns";
-import { ACCOUNT_TYPE_LABELS } from "@/lib/formatters";
+import { ACCOUNT_TYPE_LABELS, DEFAULT_COLOR } from "@/lib/formatters";
 import { type FormAccount, type FormCategory, type SerializedTransfer } from "@/lib/types";
 
 export function TransferFormDialog({
@@ -198,7 +198,7 @@ export function TransferFormDialog({
                       <span className="flex items-center gap-2">
                         <span
                           className="h-2.5 w-2.5 rounded-full shrink-0 inline-block"
-                          style={{ backgroundColor: a.color ?? "#6b7280" }}
+                          style={{ backgroundColor: a.color ?? DEFAULT_COLOR }}
                         />
                         {a.name}
                         <span className="text-muted-foreground text-xs">
@@ -251,7 +251,7 @@ export function TransferFormDialog({
                       <span className="flex items-center gap-2">
                         <span
                           className="h-2.5 w-2.5 rounded-full shrink-0 inline-block"
-                          style={{ backgroundColor: a.color ?? "#6b7280" }}
+                          style={{ backgroundColor: a.color ?? DEFAULT_COLOR }}
                         />
                         {a.name}
                         <span className="text-muted-foreground text-xs">
@@ -295,7 +295,7 @@ export function TransferFormDialog({
                         <span className="flex items-center gap-2">
                           <span
                             className="h-2.5 w-2.5 rounded-full shrink-0 inline-block"
-                            style={{ backgroundColor: c.color ?? "#6b7280" }}
+                            style={{ backgroundColor: c.color ?? DEFAULT_COLOR }}
                           />
                           {c.name}
                         </span>

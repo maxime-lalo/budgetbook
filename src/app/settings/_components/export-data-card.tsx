@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { exportAllData } from "@/app/settings/_actions/settings-actions";
+import { exportAllData } from "../_actions/settings-actions";
 
 export function ExportDataCard() {
   const [loading, setLoading] = useState(false);

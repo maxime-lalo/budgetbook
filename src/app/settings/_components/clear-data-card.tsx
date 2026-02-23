@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { clearAllData } from "@/app/settings/_actions/settings-actions";
+import { clearAllData } from "../_actions/settings-actions";
 
 const CONFIRM_KEYWORD = "SUPPRIMER";
 

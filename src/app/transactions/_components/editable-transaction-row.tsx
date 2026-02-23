@@ -10,18 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Pencil, Trash2, CreditCard, ArrowRightLeft, RefreshCw } from "lucide-react";
-import { STATUS_LABELS, STATUS_COLORS } from "@/lib/formatters";
+import { STATUS_LABELS, STATUS_COLORS, DEFAULT_COLOR, FILTER_NONE } from "@/lib/formatters";
 import {
   updateTransactionField,
   cancelTransaction,
@@ -30,6 +21,9 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { type SerializedTransaction, type FormAccount, type FormCategory, type TransactionStatus } from "@/lib/types";
+import { BucketSelectionDialog } from "./bucket-selection-dialog";
+import { CancelTransactionDialog } from "./cancel-transaction-dialog";
+import { EditTransactionDialog } from "./edit-transaction-dialog";
 
 export function EditableTransactionRow({
   transaction,
@@ -201,7 +195,7 @@ export function EditableTransactionRow({
 
   function handleSubCategoryChange(value: string) {
     const prev = subCategoryId;
-    const newSubId = value === "__none__" ? null : value;
+    const newSubId = value === FILTER_NONE ? null : value;
     setSubCategoryId(newSubId ?? "");
     saveField({ subCategoryId: newSubId }, () => setSubCategoryId(prev));
   }
@@ -244,7 +238,6 @@ export function EditableTransactionRow({
     toast.success("Transaction supprimée");
   }
 
-  // Modal d'édition Date + Compte
   function openEditDialog() {
     setEditDate(date);
     setEditRecurring(transaction.recurring);
@@ -257,6 +250,27 @@ export function EditableTransactionRow({
     const hasBuckets = bucketAccount && (bucketAccount.type === "SAVINGS" || bucketAccount.type === "INVESTMENT") && bucketAccount.buckets.length > 0;
     setEditBucketId(transaction.bucketId ?? (hasBuckets ? bucketAccount.buckets[0].id : ""));
     setEditDialogOpen(true);
+  }
+
+  function handleEditAccountChange(v: string) {
+    setEditAccountId(v);
+    const newDest = v === editDestinationAccountId ? "" : editDestinationAccountId;
+    if (v === editDestinationAccountId) setEditDestinationAccountId("");
+    const isSav = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+    const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
+    const srcAcct = accounts.find((a) => a.id === v);
+    const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
+    setEditBucketId(ba ? ba.buckets[0].id : "");
+  }
+
+  function handleEditDestinationAccountChange(v: string) {
+    const newDest = v === FILTER_NONE ? "" : v;
+    setEditDestinationAccountId(newDest);
+    const isSav = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+    const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
+    const srcAcct = accounts.find((a) => a.id === editAccountId);
+    const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
+    setEditBucketId(ba ? ba.buckets[0].id : "");
   }
 
   async function handleEditSave() {
@@ -300,7 +314,6 @@ export function EditableTransactionRow({
       return;
     }
 
-    // Mettre à jour les states locaux
     if (fields.date !== undefined) {
       setDate(editDate);
     }
@@ -313,7 +326,6 @@ export function EditableTransactionRow({
   return (
     <>
       <TableRow className={status === "CANCELLED" ? "opacity-50" : ""}>
-        {/* Libellé */}
         <TableCell className="p-1">
           <div className="flex items-center gap-1">
             {transaction.recurring && (
@@ -329,7 +341,6 @@ export function EditableTransactionRow({
           </div>
         </TableCell>
 
-        {/* Date */}
         <TableCell className="p-1 whitespace-nowrap text-center">
           {date ? (
             <Input
@@ -346,7 +357,6 @@ export function EditableTransactionRow({
           )}
         </TableCell>
 
-        {/* Montant */}
         <TableCell className="p-1 whitespace-nowrap">
           <Input
             type="number"
@@ -360,7 +370,6 @@ export function EditableTransactionRow({
           />
         </TableCell>
 
-        {/* Catégorie + Sous-catégorie */}
         <TableCell className="p-1 whitespace-nowrap">
           <div className="flex items-center gap-1">
             <Select value={categoryId ?? ""} onValueChange={handleCategoryChange}>
@@ -373,7 +382,8 @@ export function EditableTransactionRow({
                     <div className="flex items-center gap-1.5">
                       <span
                         className="h-2 w-2 rounded-full shrink-0"
-                        style={{ backgroundColor: c.color ?? "#6b7280" }}
+                        style={{ backgroundColor: c.color ?? DEFAULT_COLOR }}
+                        aria-label={c.name}
                       />
                       {c.name}
                     </div>
@@ -382,12 +392,12 @@ export function EditableTransactionRow({
               </SelectContent>
             </Select>
             {selectedCategory && selectedCategory.subCategories.length > 0 && (
-              <Select value={subCategoryId || "__none__"} onValueChange={handleSubCategoryChange}>
+              <Select value={subCategoryId || FILTER_NONE} onValueChange={handleSubCategoryChange}>
                 <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!subCategoryId ? "border-orange-500" : "border-transparent"}`}>
                   <SelectValue placeholder="Sous-cat." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Aucune</SelectItem>
+                  <SelectItem value={FILTER_NONE}>Aucune</SelectItem>
                   {selectedCategory.subCategories.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
@@ -399,7 +409,6 @@ export function EditableTransactionRow({
           </div>
         </TableCell>
 
-        {/* Statut */}
         <TableCell className="p-1 whitespace-nowrap">
           <Select value={status} onValueChange={handleStatusChange}>
             <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
@@ -418,13 +427,12 @@ export function EditableTransactionRow({
           </Select>
         </TableCell>
 
-        {/* Compte */}
         <TableCell className="p-1 whitespace-nowrap">
           {isTransfer ? (
             <div className="flex items-center gap-1.5 text-sm px-2">
               <ArrowRightLeft className="h-3.5 w-3.5 text-blue-600 shrink-0" />
               <span className="truncate">{transaction.account?.name ?? "—"}</span>
-              <span className="text-muted-foreground">→</span>
+              <span className="text-muted-foreground">&rarr;</span>
               <span className="truncate">{transaction.destinationAccount?.name}</span>
             </div>
           ) : (
@@ -433,6 +441,7 @@ export function EditableTransactionRow({
                 <button
                   type="button"
                   onClick={handleAmexToggle}
+                  aria-label={isAmex ? "AMEX activé" : "AMEX désactivé"}
                   title={isAmex ? "AMEX activé" : "Activer AMEX"}
                   className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
                 >
@@ -455,7 +464,6 @@ export function EditableTransactionRow({
           )}
         </TableCell>
 
-        {/* Actions directes */}
         <TableCell className="p-1">
           <div className="flex items-center gap-1">
             <Button
@@ -463,6 +471,7 @@ export function EditableTransactionRow({
               size="icon"
               className="h-7 w-7"
               onClick={openEditDialog}
+              aria-label="Éditer date et compte"
               title="Éditer date et compte"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -472,6 +481,7 @@ export function EditableTransactionRow({
               size="icon"
               className="h-7 w-7 text-destructive hover:text-destructive"
               onClick={handleDelete}
+              aria-label="Supprimer la transaction"
               title="Supprimer"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -480,184 +490,43 @@ export function EditableTransactionRow({
         </TableCell>
       </TableRow>
 
-      {/* Dialog de sélection de bucket (changement de compte) */}
-      <Dialog open={bucketDialogOpen} onOpenChange={(open) => { if (!open) handleBucketChangeCancel(); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sélectionner un bucket</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Ce compte possède des buckets. Veuillez en sélectionner un.
-            </p>
-            <Select value={selectedBucketForChange} onValueChange={setSelectedBucketForChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {pendingAccountChange?.buckets.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleBucketChangeCancel}>
-                Annuler
-              </Button>
-              <Button onClick={handleBucketChangeConfirm}>
-                Confirmer
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <BucketSelectionDialog
+        open={bucketDialogOpen}
+        buckets={pendingAccountChange?.buckets ?? []}
+        selectedBucketId={selectedBucketForChange}
+        onBucketChange={setSelectedBucketForChange}
+        onConfirm={handleBucketChangeConfirm}
+        onCancel={handleBucketChangeCancel}
+      />
 
-      {/* Dialog d'annulation */}
-      <Dialog open={cancelDialogOpen} onOpenChange={handleCancelDialogClose}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Annuler la transaction</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Raison de l&apos;annulation</Label>
-              <Textarea
-                value={cancelNote}
-                onChange={(e) => setCancelNote(e.target.value)}
-                placeholder="Indiquez la raison..."
-                required
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => handleCancelDialogClose(false)}>
-                Retour
-              </Button>
-              <Button variant="destructive" onClick={handleCancelConfirm}>
-                Confirmer l&apos;annulation
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CancelTransactionDialog
+        open={cancelDialogOpen}
+        onOpenChange={handleCancelDialogClose}
+        cancelNote={cancelNote}
+        onNoteChange={setCancelNote}
+        onConfirm={handleCancelConfirm}
+        onClose={() => handleCancelDialogClose(false)}
+      />
 
-      {/* Dialog d'édition Date + Compte */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Modifier date et compte</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Date</Label>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground">Récurrent</Label>
-                  <Switch
-                    checked={editRecurring}
-                    onCheckedChange={setEditRecurring}
-                  />
-                </div>
-              </div>
-              <Input
-                type="date"
-                value={editDate}
-                onChange={(e) => setEditDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Mois budgétaire</Label>
-              <Input
-                type="month"
-                value={editMonth}
-                onChange={(e) => setEditMonth(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Compte</Label>
-              <Select value={editAccountId} onValueChange={(v) => {
-                setEditAccountId(v);
-                const newDest = v === editDestinationAccountId ? "" : editDestinationAccountId;
-                if (v === editDestinationAccountId) setEditDestinationAccountId("");
-                const isSav = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
-                const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
-                const srcAcct = accounts.find((a) => a.id === v);
-                const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
-                setEditBucketId(ba ? ba.buckets[0].id : "");
-              }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Compte destination</Label>
-              <Select value={editDestinationAccountId || "__none__"} onValueChange={(v) => {
-                const newDest = v === "__none__" ? "" : v;
-                setEditDestinationAccountId(newDest);
-                const isSav = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
-                const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
-                const srcAcct = accounts.find((a) => a.id === editAccountId);
-                const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
-                setEditBucketId(ba ? ba.buckets[0].id : "");
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Aucun" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Aucun</SelectItem>
-                  {accounts.filter((a) => a.id !== editAccountId).map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {(() => {
-              const isSavings = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
-              const destAcct = editDestinationAccountId ? accounts.find((a) => a.id === editDestinationAccountId) : undefined;
-              const srcAcct = accounts.find((a) => a.id === editAccountId);
-              const bucketAcct = isSavings(destAcct) ? destAcct : isSavings(srcAcct) ? srcAcct : undefined;
-              const showBuckets = !!bucketAcct;
-              if (!showBuckets) return null;
-              return (
-                <div className="space-y-2">
-                  <Label>Bucket</Label>
-                  <Select value={editBucketId} onValueChange={setEditBucketId}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {bucketAcct.buckets.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              );
-            })()}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                Annuler
-              </Button>
-              <Button onClick={handleEditSave}>
-                Enregistrer
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EditTransactionDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        accounts={accounts}
+        editDate={editDate}
+        onDateChange={setEditDate}
+        editRecurring={editRecurring}
+        onRecurringChange={setEditRecurring}
+        editMonth={editMonth}
+        onMonthChange={setEditMonth}
+        editAccountId={editAccountId}
+        onAccountChange={handleEditAccountChange}
+        editDestinationAccountId={editDestinationAccountId}
+        onDestinationAccountChange={handleEditDestinationAccountChange}
+        editBucketId={editBucketId}
+        onBucketChange={setEditBucketId}
+        onSave={handleEditSave}
+        onClose={() => setEditDialogOpen(false)}
+      />
     </>
   );
 }

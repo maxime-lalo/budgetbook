@@ -12,6 +12,7 @@ import {
 import { Search, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type FormCategory, type FormAccount } from "@/lib/types";
+import { FILTER_ALL } from "@/lib/formatters";
 
 export type TransactionFilterValues = {
   search: string;
@@ -73,7 +74,7 @@ export function TransactionFilters({
             <SelectValue placeholder="Toutes les catégories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Toutes les catégories</SelectItem>
+            <SelectItem value={FILTER_ALL}>Toutes les catégories</SelectItem>
             {[...categories].sort((a, b) => a.name.localeCompare(b.name, "fr")).map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
@@ -86,7 +87,7 @@ export function TransactionFilters({
             <SelectValue placeholder="Tous les comptes" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Tous les comptes</SelectItem>
+            <SelectItem value={FILTER_ALL}>Tous les comptes</SelectItem>
             {accounts.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 {a.name}
@@ -99,7 +100,7 @@ export function TransactionFilters({
             <SelectValue placeholder="Tous les statuts" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Tous les statuts</SelectItem>
+            <SelectItem value={FILTER_ALL}>Tous les statuts</SelectItem>
             <SelectItem value="PENDING">En attente</SelectItem>
             <SelectItem value="COMPLETED">Réalisé</SelectItem>
             <SelectItem value="PLANNED">Prévu</SelectItem>

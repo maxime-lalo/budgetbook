@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, DEFAULT_COLOR } from "@/lib/formatters";
 import { ArrowDownRight, ArrowUpRight, ArrowRightLeft, Wallet, AlertTriangle, ArrowRight } from "lucide-react";
 
 type DashboardData = {
@@ -83,7 +83,7 @@ export function AccountsList({ accounts }: Pick<DashboardData, "accounts">) {
               <div className="flex items-center gap-2">
                 <div
                   className="h-3 w-3 rounded-full shrink-0"
-                  style={{ backgroundColor: account.color ?? "#6b7280" }}
+                  style={{ backgroundColor: account.color ?? DEFAULT_COLOR }}
                 />
                 <span className="text-sm">{account.name}</span>
               </div>
@@ -126,7 +126,7 @@ export function BudgetAlerts({ overBudgetCategories }: Pick<DashboardData, "over
                   <div className="flex items-center gap-2">
                     <div
                       className="h-3 w-3 rounded-full shrink-0"
-                      style={{ backgroundColor: cat.color ?? "#6b7280" }}
+                      style={{ backgroundColor: cat.color ?? DEFAULT_COLOR }}
                     />
                     <span>{cat.name}</span>
                   </div>
@@ -216,7 +216,7 @@ export function RecentTransfers({ recentTransfers }: Pick<DashboardData, "recent
                     <span className="flex items-center gap-1">
                       <span
                         className="h-2 w-2 rounded-full inline-block"
-                        style={{ backgroundColor: t.account?.color ?? "#6b7280" }}
+                        style={{ backgroundColor: t.account?.color ?? DEFAULT_COLOR }}
                       />
                       {t.account?.name ?? "—"}
                     </span>
@@ -225,7 +225,7 @@ export function RecentTransfers({ recentTransfers }: Pick<DashboardData, "recent
                       <span className="flex items-center gap-1">
                         <span
                           className="h-2 w-2 rounded-full inline-block"
-                          style={{ backgroundColor: t.destinationAccount.color ?? "#6b7280" }}
+                          style={{ backgroundColor: t.destinationAccount.color ?? DEFAULT_COLOR }}
                         />
                         {t.destinationAccount.name}
                       </span>

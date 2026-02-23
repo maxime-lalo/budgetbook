@@ -21,6 +21,21 @@ describe("toNumber", () => {
   it("handles negative string", () => {
     expect(toNumber("-123.45")).toBe(-123.45);
   });
+
+  it("returns NaN for NaN input", () => {
+    // typeof NaN === "number", so toNumber passes it through
+    expect(toNumber(NaN)).toBeNaN();
+  });
+
+  it("returns Infinity for Infinity input", () => {
+    // typeof Infinity === "number", so toNumber passes it through
+    expect(toNumber(Infinity)).toBe(Infinity);
+  });
+
+  it("returns NaN for empty string", () => {
+    // parseFloat("") returns NaN
+    expect(toNumber("")).toBeNaN();
+  });
 });
 
 describe("round2", () => {
@@ -39,6 +54,12 @@ describe("round2", () => {
 
   it("handles floating-point precision issues", () => {
     expect(round2(0.1 + 0.2)).toBe(0.3);
+  });
+
+  it("handles negative floating-point edge case (-1.005)", () => {
+    // -1.005 * 100 = -100.49999999999999 due to IEEE 754, so Math.round gives -100
+    // This means round2(-1.005) = -1.00 (not -1.01) due to floating-point representation
+    expect(round2(-1.005)).toBe(-1);
   });
 });
 

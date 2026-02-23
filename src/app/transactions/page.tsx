@@ -63,21 +63,25 @@ export default async function TransactionsPage({
         </div>
       </div>
 
-      <TotalsBar {...totals} budgetCarryOver={budgetCarryOver} />
+      <Suspense fallback={<div className="grid gap-2 grid-cols-2 sm:grid-cols-4"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div>}>
+        <TotalsBar {...totals} budgetCarryOver={budgetCarryOver} />
+      </Suspense>
 
-      <TransactionsTable
-        transactions={transactions}
-        accounts={formData.accounts}
-        categories={formData.categories}
-        budgetCarryOver={budgetCarryOver}
-        initialCategory={params.category}
-        year={year}
-        month={month}
-        amexPendingCount={amexPendingCount}
-        amexMonthlyTotal={amexMonthlyTotal}
-        amexEnabled={amexEnabled}
-        separateRecurring={prefs.separateRecurring}
-      />
+      <Suspense fallback={<div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-[400px] w-full rounded-md" /></div>}>
+        <TransactionsTable
+          transactions={transactions}
+          accounts={formData.accounts}
+          categories={formData.categories}
+          budgetCarryOver={budgetCarryOver}
+          initialCategory={params.category}
+          year={year}
+          month={month}
+          amexPendingCount={amexPendingCount}
+          amexMonthlyTotal={amexMonthlyTotal}
+          amexEnabled={amexEnabled}
+          separateRecurring={prefs.separateRecurring}
+        />
+      </Suspense>
     </div>
   );
 }

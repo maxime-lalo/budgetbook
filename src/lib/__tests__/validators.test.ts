@@ -86,6 +86,31 @@ describe("transactionSchema", () => {
     expect(transactionSchema.safeParse({ ...validTransaction, month: 0 }).success).toBe(false);
     expect(transactionSchema.safeParse({ ...validTransaction, month: 13 }).success).toBe(false);
   });
+
+  it("accepts very large amount (999999999.99)", () => {
+    const result = transactionSchema.safeParse({ ...validTransaction, amount: 999999999.99 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.amount).toBe(999999999.99);
+    }
+  });
+
+  it("accepts very small amount (0.01)", () => {
+    const result = transactionSchema.safeParse({ ...validTransaction, amount: 0.01 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.amount).toBe(0.01);
+    }
+  });
+
+  it("accepts very long label (1000 chars) since only min(1) constraint", () => {
+    const longLabel = "A".repeat(1000);
+    const result = transactionSchema.safeParse({ ...validTransaction, label: longLabel });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.label).toBe(longLabel);
+    }
+  });
 });
 
 describe("accountSchema", () => {
@@ -354,6 +379,14 @@ describe("bucketSchema", () => {
   it("accepts optional nullable color", () => {
     const result = bucketSchema.safeParse({ ...validBucket, color: "#00ff00" });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts goal = 0 (boundary — nonnegative includes zero)", () => {
+    const result = bucketSchema.safeParse({ ...validBucket, goal: 0 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.goal).toBe(0);
+    }
   });
 });
 
