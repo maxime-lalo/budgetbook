@@ -359,13 +359,19 @@ export function EditableTransactionRow({
 
         {/* Date */}
         <TableCell className="p-1 whitespace-nowrap text-center">
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            onBlur={handleDateBlur}
-            className="h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[130px] text-muted-foreground"
-          />
+          {date ? (
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              onBlur={handleDateBlur}
+              className="h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[130px] text-muted-foreground"
+            />
+          ) : (
+            <span className="inline-flex items-center h-8 px-2 text-xs font-medium text-muted-foreground bg-muted rounded-md">
+              Récurrent
+            </span>
+          )}
         </TableCell>
 
         {/* Montant */}
