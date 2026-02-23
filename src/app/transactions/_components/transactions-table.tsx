@@ -63,7 +63,8 @@ type SortDirection = "asc" | "desc";
 const STATUS_ORDER: Record<string, number> = {
   COMPLETED: 0,
   PENDING: 1,
-  CANCELLED: 2,
+  PRÉVUE: 2,
+  CANCELLED: 3,
 };
 
 type CrossMonthResult = {

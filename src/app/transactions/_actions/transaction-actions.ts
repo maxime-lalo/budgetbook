@@ -58,10 +58,10 @@ export async function getTransactionTotals(year: number, month: number) {
   const checkingIds = checkingAccounts.map((a) => a.id);
 
   if (checkingIds.length === 0) {
-    return { real: 0, pending: 0, forecast: 0 };
+    return { real: 0, pending: 0, planned: 0, forecast: 0 };
   }
 
-  const [completed, pending, incomingCompleted, incomingPending] = await Promise.all([
+  const [completed, pending, planned, incomingCompleted, incomingPending, incomingPlanned] = await Promise.all([
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.accountId, checkingIds))),
@@ -70,19 +70,27 @@ export async function getTransactionTotals(year: number, month: number) {
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.accountId, checkingIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PRÉVUE"), inArray(transactions.accountId, checkingIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, checkingIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, checkingIds))),
+    db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PRÉVUE"), inArray(transactions.destinationAccountId, checkingIds))),
   ]);
 
   const realTotal = round2(toNumber(completed[0].total) + -(toNumber(incomingCompleted[0].total)));
   const pendingTotal = round2(toNumber(pending[0].total) + -(toNumber(incomingPending[0].total)));
+  const plannedTotal = round2(toNumber(planned[0].total) + -(toNumber(incomingPlanned[0].total)));
 
   return {
     real: realTotal,
     pending: pendingTotal,
-    forecast: round2(realTotal + pendingTotal),
+    planned: plannedTotal,
+    forecast: round2(realTotal + pendingTotal + plannedTotal),
   };
 }
 
@@ -381,7 +389,7 @@ export async function searchTransactionsAcrossMonths(
     conditions.push(eq(transactions.accountId, filters.accountId));
   }
   if (filters.status) {
-    conditions.push(eq(transactions.status, filters.status as "PENDING" | "COMPLETED" | "CANCELLED"));
+    conditions.push(eq(transactions.status, filters.status as "PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE"));
   }
   if (filters.amountMin !== undefined) {
     conditions.push(gte(transactions.amount, filters.amountMin.toString()));

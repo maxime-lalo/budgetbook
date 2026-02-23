@@ -70,7 +70,7 @@ export const transactions = sqliteTable(
     date: text("date"),
     month: integer("month").notNull(),
     year: integer("year").notNull(),
-    status: text("status", { enum: ["PENDING", "COMPLETED", "CANCELLED"] }).notNull().default("PENDING"),
+    status: text("status", { enum: ["PENDING", "COMPLETED", "CANCELLED", "PRÉVUE"] }).notNull().default("PENDING"),
     note: text("note"),
     accountId: text("accountId").notNull(),
     destinationAccountId: text("destinationAccountId"),

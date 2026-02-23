@@ -68,7 +68,7 @@ export async function getSavingsTotals(year: number) {
   const savingsIds = savingsAccounts.map((a) => a.id);
 
   if (savingsIds.length === 0) {
-    return { real: 0, pending: 0, forecast: 0 };
+    return { real: 0, pending: 0, planned: 0, forecast: 0 };
   }
 
   const statusFilter = ["COMPLETED", "PENDING"] as const;
@@ -99,6 +99,7 @@ export async function getSavingsTotals(year: number) {
   return {
     real: realTotal,
     pending: pendingTotal,
+    planned: 0,
     forecast: round2(realTotal + pendingTotal),
   };
 }

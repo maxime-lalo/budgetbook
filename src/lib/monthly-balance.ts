@@ -14,7 +14,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
 
   let totalForecast = 0;
   if (checkingIds.length > 0) {
-    const statusFilter = inArray(transactions.status, ["COMPLETED", "PENDING"]);
+    const statusFilter = inArray(transactions.status, ["COMPLETED", "PENDING", "PRÉVUE"]);
     const monthFilter = and(eq(transactions.year, year), eq(transactions.month, month));
 
     const [onChecking, incomingToChecking] = await Promise.all([
@@ -41,7 +41,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
-        inArray(transactions.status, ["COMPLETED", "PENDING"])
+        inArray(transactions.status, ["COMPLETED", "PENDING", "PRÉVUE"])
       )
     )
     .groupBy(transactions.categoryId);

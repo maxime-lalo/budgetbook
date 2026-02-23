@@ -454,6 +454,12 @@ export function EditableTransactionRow({
                   {STATUS_LABELS.COMPLETED}
                 </div>
               </SelectItem>
+              <SelectItem value="PRÉVUE">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full shrink-0 bg-purple-500" />
+                  {STATUS_LABELS.PRÉVUE}
+                </div>
+              </SelectItem>
               <SelectItem value="CANCELLED">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full shrink-0 bg-red-500" />

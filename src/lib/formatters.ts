@@ -45,4 +45,5 @@ export const STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente",
   COMPLETED: "Réalisé",
   CANCELLED: "Annulé",
+  PRÉVUE: "Prévu",
 };

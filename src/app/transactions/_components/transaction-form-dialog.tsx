@@ -281,6 +281,7 @@ export function TransactionFormDialog({
                 <SelectContent>
                   <SelectItem value="PENDING">En attente</SelectItem>
                   <SelectItem value="COMPLETED">Réalisé</SelectItem>
+                  <SelectItem value="PRÉVUE">Prévu</SelectItem>
                   <SelectItem value="CANCELLED">Annulé</SelectItem>
                 </SelectContent>
               </Select>
