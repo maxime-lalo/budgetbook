@@ -47,9 +47,9 @@ RUN apk add --no-cache python3 make g++ && \
     npm rebuild better-sqlite3 && \
     apk del python3 make g++
 
-# Entrypoint script
-COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+# Entrypoint + helper scripts
+COPY --chown=nextjs:nodejs scripts/ ./scripts/
+RUN chmod +x ./scripts/docker-entrypoint.sh
 
 USER nextjs
 
@@ -58,4 +58,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["./docker-entrypoint.sh"]
+CMD ["./scripts/docker-entrypoint.sh"]
