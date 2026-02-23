@@ -136,6 +136,13 @@ export function EditableTransactionRow({
     saveField({ label }, () => setLabel(transaction.label));
   }
 
+  function handleDateBlur() {
+    const newDate = date || null;
+    const oldDate = transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : "";
+    if (date === oldDate) return;
+    saveField({ date: newDate || null }, () => setDate(oldDate));
+  }
+
   function handleAmountBlur() {
     const num = Number(amount);
     if (isNaN(num) || num === 0) {
@@ -347,6 +354,17 @@ export function EditableTransactionRow({
             onChange={(e) => setLabel(e.target.value)}
             onBlur={handleLabelBlur}
             className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input"
+          />
+        </TableCell>
+
+        {/* Date */}
+        <TableCell className="p-1 whitespace-nowrap text-center">
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            onBlur={handleDateBlur}
+            className="h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[130px] text-muted-foreground"
           />
         </TableCell>
 

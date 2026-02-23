@@ -56,7 +56,7 @@ type Category = {
   subCategories: { id: string; name: string }[];
 };
 
-type SortColumn = "status" | "amount";
+type SortColumn = "date" | "status" | "amount";
 type SortDirection = "asc" | "desc";
 
 const STATUS_ORDER: Record<string, number> = {
@@ -227,6 +227,12 @@ export function TransactionsTable({
   function compareFn(a: Transaction, b: Transaction): number {
     const dir = sortDirection === "asc" ? 1 : -1;
 
+    if (sortColumn === "date") {
+      const aDate = a.date ?? "";
+      const bDate = b.date ?? "";
+      return dir * aDate.localeCompare(bDate);
+    }
+
     if (sortColumn === "status") {
       const aOrder = STATUS_ORDER[a.status] ?? 99;
       const bOrder = STATUS_ORDER[b.status] ?? 99;
@@ -253,8 +259,9 @@ export function TransactionsTable({
       <TableCell className="py-2 text-sm italic text-muted-foreground">
         Report mois précédent
       </TableCell>
+      <TableCell />
       <TableCell
-        className={`py-2 text-sm font-medium ${
+        className={`py-2 text-sm font-medium text-center ${
           budgetCarryOver >= 0 ? "text-green-600" : "text-red-600"
         }`}
       >
@@ -276,7 +283,7 @@ export function TransactionsTable({
     transactionRows = (
       <TableRow>
         <TableCell
-          colSpan={6}
+          colSpan={7}
           className="text-center py-8 text-muted-foreground"
         >
           Aucune transaction ne correspond aux filtres.
@@ -318,7 +325,7 @@ export function TransactionsTable({
               onClick={() => setRecurringOpen((o) => !o)}
             >
               <TableCell
-                colSpan={6}
+                colSpan={7}
                 className="py-1.5 px-4 text-sm font-medium text-muted-foreground"
               >
                 <div className="flex items-center gap-1">
@@ -346,7 +353,7 @@ export function TransactionsTable({
         {hasBothSections && (
           <TableRow>
             <TableCell
-              colSpan={6}
+              colSpan={7}
               className="bg-muted/50 py-2 px-4 text-sm font-medium text-muted-foreground"
             >
               Transactions ({dated.length})
@@ -403,6 +410,14 @@ export function TransactionsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Libellé</TableHead>
+              <SortableHeader
+                column="date"
+                label="Date"
+                className="w-[130px]"
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onToggleSort={toggleSort}
+              />
               <SortableHeader
                 column="amount"
                 label="Montant"

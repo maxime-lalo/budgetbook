@@ -49,6 +49,7 @@ export function NewTransactionRow({
   defaultCategoryId?: string;
 }) {
   const [label, setLabel] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? "");
   const [subCategoryId, setSubCategoryId] = useState("");
@@ -69,6 +70,7 @@ export function NewTransactionRow({
 
   function resetFields() {
     setLabel("");
+    setDate(new Date().toISOString().split("T")[0]);
     setAmount("");
     setCategoryId(defaultCategoryId ?? "");
     setSubCategoryId("");
@@ -84,7 +86,7 @@ export function NewTransactionRow({
     const result = await createTransaction({
       label: label.trim(),
       amount: Number(amount),
-      date: new Date().toISOString().split("T")[0],
+      date: date || new Date().toISOString().split("T")[0],
       month,
       year,
       status,
@@ -141,6 +143,17 @@ export function NewTransactionRow({
           onKeyDown={handleKeyDown}
           placeholder="Nouveau..."
           className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input"
+        />
+      </TableCell>
+
+      {/* Date */}
+      <TableCell className="p-1 whitespace-nowrap text-center">
+        <Input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[130px] text-muted-foreground"
         />
       </TableCell>
 
