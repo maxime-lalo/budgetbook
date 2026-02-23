@@ -97,6 +97,7 @@ export const transactions = pgTable(
     subCategoryId: text("subCategoryId"),
     bucketId: text("bucketId"),
     isAmex: boolean("isAmex").notNull().default(false),
+    recurring: boolean("recurring").notNull().default(false),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

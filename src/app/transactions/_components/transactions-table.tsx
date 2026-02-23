@@ -33,6 +33,7 @@ type Transaction = {
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
+  recurring: boolean;
   destinationAccountId: string | null;
   account: { name: string; color: string | null } | null;
   destinationAccount: { name: string; color: string | null } | null;
@@ -324,13 +325,14 @@ export function TransactionsTable({
       />
     ));
   } else {
-    const dateless = filtered.filter((t) => t.date === null);
-    const dated = filtered.filter((t) => t.date !== null);
-    const hasBothSections = dateless.length > 0 && dated.length > 0;
+    // Pas de tri : layout par sections
+    const recurring = filtered.filter((t) => t.recurring === true);
+    const nonRecurring = filtered.filter((t) => t.recurring !== true);
+    const hasBothSections = recurring.length > 0 && nonRecurring.length > 0;
 
     transactionRows = (
       <>
-        {dateless.length > 0 && (
+        {recurring.length > 0 && (
           <>
             <TableRow
               className="bg-muted/50 cursor-pointer select-none"
@@ -346,12 +348,12 @@ export function TransactionsTable({
                   ) : (
                     <ChevronRight className="h-4 w-4" />
                   )}
-                  Récurrentes ({dateless.length})
+                  Récurrentes ({recurring.length})
                 </div>
               </TableCell>
             </TableRow>
             {recurringOpen &&
-              dateless.map((t) => (
+              recurring.map((t) => (
                 <EditableTransactionRow
                   key={t.id}
                   transaction={t}
@@ -368,11 +370,11 @@ export function TransactionsTable({
               colSpan={7}
               className="bg-muted/50 py-2 px-4 text-sm font-medium text-muted-foreground"
             >
-              Transactions ({dated.length})
+              Transactions ({nonRecurring.length})
             </TableCell>
           </TableRow>
         )}
-        {dated.map((t) => (
+        {nonRecurring.map((t) => (
           <EditableTransactionRow
             key={t.id}
             transaction={t}

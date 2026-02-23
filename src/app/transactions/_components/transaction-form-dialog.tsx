@@ -57,7 +57,7 @@ export function TransactionFormDialog({
   const [categoryId, setCategoryId] = useState("");
   const [status, setStatus] = useState("PENDING");
   const [isAmex, setIsAmex] = useState(false);
-  const [noDate, setNoDate] = useState(false);
+  const [recurring, setRecurring] = useState(false);
   const [dateValue, setDateValue] = useState(format(new Date(), "yyyy-MM-dd"));
   const [isExpense, setIsExpense] = useState(true);
   const [bucketId, setBucketId] = useState("");
@@ -77,7 +77,7 @@ export function TransactionFormDialog({
     const data: Record<string, unknown> = {
       label: formData.get("label"),
       amount: isExpense ? -Math.abs(num) : Math.abs(num),
-      date: noDate ? null : formData.get("date"),
+      date: formData.get("date"),
       month: parseInt(budgetMonth.split("-")[1], 10),
       year: parseInt(budgetMonth.split("-")[0], 10),
       status,
@@ -87,6 +87,7 @@ export function TransactionFormDialog({
       subCategoryId: formData.get("subCategoryId") || null,
       bucketId: bucketId || null,
       isAmex,
+      recurring,
       destinationAccountId: null,
     };
 
@@ -100,11 +101,6 @@ export function TransactionFormDialog({
     }
     toast.success("Transaction créée");
     setOpen(false);
-  }
-
-  function handleNoDateChange(checked: boolean) {
-    setNoDate(checked);
-    setDateValue(checked ? "" : format(new Date(), "yyyy-MM-dd"));
   }
 
   return (
@@ -178,9 +174,6 @@ export function TransactionFormDialog({
                 type="date"
                 value={dateValue}
                 onChange={(e) => setDateValue(e.target.value)}
-                disabled={noDate}
-                required={!noDate}
-                className={noDate ? "cursor-not-allowed opacity-50" : ""}
               />
             </div>
             <div className="space-y-2">
@@ -208,11 +201,11 @@ export function TransactionFormDialog({
             )}
             <div className="flex items-center gap-2">
               <Switch
-                id="no-date"
-                checked={noDate}
-                onCheckedChange={handleNoDateChange}
+                id="recurring"
+                checked={recurring}
+                onCheckedChange={setRecurring}
               />
-              <Label htmlFor="no-date">Récurrent</Label>
+              <Label htmlFor="recurring">Récurrent</Label>
             </div>
           </div>
 

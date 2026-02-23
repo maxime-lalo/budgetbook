@@ -54,6 +54,7 @@ export const transactionSchema = z
     subCategoryId: z.string().nullable().optional(),
     bucketId: z.string().nullable().optional(),
     isAmex: z.boolean().default(false),
+    recurring: z.boolean().default(false),
     destinationAccountId: z.string().nullable().optional(),
   })
   .refine(

@@ -1,7 +1,7 @@
 "use server";
 
 import { db, transactions, accounts, buckets } from "@/lib/db";
-import { eq, and, inArray, sql, asc, desc, isNull, gte, lte, or } from "drizzle-orm";
+import { eq, and, inArray, sql, asc, desc, gte, lte, or } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { transactionSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
@@ -19,7 +19,7 @@ export async function getTransactions(year: number, month: number) {
       destinationAccount: { columns: { name: true, color: true } },
     },
     orderBy: [
-      sql`CASE WHEN ${transactions.date} IS NULL THEN 0 ELSE 1 END`,
+      sql`CASE WHEN ${transactions.recurring} THEN 0 ELSE 1 END`,
       asc(transactions.date),
       asc(transactions.createdAt),
       asc(transactions.label),
@@ -40,6 +40,7 @@ export async function getTransactions(year: number, month: number) {
     subCategoryId: t.subCategoryId,
     bucketId: t.bucketId,
     isAmex: t.isAmex,
+    recurring: t.recurring,
     destinationAccountId: t.destinationAccountId,
     account: t.account ? { name: t.account.name, color: t.account.color } : null,
     destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,
@@ -103,6 +104,7 @@ export async function createTransaction(data: Record<string, unknown>) {
     subCategoryId: parsed.data.subCategoryId || null,
     bucketId: parsed.data.bucketId || null,
     isAmex: parsed.data.isAmex,
+    recurring: parsed.data.recurring,
     destinationAccountId: parsed.data.destinationAccountId || null,
   });
   await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
@@ -134,6 +136,7 @@ export async function updateTransaction(id: string, data: Record<string, unknown
     subCategoryId: parsed.data.subCategoryId || null,
     bucketId: parsed.data.bucketId || null,
     isAmex: parsed.data.isAmex,
+    recurring: parsed.data.recurring,
     destinationAccountId: parsed.data.destinationAccountId || null,
   }).where(eq(transactions.id, id));
 
@@ -244,6 +247,7 @@ export async function updateTransactionField(
     status: string;
     note: string | null;
     isAmex: boolean;
+    recurring: boolean;
     destinationAccountId: string | null;
   }>
 ) {
@@ -272,6 +276,7 @@ export async function updateTransactionField(
   if (fields.status !== undefined) data.status = fields.status;
   if (fields.note !== undefined) data.note = fields.note;
   if (fields.isAmex !== undefined) data.isAmex = fields.isAmex;
+  if (fields.recurring !== undefined) data.recurring = fields.recurring;
   if (fields.destinationAccountId !== undefined) data.destinationAccountId = fields.destinationAccountId;
 
   await db.update(transactions).set(data).where(eq(transactions.id, id));
@@ -302,7 +307,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
     where: and(
       eq(transactions.year, prevYear),
       eq(transactions.month, prevMonth),
-      isNull(transactions.date)
+      eq(transactions.recurring, true)
     ),
   });
 
@@ -312,7 +317,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
 
   // Supprimer les récurrentes existantes du mois cible
   await db.delete(transactions).where(
-    and(eq(transactions.year, year), eq(transactions.month, month), isNull(transactions.date))
+    and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.recurring, true))
   );
 
   // Copier avec status PENDING et sans note
@@ -331,6 +336,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
       subCategoryId: t.subCategoryId,
       bucketId: t.bucketId,
       isAmex: t.isAmex,
+      recurring: true,
       destinationAccountId: t.destinationAccountId,
     });
   }

@@ -146,8 +146,8 @@ async function main() {
   ];
 
   const recurringTransactions = [
-    { label: "Loyer", amount: "-850", date: null, month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Logement"), subCategoryId: getSubId("Logement", "Loyer") },
-    { label: "Netflix", amount: "-17.99", date: null, month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Abonnements"), subCategoryId: getSubId("Abonnements", "Streaming") },
+    { label: "Loyer", amount: "-850", date: null, recurring: true, month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Logement"), subCategoryId: getSubId("Logement", "Loyer") },
+    { label: "Netflix", amount: "-17.99", date: null, recurring: true, month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Abonnements"), subCategoryId: getSubId("Abonnements", "Streaming") },
   ];
 
   for (const t of [...sampleTransactions, ...recurringTransactions]) {

@@ -1,7 +1,7 @@
 "use server";
 
 import { db, transactions, accounts, buckets } from "@/lib/db";
-import { eq, and, or, inArray, isNotNull, sql, asc, isNull } from "drizzle-orm";
+import { eq, and, or, inArray, isNotNull, sql, asc } from "drizzle-orm";
 import { toNumber, toISOString, round2 } from "@/lib/db/helpers";
 
 export async function getSavingsTransactions(year: number) {
@@ -29,7 +29,7 @@ export async function getSavingsTransactions(year: number) {
       destinationAccount: { columns: { name: true, color: true } },
     },
     orderBy: [
-      sql`CASE WHEN ${transactions.date} IS NULL THEN 0 ELSE 1 END`,
+      sql`CASE WHEN ${transactions.recurring} THEN 0 ELSE 1 END`,
       asc(transactions.date),
       asc(transactions.createdAt),
       asc(transactions.label),
@@ -50,6 +50,7 @@ export async function getSavingsTransactions(year: number) {
     subCategoryId: t.subCategoryId,
     bucketId: t.bucketId,
     isAmex: t.isAmex,
+    recurring: t.recurring,
     destinationAccountId: t.destinationAccountId,
     account: t.account ? { name: t.account.name, color: t.account.color } : null,
     destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,

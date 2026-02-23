@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Pencil, Trash2, CreditCard, ArrowRightLeft } from "lucide-react";
+import { Pencil, Trash2, CreditCard, ArrowRightLeft, RefreshCw } from "lucide-react";
 import { STATUS_LABELS } from "@/lib/formatters";
 import {
   updateTransactionField,
@@ -44,6 +44,7 @@ type Transaction = {
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
+  recurring: boolean;
   destinationAccountId: string | null;
   account: { name: string; color: string | null } | null;
   destinationAccount: { name: string; color: string | null } | null;
@@ -102,7 +103,7 @@ export function EditableTransactionRow({
   const [cancelNote, setCancelNote] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editDate, setEditDate] = useState(date);
-  const [editRecurring, setEditRecurring] = useState(date === "");
+  const [editRecurring, setEditRecurring] = useState(transaction.recurring);
   const [editMonth, setEditMonth] = useState(
     `${transaction.year}-${String(transaction.month).padStart(2, "0")}`
   );
@@ -282,7 +283,7 @@ export function EditableTransactionRow({
   // Modal d'édition Date + Compte
   function openEditDialog() {
     setEditDate(date);
-    setEditRecurring(date === "");
+    setEditRecurring(transaction.recurring);
     setEditMonth(`${transaction.year}-${String(transaction.month).padStart(2, "0")}`);
     setEditAccountId(accountId);
     setEditDestinationAccountId(transaction.destinationAccountId ?? "");
@@ -299,10 +300,12 @@ export function EditableTransactionRow({
     const originalDate = transaction.date
       ? format(new Date(transaction.date), "yyyy-MM-dd")
       : "";
-    const effectiveDate = editRecurring ? "" : editDate;
 
-    if (effectiveDate !== originalDate) {
-      fields.date = effectiveDate === "" ? null : effectiveDate;
+    if (editDate !== originalDate) {
+      fields.date = editDate === "" ? null : editDate;
+    }
+    if (editRecurring !== transaction.recurring) {
+      fields.recurring = editRecurring;
     }
     if (editAccountId !== accountId) {
       fields.accountId = editAccountId;
@@ -335,7 +338,7 @@ export function EditableTransactionRow({
 
     // Mettre à jour les states locaux
     if (fields.date !== undefined) {
-      setDate(effectiveDate);
+      setDate(editDate);
     }
     if (fields.accountId) {
       setAccountId(editAccountId);
@@ -348,13 +351,18 @@ export function EditableTransactionRow({
       <TableRow className={status === "CANCELLED" ? "opacity-50" : ""}>
         {/* Libellé */}
         <TableCell className="p-1">
-          <Input
-            type="text"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            onBlur={handleLabelBlur}
-            className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input"
-          />
+          <div className="flex items-center gap-1">
+            {transaction.recurring && (
+              <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
+            <Input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              onBlur={handleLabelBlur}
+              className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input"
+            />
+          </div>
         </TableCell>
 
         {/* Date */}
@@ -598,13 +606,11 @@ export function EditableTransactionRow({
                   />
                 </div>
               </div>
-              {!editRecurring && (
-                <Input
-                  type="date"
-                  value={editDate}
-                  onChange={(e) => setEditDate(e.target.value)}
-                />
-              )}
+              <Input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Mois budgétaire</Label>
