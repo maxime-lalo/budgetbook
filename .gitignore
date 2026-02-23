@@ -48,8 +48,12 @@ drizzle/sqlite/
 # SQLite database files
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
 
 # imported personal data
 prisma/data/
