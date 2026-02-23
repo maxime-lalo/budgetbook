@@ -25,46 +25,62 @@ if [ "$DB_PROVIDER" = "sqlite" ]; then
       }
       if (indexes.length > 0) console.log('Dropped', indexes.length, 'custom indexes');
 
-      // Manual schema migrations — add missing columns so drizzle-kit push
-      // detects 'No changes' and skips table rebuilds (which fail on FK checks)
-      const columns = db.prepare(\"PRAGMA table_info('api_tokens')\").all();
-      if (!columns.find(c => c.name === 'tokenPrefix')) {
+      // Add missing columns manually (avoids drizzle-kit table rebuild)
+      const apiCols = db.prepare(\"PRAGMA table_info('api_tokens')\").all();
+      if (!apiCols.find(c => c.name === 'tokenPrefix')) {
         db.prepare(\"ALTER TABLE api_tokens ADD COLUMN tokenPrefix text NOT NULL DEFAULT ''\").run();
         console.log('Added tokenPrefix column to api_tokens');
       }
 
-      // Fix orphaned FK references (data predating FK enforcement)
-      const violations = db.pragma('foreign_key_check');
-      if (violations.length > 0) {
-        console.log('Found', violations.length, 'FK violations, cleaning up...');
-        const fkCache = {};
-        let nulled = 0, deleted = 0;
-        for (const v of violations) {
-          const cacheKey = v.table + '_' + v.fkid;
-          if (!fkCache[cacheKey]) {
-            const fks = db.pragma('foreign_key_list(\"' + v.table + '\")');
-            fkCache[cacheKey] = fks.find(f => f.id === v.fkid);
-          }
-          const fk = fkCache[cacheKey];
-          if (fk) {
-            try {
-              db.prepare('UPDATE \"' + v.table + '\" SET \"' + fk.from + '\" = NULL WHERE rowid = ?').run(v.rowid);
-              nulled++;
-            } catch(e) {
-              // Column is NOT NULL — delete the row
-              db.prepare('DELETE FROM \"' + v.table + '\" WHERE rowid = ?').run(v.rowid);
-              deleted++;
+      // Clean orphaned FK references against INTENDED schema
+      // (existing tables may lack FK constraints, so PRAGMA foreign_key_check finds nothing)
+      const fkChecks = [
+        // [table, column, parentTable, parentColumn, nullable]
+        ['transactions', 'accountId',            'accounts',       'id', false],
+        ['transactions', 'destinationAccountId', 'accounts',       'id', true],
+        ['transactions', 'categoryId',           'categories',     'id', true],
+        ['transactions', 'subCategoryId',        'sub_categories', 'id', true],
+        ['transactions', 'bucketId',             'buckets',        'id', true],
+        ['budgets',      'categoryId',           'categories',     'id', false],
+        ['buckets',      'accountId',            'accounts',       'id', false],
+        ['sub_categories','categoryId',          'categories',     'id', false],
+        ['accounts',     'linkedAccountId',      'accounts',       'id', true],
+      ];
+      let totalFixed = 0;
+      for (const [table, col, parent, parentCol, nullable] of fkChecks) {
+        try {
+          const orphans = db.prepare(
+            'SELECT COUNT(*) as cnt FROM \"' + table + '\" WHERE \"' + col + '\" IS NOT NULL AND \"' + col + '\" NOT IN (SELECT \"' + parentCol + '\" FROM \"' + parent + '\")'
+          ).get();
+          if (orphans.cnt > 0) {
+            if (nullable) {
+              db.prepare('UPDATE \"' + table + '\" SET \"' + col + '\" = NULL WHERE \"' + col + '\" IS NOT NULL AND \"' + col + '\" NOT IN (SELECT \"' + parentCol + '\" FROM \"' + parent + '\")').run();
+              console.log('Nulled ' + orphans.cnt + ' orphaned ' + table + '.' + col);
+            } else {
+              db.prepare('DELETE FROM \"' + table + '\" WHERE \"' + col + '\" NOT IN (SELECT \"' + parentCol + '\" FROM \"' + parent + '\")').run();
+              console.log('Deleted ' + orphans.cnt + ' rows from ' + table + ' (orphaned ' + col + ')');
             }
+            totalFixed += orphans.cnt;
           }
-        }
-        console.log('FK cleanup: ' + nulled + ' nulled, ' + deleted + ' deleted');
+        } catch(e) { /* table may not exist yet */ }
+      }
+      if (totalFixed > 0) console.log('Total FK fixes: ' + totalFixed);
+
+      // Debug: show current schema for each table (FK presence)
+      const tables = ['accounts','buckets','categories','sub_categories','transactions','budgets','monthly_balances','api_tokens','app_preferences'];
+      for (const t of tables) {
+        try {
+          const fks = db.pragma('foreign_key_list(\"' + t + '\")');
+          const cols = db.prepare(\"PRAGMA table_info('\" + t + \"')\").all().map(c => c.name);
+          console.log('[DEBUG] ' + t + ': ' + cols.length + ' cols, ' + fks.length + ' FKs');
+        } catch(e) {}
       }
 
       db.close();
-    } catch(e) { console.log('Pre-push skipped (first run):', e.message); }
+    } catch(e) { console.log('Pre-push error:', e.message); }
   " || true
   echo "SQLite mode: pushing schema..."
-  npx drizzle-kit push --force
+  npx drizzle-kit push --force 2>&1 || echo "drizzle-kit push failed (exit $?)"
 else
   echo "PostgreSQL mode: pushing schema..."
   npx drizzle-kit push --force
