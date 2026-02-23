@@ -61,6 +61,7 @@ export function TransactionFormDialog({
   const [dateValue, setDateValue] = useState(format(new Date(), "yyyy-MM-dd"));
   const [isExpense, setIsExpense] = useState(true);
   const [bucketId, setBucketId] = useState("");
+  const [budgetMonth, setBudgetMonth] = useState(`${year}-${String(month).padStart(2, "0")}`);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const selectedCategory = categories.find((c) => c.id === categoryId);
@@ -77,8 +78,8 @@ export function TransactionFormDialog({
       label: formData.get("label"),
       amount: isExpense ? -Math.abs(num) : Math.abs(num),
       date: noDate ? null : formData.get("date"),
-      month,
-      year,
+      month: parseInt(budgetMonth.split("-")[1], 10),
+      year: parseInt(budgetMonth.split("-")[0], 10),
       status,
       note: formData.get("note") || null,
       accountId,
@@ -156,7 +157,7 @@ export function TransactionFormDialog({
               </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 items-end">
+          <div className="grid grid-cols-3 gap-4 items-end">
             <div className="space-y-2">
               <Label htmlFor="amount">Montant</Label>
               <Input
@@ -180,6 +181,15 @@ export function TransactionFormDialog({
                 disabled={noDate}
                 required={!noDate}
                 className={noDate ? "cursor-not-allowed opacity-50" : ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="budgetMonth">Mois budgétaire</Label>
+              <Input
+                id="budgetMonth"
+                type="month"
+                value={budgetMonth}
+                onChange={(e) => setBudgetMonth(e.target.value)}
               />
             </div>
           </div>

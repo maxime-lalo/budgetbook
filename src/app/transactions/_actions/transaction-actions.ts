@@ -260,10 +260,7 @@ export async function updateTransactionField(
     if (fields.date === null) {
       data.date = null;
     } else {
-      const d = new Date(fields.date);
-      data.date = toDbDate(d);
-      data.month = d.getMonth() + 1;
-      data.year = d.getFullYear();
+      data.date = toDbDate(new Date(fields.date));
     }
   }
   if (fields.month !== undefined) data.month = fields.month;
