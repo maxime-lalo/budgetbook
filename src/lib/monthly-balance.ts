@@ -1,22 +1,33 @@
-import { db, transactions, budgets, monthlyBalances } from "@/lib/db";
+import { db, transactions, budgets, monthlyBalances, accounts } from "@/lib/db";
 import { eq, and, or, inArray, lt } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { toNumber, round2 } from "@/lib/db/helpers";
 
 export async function recomputeMonthlyBalance(year: number, month: number) {
-  // 1. Forecast = somme de toutes les transactions COMPLETED + PENDING
-  const [forecastResult] = await db
-    .select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.year, year),
-        eq(transactions.month, month),
-        inArray(transactions.status, ["COMPLETED", "PENDING"])
-      )
-    );
-  const totalForecast = toNumber(forecastResult.total);
+  // 1. Forecast = même logique que getTransactionTotals (comptes CHECKING uniquement + virements entrants)
+  const checkingAccounts = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.type, "CHECKING"));
+  const checkingIds = checkingAccounts.map((a) => a.id);
+
+  let totalForecast = 0;
+  if (checkingIds.length > 0) {
+    const statusFilter = inArray(transactions.status, ["COMPLETED", "PENDING"]);
+    const monthFilter = and(eq(transactions.year, year), eq(transactions.month, month));
+
+    const [onChecking, incomingToChecking] = await Promise.all([
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(monthFilter, statusFilter, inArray(transactions.accountId, checkingIds))),
+      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+        .from(transactions)
+        .where(and(monthFilter, statusFilter, inArray(transactions.destinationAccountId, checkingIds))),
+    ]);
+
+    totalForecast = round2(toNumber(onChecking[0].total) + -(toNumber(incomingToChecking[0].total)));
+  }
 
   // 2. Montant NET par catégorie (inclut remboursements)
   // Même logique que getBudgetsWithSpent : net < 0 → dépense, sinon 0
