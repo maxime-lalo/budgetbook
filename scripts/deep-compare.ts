@@ -1,9 +1,11 @@
 import { readFileSync } from 'fs';
 
 const json = JSON.parse(readFileSync('/Users/maximelalo/Downloads/comptes-export-2026-02-16.json', 'utf-8'));
+interface Tx { categoryId: string; year: number; month: number; label: string; amount: string; status: string; }
+
 const ecoTx = json.data.transactions
-  .filter((t: any) => t.categoryId === 'cmleb3stu0013v5v482ldxpzp' && t.status !== 'CANCELLED')
-  .sort((a: any, b: any) => a.year - b.year || a.month - b.month);
+  .filter((t: Tx) => t.categoryId === 'cmleb3stu0013v5v482ldxpzp' && t.status !== 'CANCELLED')
+  .sort((a: Tx, b: Tx) => a.year - b.year || a.month - b.month);
 
 // ============================================================
 // EXCEL DATA - montants uniquement (positif = vers livret, négatif = retrait)

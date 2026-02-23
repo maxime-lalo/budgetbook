@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,20 +23,7 @@ import { createTransaction } from "../_actions/transaction-actions";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { format } from "date-fns";
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-  buckets: { id: string; name: string }[];
-  linkedCards: { id: string; name: string }[];
-};
-
-type Category = {
-  id: string;
-  name: string;
-  subCategories: { id: string; name: string }[];
-};
+import { type FormAccount, type FormCategory } from "@/lib/types";
 
 export function TransactionFormDialog({
   accounts,
@@ -45,8 +32,8 @@ export function TransactionFormDialog({
   month,
   amexEnabled = true,
 }: {
-  accounts: Account[];
-  categories: Category[];
+  accounts: FormAccount[];
+  categories: FormCategory[];
   year: number;
   month: number;
   amexEnabled?: boolean;
@@ -55,7 +42,7 @@ export function TransactionFormDialog({
 
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [categoryId, setCategoryId] = useState("");
-  const [status, setStatus] = useState("PENDING");
+  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE">("PENDING");
   const [isAmex, setIsAmex] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [dateValue, setDateValue] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -63,9 +50,24 @@ export function TransactionFormDialog({
   const [bucketId, setBucketId] = useState("");
   const [budgetMonth, setBudgetMonth] = useState(`${year}-${String(month).padStart(2, "0")}`);
 
+  const handleOpenChange = useCallback((value: boolean) => {
+    if (value) {
+      setAccountId(accounts[0]?.id ?? "");
+      setCategoryId("");
+      setStatus("PENDING");
+      setIsAmex(false);
+      setRecurring(false);
+      setDateValue(format(new Date(), "yyyy-MM-dd"));
+      setIsExpense(true);
+      setBucketId("");
+      setBudgetMonth(`${year}-${String(month).padStart(2, "0")}`);
+    }
+    setOpen(value);
+  }, [accounts, year, month]);
+
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const selectedCategory = categories.find((c) => c.id === categoryId);
-  const isSavingsType = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+  const isSavingsType = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
   const sourceHasBuckets = isSavingsType(selectedAccount);
 
   const showAmexToggle = amexEnabled && selectedAccount?.type === "CHECKING";
@@ -74,17 +76,18 @@ export function TransactionFormDialog({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const num = Number(formData.get("amount"));
-    const data: Record<string, unknown> = {
-      label: formData.get("label"),
+    const dateStr = formData.get("date") as string;
+    const data = {
+      label: formData.get("label") as string,
       amount: isExpense ? -Math.abs(num) : Math.abs(num),
-      date: formData.get("date"),
+      date: dateStr ? new Date(dateStr) : null,
       month: parseInt(budgetMonth.split("-")[1], 10),
       year: parseInt(budgetMonth.split("-")[0], 10),
       status,
-      note: formData.get("note") || null,
+      note: (formData.get("note") as string) || null,
       accountId,
       categoryId,
-      subCategoryId: formData.get("subCategoryId") || null,
+      subCategoryId: (formData.get("subCategoryId") as string) || null,
       bucketId: bucketId || null,
       isAmex,
       recurring,
@@ -93,9 +96,9 @@ export function TransactionFormDialog({
 
     const result = await createTransaction(data);
 
-    if (result.error) {
+    if ("error" in result) {
       const errors = result.error;
-      const msg = Object.values(errors).flat().join(", ");
+      const msg = typeof errors === "string" ? errors : Object.values(errors).flat().join(", ");
       toast.error(msg || "Erreur de validation");
       return;
     }
@@ -106,7 +109,7 @@ export function TransactionFormDialog({
   return (
     <>
       {/* Desktop: bouton inline */}
-      <Button className="hidden sm:inline-flex" onClick={() => setOpen(true)}>
+      <Button className="hidden sm:inline-flex" onClick={() => handleOpenChange(true)}>
         <Plus className="h-4 w-4 mr-2" />
         Nouvelle transaction
       </Button>
@@ -114,12 +117,12 @@ export function TransactionFormDialog({
       {/* Mobile: bouton flottant (FAB) */}
       <Button
         className="sm:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
-        onClick={() => setOpen(true)}
+        onClick={() => handleOpenChange(true)}
       >
         <Plus className="h-6 w-6" />
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouvelle transaction</DialogTitle>
@@ -274,7 +277,7 @@ export function TransactionFormDialog({
             </div>
             <div className="space-y-2">
               <Label>Statut</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

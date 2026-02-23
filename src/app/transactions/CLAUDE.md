@@ -88,16 +88,19 @@ Ligne intégrée directement dans le tableau (dernière ligne) permettant d'ajou
 |----------|-------------|
 | `getTransactions(year, month)` | Transactions du mois avec relations, sérialisées en plain objects |
 | `getTransactionTotals(year, month)` | Agrégats : réel, en attente, prévisionnel |
-| `createTransaction(data)` | Création avec validation Zod |
-| `updateTransaction(id, data)` | Mise à jour avec validation Zod |
-| `deleteTransaction(id)` | Suppression |
+| `createTransaction(data)` | Délègue à `insertTransaction()` de `transaction-helpers.ts` |
+| `updateTransaction(id, data)` | Délègue à `updateTransactionById()` de `transaction-helpers.ts` |
+| `deleteTransaction(id)` | Délègue à `deleteTransactionById()` de `transaction-helpers.ts` |
 | `markTransactionCompleted(id)` | Passage en COMPLETED |
 | `cancelTransaction(id, note)` | Passage en CANCELLED avec note obligatoire |
-| `updateTransactionField(id, fields)` | Mise à jour partielle d'un ou plusieurs champs (inclut isAmex) |
+| `updateTransactionField(id, fields)` | Mise à jour partielle d'un ou plusieurs champs (inclut isAmex). Valide via `partialTransactionFieldSchema` |
 | `completeAmexTransactions(year, month)` | Passage en bloc de toutes les transactions AMEX PENDING en COMPLETED |
 | `getPreviousMonthBudgetRemaining(year, month)` | Report du mois précédent (voir calcul ci-dessous) |
-| `copyRecurringTransactions(year, month)` | Copie les transactions récurrentes (sans date) du mois précédent |
+| `copyRecurringTransactions(year, month)` | Copie les transactions récurrentes (sans date) du mois précédent (batch insert) |
+| `searchTransactionsAcrossMonths(query, year)` | Recherche par label sur toute l'année |
 | `getFormData()` | Comptes + catégories (avec couleurs) pour le formulaire (objets plain sans Decimal) |
+
+Toutes les mutations sont wrappées avec `safeAction()` de `src/lib/safe-action.ts`.
 
 ## Report cumulatif de mois (`getPreviousMonthBudgetRemaining`)
 

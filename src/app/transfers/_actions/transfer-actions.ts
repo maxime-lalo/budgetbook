@@ -2,11 +2,9 @@
 
 import { db, transactions, accounts, buckets } from "@/lib/db";
 import { eq, and, isNotNull, asc, desc } from "drizzle-orm";
-import { createId } from "@paralleldrive/cuid2";
-import { transactionSchema } from "@/lib/validators";
-import { revalidatePath } from "next/cache";
-import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
-import { toNumber, toISOString, toDbDate } from "@/lib/db/helpers";
+import { type TransactionInput } from "@/lib/validators";
+import { toNumber, toISOString } from "@/lib/db/helpers";
+import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
 
 export async function getTransfers(year: number, month: number) {
   const result = await db.query.transactions.findMany({
@@ -90,96 +88,16 @@ export async function getTransferFormData() {
   };
 }
 
-function revalidateAll() {
-  revalidatePath("/transfers");
-  revalidatePath("/transactions");
-  revalidatePath("/savings");
+const TRANSFER_OVERRIDES = { forceNegativeAmount: true, forceIsAmex: false } as const;
+
+export async function createTransfer(data: TransactionInput) {
+  return insertTransaction(data, TRANSFER_OVERRIDES, "Erreur lors de la création du virement");
 }
 
-export async function createTransfer(data: Record<string, unknown>) {
-  const transferData = {
-    ...data,
-    amount: -Math.abs(Number(data.amount)),
-    isAmex: false,
-  };
-
-  const parsed = transactionSchema.safeParse(transferData);
-  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
-
-  await db.insert(transactions).values({
-    id: createId(),
-    label: parsed.data.label,
-    amount: parsed.data.amount.toString(),
-    date: parsed.data.date ? toDbDate(parsed.data.date) : null,
-    month: parsed.data.month,
-    year: parsed.data.year,
-    status: parsed.data.status,
-    note: parsed.data.note || null,
-    accountId: parsed.data.accountId,
-    categoryId: parsed.data.categoryId,
-    subCategoryId: parsed.data.subCategoryId || null,
-    bucketId: parsed.data.bucketId || null,
-    isAmex: false,
-    destinationAccountId: parsed.data.destinationAccountId || null,
-  });
-
-  await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
-  revalidateAll();
-  return { success: true };
-}
-
-export async function updateTransfer(id: string, data: Record<string, unknown>) {
-  const transferData = {
-    ...data,
-    amount: -Math.abs(Number(data.amount)),
-    isAmex: false,
-  };
-
-  const parsed = transactionSchema.safeParse(transferData);
-  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
-
-  const oldTransaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
-
-  await db.update(transactions).set({
-    label: parsed.data.label,
-    amount: parsed.data.amount.toString(),
-    date: parsed.data.date ? toDbDate(parsed.data.date) : null,
-    month: parsed.data.month,
-    year: parsed.data.year,
-    status: parsed.data.status,
-    note: parsed.data.note || null,
-    accountId: parsed.data.accountId,
-    categoryId: parsed.data.categoryId,
-    subCategoryId: parsed.data.subCategoryId || null,
-    bucketId: parsed.data.bucketId || null,
-    isAmex: false,
-    destinationAccountId: parsed.data.destinationAccountId || null,
-  }).where(eq(transactions.id, id));
-
-  await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
-  if (oldTransaction && (oldTransaction.year !== parsed.data.year || oldTransaction.month !== parsed.data.month)) {
-    await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
-  }
-
-  revalidateAll();
-  return { success: true };
+export async function updateTransfer(id: string, data: TransactionInput) {
+  return updateTransactionById(id, data, TRANSFER_OVERRIDES, "Erreur lors de la mise à jour du virement");
 }
 
 export async function deleteTransfer(id: string) {
-  const transaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
-
-  await db.delete(transactions).where(eq(transactions.id, id));
-
-  if (transaction) {
-    await recomputeMonthlyBalance(transaction.year, transaction.month);
-  }
-
-  revalidateAll();
-  return { success: true };
+  return deleteTransactionById(id, "Erreur lors de la suppression du virement");
 }

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Search, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { type FormCategory, type FormAccount } from "@/lib/types";
 
 export type TransactionFilterValues = {
   search: string;
@@ -22,27 +23,14 @@ export type TransactionFilterValues = {
   crossMonth: boolean;
 };
 
-type Category = {
-  id: string;
-  name: string;
-  color: string | null;
-  subCategories: { id: string; name: string }[];
-};
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-};
-
 export function TransactionFilters({
   categories,
   accounts,
   filters,
   onFilterChange,
 }: {
-  categories: Category[];
-  accounts: Account[];
+  categories: FormCategory[];
+  accounts: FormAccount[];
   initialCategory?: string;
   filters: TransactionFilterValues;
   onFilterChange: (filters: TransactionFilterValues) => void;

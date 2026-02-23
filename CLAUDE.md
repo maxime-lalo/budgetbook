@@ -23,6 +23,7 @@ La migration Excel → BDD est un projet séparé ultérieur.
 | Dates | date-fns (locale fr) |
 | Monnaie | Intl.NumberFormat (EUR, fr-FR) |
 | Package manager | pnpm (workspace monorepo-ready) |
+| Tests | Vitest 3 |
 | Conteneurisation | Docker multi-stage + Docker Compose |
 
 ## Commandes
@@ -51,6 +52,10 @@ docker compose -f docker-compose.sqlite.yml up -d --build
 pnpm build                       # next build
 pnpm lint                        # ESLint
 
+# Tests
+pnpm test                        # Vitest (watch mode)
+pnpm test:run                    # Vitest (run once, CI)
+
 # Import de données
 pnpm db:extract                  # Extraire transactions depuis Excel (Python)
 pnpm db:import                   # Importer transactions en BDD (tsx)
@@ -78,7 +83,12 @@ comptes/
 ├── scripts/
 │   └── docker-entrypoint.sh  # Entrypoint Docker (drizzle-kit push)
 ├── src/
+│   ├── proxy.ts              # Middleware sécurité (headers)
 │   ├── app/                  # Pages (App Router)
+│   │   ├── error.tsx         # Error boundary
+│   │   ├── global-error.tsx  # Global error boundary
+│   │   ├── not-found.tsx     # Page 404
+│   │   ├── loading.tsx       # Loading skeleton
 │   │   ├── transactions/     # Vue principale mensuelle
 │   │   ├── transfers/        # Virements inter-comptes
 │   │   ├── budgets/          # Budgets mensuels par catégorie
@@ -92,16 +102,25 @@ comptes/
 │   │   └── layout/           # Sidebar, mobile-nav, theme
 │   └── lib/
 │       ├── db/               # Drizzle ORM (schéma, singleton, helpers)
-│       │   ├── schema/pg.ts  # Schéma PostgreSQL (pgTable, numeric, pgEnum)
-│       │   ├── schema/sqlite.ts # Schéma SQLite (sqliteTable, real, text)
-│       │   ├── index.ts      # Singleton dual-provider (lit DB_PROVIDER)
-│       │   ├── helpers.ts    # toNumber(), toISOString()
-│       │   └── seed.ts       # Données de démo
-│       ├── validators.ts     # Schémas Zod
-│       ├── formatters.ts     # Formatage monnaie, dates
+│       │   ├── schema/pg.ts   # Schéma PostgreSQL
+│       │   ├── schema/sqlite.ts # Schéma SQLite
+│       │   ├── index.ts       # Singleton dual-provider
+│       │   ├── helpers.ts     # toNumber(), toISOString(), round2()
+│       │   └── seed.ts        # Données de démo
+│       ├── __tests__/         # Tests unitaires (Vitest)
+│       ├── validators.ts      # Schémas Zod (toute la validation)
+│       ├── types.ts           # Types TypeScript partagés
+│       ├── formatters.ts      # Formatage monnaie, dates, labels
+│       ├── safe-action.ts     # Wrapper try/catch pour server actions
+│       ├── transaction-helpers.ts # CRUD partagé transactions/transferts
 │       ├── monthly-balance.ts # Report cumulatif inter-mois
-│       ├── api-auth.ts       # Validation Bearer token
-│       └── hooks/            # React hooks custom
+│       ├── api-auth.ts        # Validation Bearer token + hashage SHA-256
+│       ├── api-rate-limit.ts  # Rate limiting (60/min par IP)
+│       ├── env.ts             # Validation variables d'environnement (Zod)
+│       ├── logger.ts          # Logger structuré (error/warn/info)
+│       ├── revalidate.ts      # revalidateTransactionPages()
+│       ├── utils.ts           # cn() pour Tailwind
+│       └── hooks/             # React hooks custom
 ├── drizzle.config.ts         # Config Drizzle Kit (conditionnel PG/SQLite)
 ├── docker-compose.yml        # Dev : Postgres seul
 ├── docker-compose.prod.yml   # Prod : App + Postgres (2 containers)
@@ -134,9 +153,18 @@ L'app supporte deux providers via `DB_PROVIDER` :
 - `isAmex` (Boolean) marque les transactions faites via carte AMEX ; elles vivent sur le compte courant, pas sur un compte CREDIT_CARD séparé
 - `onDelete: Cascade` pour Bucket/SubCategory sous leur parent
 - `onDelete: Restrict` pour Transaction → Category (impossible de supprimer une catégorie utilisée par des transactions)
-- `categoryId` est **requis** (non nullable) sur les transactions ; seule `subCategoryId` est optionnelle
+- `categoryId` est nullable sur les transactions (optionnel pour les virements) ; seule les transactions UI le requièrent via Zod
 - Les montants numériques (string en PG, number en SQLite) sont convertis via `toNumber()` avant passage aux Client Components
 - Les formulaires utilisent `FormData` (categories, accounts) ou objets JSON (transactions)
+
+## Conventions architecturales
+
+- **`safeAction`** : toutes les mutations server actions sont wrappées avec `safeAction()` de `src/lib/safe-action.ts` qui catch les erreurs inattendues, les log via `logger`, et retourne `{ error: string }`
+- **Types partagés** : les types `SerializedTransaction`, `FormAccount`, `FormCategory` etc. sont centralisés dans `src/lib/types.ts` (pas de types locaux dans les composants)
+- **CRUD partagé** : `src/lib/transaction-helpers.ts` centralise `insertTransaction`, `updateTransactionById`, `deleteTransactionById` — utilisé par `transaction-actions.ts` et `transfer-actions.ts` (avec `TransactionOverrides` pour les virements)
+- **Revalidation** : `revalidateTransactionPages()` de `src/lib/revalidate.ts` invalide `/transactions`, `/transfers` et `/savings` en un appel
+- **Pattern erreur** : les composants client utilisent `"error" in result` (pas `result.error`) pour le narrowing TypeScript sur les retours de server actions
+- **FK constraints** : définies via `foreignKey()` au niveau table (pas `.references()` sur les colonnes) pour éviter un bug d'inférence de types Drizzle ORM (#4308)
 
 ## API REST externe
 
@@ -152,6 +180,9 @@ API REST sécurisée par Bearer token pour les intégrations externes (Tasker �
 - Sans token valide → 401 Unauthorized
 - L'utilitaire `src/lib/api-auth.ts` centralise la validation du token
 - POST `/api/transactions` : `categoryId` requis, `date`/`accountId`/`status` ont des valeurs par défaut
+- POST `/api/transactions` : `status` accepte aussi `PRÉVUE` (en plus de PENDING, COMPLETED, CANCELLED)
+- **Rate limiting** : 60 requêtes/minute par IP via `src/lib/api-rate-limit.ts`
+- **Hashage tokens** : les tokens sont hashés en SHA-256 avant stockage en BDD ; seul le préfixe (8 chars) est visible dans l'UI
 - En production derrière Authelia, ajouter une règle bypass pour `/api/` (policy: bypass)
 
 ## Logique financière inter-pages

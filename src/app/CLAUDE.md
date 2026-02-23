@@ -8,9 +8,20 @@
 - ThemeProvider (next-themes) : attribut `class`, défaut `system`
 - Toaster (sonner) : position bottom-right, richColors
 
+## Error Boundaries
+
+| Fichier | Description |
+|---------|-------------|
+| `error.tsx` | Error boundary par route (reset + message d'erreur) |
+| `global-error.tsx` | Error boundary global (erreurs dans le layout) |
+| `not-found.tsx` | Page 404 personnalisée |
+| `loading.tsx` | Skeleton de chargement global |
+
 ## Page d'accueil (page.tsx)
 
 Dashboard avec cards de synthèse (reste à vivre, dépenses, revenus), liste des comptes avec solde (les comptes SAVINGS/INVESTMENT incluent les `baseAmount` des buckets), alertes de dépassement budget, dernières transactions et derniers virements.
+
+Les données du dashboard sont fetchées via `src/app/_actions/dashboard-actions.ts` (8 requêtes en parallèle).
 
 ## Routes
 

@@ -80,6 +80,23 @@ export type SubCategoryInput = z.infer<typeof subCategorySchema>;
 export type TransactionInput = z.infer<typeof transactionSchema>;
 export type BudgetInput = z.infer<typeof budgetSchema>;
 
+export const partialTransactionFieldSchema = z.object({
+  label: z.string().min(1).optional(),
+  amount: z.number().refine((v) => v !== 0, "Le montant ne peut pas être zéro").optional(),
+  date: z.string().nullable().optional(),
+  month: z.number().int().min(1).max(12).optional(),
+  year: z.number().int().min(2000).max(2100).optional(),
+  accountId: z.string().min(1).optional(),
+  categoryId: z.string().nullable().optional(),
+  subCategoryId: z.string().nullable().optional(),
+  bucketId: z.string().nullable().optional(),
+  status: z.enum(["PENDING", "COMPLETED", "CANCELLED", "PRÉVUE"]).optional(),
+  note: z.string().nullable().optional(),
+  isAmex: z.boolean().optional(),
+  recurring: z.boolean().optional(),
+  destinationAccountId: z.string().nullable().optional(),
+});
+
 // --- Schéma de validation pour l'import/export complet ---
 
 const numericString = z.union([z.string(), z.number()]).transform(String);
@@ -143,6 +160,7 @@ const exportTransactionSchema = z.object({
   subCategoryId: z.string().nullable(),
   bucketId: z.string().nullable(),
   isAmex: z.boolean(),
+  recurring: z.boolean().default(false),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -171,6 +189,7 @@ const exportMonthlyBalanceSchema = z.object({
 const exportApiTokenSchema = z.object({
   id: z.string(),
   token: z.string(),
+  tokenPrefix: z.string().default(""),
   name: z.string(),
   createdAt: z.string(),
 });

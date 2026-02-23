@@ -1,35 +1,70 @@
 # Settings - Réglages
 
-Page de configuration de l'application. Actuellement : gestion du token API.
+Page de configuration de l'application : gestion du token API, préférences AMEX/récurrentes, export/import de données.
 
-## Page (`page.tsx`) — Server Component
+## Page (`page.tsx`) -- Server Component
 
 - Titre "Réglages"
-- Récupère le token existant via `getApiToken()` et le passe au composant client
+- Récupère le token existant via `getApiToken()` et les préférences via `getAppPreferences()`
+- Passe les données aux composants client
 
 ## Server Actions (`_actions/settings-actions.ts`)
 
 | Fonction | Description |
 |----------|-------------|
-| `getApiToken()` | Retourne `{ token, createdAt }` ou `null` si aucun token |
-| `regenerateApiToken()` | Supprime tous les tokens, crée un nouveau (`crypto.randomUUID()`), retourne `{ token, createdAt }` |
+| `getApiToken()` | Retourne `{ tokenPrefix, createdAt }` ou `null` si aucun token |
+| `regenerateApiToken()` | Génère plainToken, hashe en SHA-256, stocke hash + préfixe, retourne `{ token: plainToken, tokenPrefix, createdAt }` |
+| `getAppPreferences()` | Retourne les préférences app (amexEnabled, separateRecurring) |
+| `updateAmexEnabled(enabled)` | Active/désactive le mode AMEX |
+| `updateSeparateRecurring(enabled)` | Active/désactive la séparation des récurrentes |
+| `exportAllData()` | Exporte toutes les données en JSON |
+| `importAllData(jsonString)` | Importe des données depuis un JSON (validation via `comptesExportSchema`) |
+| `clearAllData()` | Supprime toutes les données (transactions, budgets, etc.) |
+| `recalculateAllBalances()` | Recalcule tous les MonthlyBalance via `backfillAllMonthlyBalances()` |
 
-Un seul token actif à la fois. Régénérer invalide immédiatement l'ancien.
+Un seul token actif à la fois. Régénérer invalide immédiatement l'ancien. Le token en clair n'est retourné qu'une seule fois lors de la génération.
+
+Toutes les mutations sont wrappées avec `safeAction()` de `src/lib/safe-action.ts`.
 
 ## Composants
 
-### ApiTokenCard (`_components/api-token-card.tsx`) — Client Component
+### ApiTokenCard (`_components/api-token-card.tsx`) -- Client Component
 
 Card Shadcn pour gérer le token API :
 
 - **Sans token** : bouton "Générer un token"
 - **Avec token** :
-  - Champ en lecture seule, masqué par défaut (`••••••••`), bouton oeil pour afficher/masquer
-  - Bouton "Copier" → clipboard + toast de confirmation (Sonner)
+  - Affiche le préfixe du token (`abcd1234...`) -- le token complet n'est plus stocké
+  - Lors de la génération/régénération, le token en clair est affiché une seule fois avec bouton "Copier"
+  - Bouton "Copier" -> clipboard + toast de confirmation (Sonner)
   - Date de création affichée
   - Bouton "Régénérer" (destructive) avec AlertDialog de confirmation
 
-**Props** : `initialToken: { token: string; createdAt: string } | null`
+**Props** : `initialToken: { tokenPrefix: string; createdAt: string } | null`
+
+### AmexToggleCard -- Client Component
+
+Card avec switch pour activer/désactiver le mode AMEX (affiche les colonnes et options AMEX dans l'app).
+
+### RecurringToggleCard -- Client Component
+
+Card avec switch pour activer/désactiver la séparation des transactions récurrentes dans le tableau.
+
+### RecalculateBalancesCard -- Client Component
+
+Card avec bouton pour recalculer tous les MonthlyBalance (utile après un import ou une correction manuelle).
+
+### ExportDataCard -- Client Component
+
+Card avec bouton pour exporter toutes les données de l'app en JSON (téléchargement fichier).
+
+### ImportDataCard -- Client Component
+
+Card avec zone de dépôt/sélection de fichier JSON pour importer des données. Validation via `comptesExportSchema`.
+
+### ClearDataCard -- Client Component
+
+Card destructive avec bouton pour supprimer toutes les données. AlertDialog de confirmation requis.
 
 
 <claude-mem-context>

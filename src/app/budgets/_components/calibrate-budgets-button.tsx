@@ -18,7 +18,7 @@ export function CalibrateBudgetsButton({
 
   async function handleCalibrate() {
     const result = await calibrateBudgets(year, month);
-    if (result.error) {
+    if ("error" in result) {
       toast.error(result.error);
       return;
     }

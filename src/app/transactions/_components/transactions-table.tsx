@@ -18,44 +18,7 @@ import { TransactionFilters, type TransactionFilterValues } from "./transaction-
 import { CrossMonthResults } from "./cross-month-results";
 import { searchTransactionsAcrossMonths } from "../_actions/transaction-actions";
 import { formatCurrency } from "@/lib/formatters";
-
-type Transaction = {
-  id: string;
-  label: string;
-  amount: number;
-  date: string | null;
-  month: number;
-  year: number;
-  status: string;
-  note: string | null;
-  accountId: string;
-  categoryId: string | null;
-  subCategoryId: string | null;
-  bucketId: string | null;
-  isAmex: boolean;
-  recurring: boolean;
-  destinationAccountId: string | null;
-  account: { name: string; color: string | null } | null;
-  destinationAccount: { name: string; color: string | null } | null;
-  category: { name: string; color: string | null } | null;
-  subCategory: { name: string } | null;
-  bucket: { name: string } | null;
-};
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-  buckets: { id: string; name: string }[];
-  linkedCards: { id: string; name: string }[];
-};
-
-type Category = {
-  id: string;
-  name: string;
-  color: string | null;
-  subCategories: { id: string; name: string }[];
-};
+import { type SerializedTransaction, type FormAccount, type FormCategory } from "@/lib/types";
 
 type SortColumn = "date" | "status" | "amount";
 type SortDirection = "asc" | "desc";
@@ -135,9 +98,9 @@ export function TransactionsTable({
   defaultAccountId,
   defaultCategoryId,
 }: {
-  transactions: Transaction[];
-  accounts: Account[];
-  categories: Category[];
+  transactions: SerializedTransaction[];
+  accounts: FormAccount[];
+  categories: FormCategory[];
   budgetCarryOver: number;
   initialCategory?: string;
   year: number;
@@ -228,7 +191,7 @@ export function TransactionsTable({
   });
 
   // Sort
-  function compareFn(a: Transaction, b: Transaction): number {
+  function compareFn(a: SerializedTransaction, b: SerializedTransaction): number {
     const dir = sortDirection === "asc" ? 1 : -1;
 
     if (sortColumn === "date") {

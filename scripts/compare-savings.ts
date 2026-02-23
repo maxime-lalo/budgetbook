@@ -2,12 +2,14 @@ import { readFileSync } from 'fs';
 
 const json = JSON.parse(readFileSync('/Users/maximelalo/Downloads/comptes-export-2026-02-16.json', 'utf-8'));
 
+interface Tx { categoryId: string; year: number; month: number; label: string; amount: string; status: string; }
+
 const ecoTx = json.data.transactions
-  .filter((t: any) => t.categoryId === 'cmleb3stu0013v5v482ldxpzp')
-  .sort((a: any, b: any) => a.year - b.year || a.month - b.month || a.label.localeCompare(b.label, 'fr'));
+  .filter((t: Tx) => t.categoryId === 'cmleb3stu0013v5v482ldxpzp')
+  .sort((a: Tx, b: Tx) => a.year - b.year || a.month - b.month || a.label.localeCompare(b.label, 'fr'));
 
 // Grouper par année
-const byYear: Record<number, any[]> = {};
+const byYear: Record<number, Tx[]> = {};
 for (const t of ecoTx) {
   if (!(t.year in byYear)) byYear[t.year] = [];
   byYear[t.year].push(t);
@@ -28,8 +30,8 @@ for (const year of Object.keys(byYear).sort()) {
 }
 
 const grandTotal = ecoTx
-  .filter((t: any) => t.status !== 'CANCELLED')
-  .reduce((s: number, t: any) => s + parseFloat(t.amount), 0);
+  .filter((t: Tx) => t.status !== 'CANCELLED')
+  .reduce((s: number, t: Tx) => s + parseFloat(t.amount), 0);
 console.log('Grand total (hors CANCELLED):', grandTotal.toFixed(2));
 
 // Totaux Excel attendus par année (net des 4 colonnes combinées)

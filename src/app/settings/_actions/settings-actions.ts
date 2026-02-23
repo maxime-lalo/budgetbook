@@ -6,8 +6,11 @@ import { createId } from "@paralleldrive/cuid2";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { comptesExportSchema } from "@/lib/validators";
-import { toNumber, toISOString } from "@/lib/db/helpers";
+import { toISOString } from "@/lib/db/helpers";
 import { backfillAllMonthlyBalances } from "@/lib/monthly-balance";
+import { logger } from "@/lib/logger";
+import { hashToken } from "@/lib/api-auth";
+import { safeAction } from "@/lib/safe-action";
 
 // Helper: convertit une date ISO string en Date (PG) ou la laisse en string (SQLite)
 const toTimestamp = (isoString: string): Date | string =>
@@ -24,26 +27,32 @@ export async function getApiToken() {
   if (!token) return null;
 
   return {
-    token: token.token,
+    tokenPrefix: token.tokenPrefix || token.token.slice(0, 8),
     createdAt: toISOString(token.createdAt)!,
   };
 }
 
 export async function regenerateApiToken() {
-  await db.delete(apiTokens);
+  return safeAction(async () => {
+    await db.delete(apiTokens);
 
-  const id = createId();
-  const token = randomUUID();
-  await db.insert(apiTokens).values({ id, token });
+    const id = createId();
+    const plainToken = randomUUID();
+    const hashedToken = hashToken(plainToken);
+    const tokenPrefix = plainToken.slice(0, 8);
 
-  const created = await db.query.apiTokens.findFirst({
-    where: eq(apiTokens.id, id),
-  });
+    await db.insert(apiTokens).values({ id, token: hashedToken, tokenPrefix });
 
-  return {
-    token,
-    createdAt: toISOString(created!.createdAt)!,
-  };
+    const created = await db.query.apiTokens.findFirst({
+      where: eq(apiTokens.id, id),
+    });
+
+    return {
+      token: plainToken,
+      tokenPrefix,
+      createdAt: toISOString(created!.createdAt)!,
+    };
+  }, "Erreur lors de la régénération du token");
 }
 
 export async function getAppPreferences() {
@@ -66,33 +75,39 @@ export async function getAppPreferences() {
 }
 
 export async function updateAmexEnabled(enabled: boolean) {
-  const existing = await db.query.appPreferences.findFirst({
-    where: eq(appPreferences.id, "singleton"),
-  });
+  return safeAction(async () => {
+    const existing = await db.query.appPreferences.findFirst({
+      where: eq(appPreferences.id, "singleton"),
+    });
 
-  if (existing) {
-    await db.update(appPreferences).set({ amexEnabled: enabled }).where(eq(appPreferences.id, "singleton"));
-  } else {
-    await db.insert(appPreferences).values({ id: "singleton", amexEnabled: enabled });
-  }
+    if (existing) {
+      await db.update(appPreferences).set({ amexEnabled: enabled }).where(eq(appPreferences.id, "singleton"));
+    } else {
+      await db.insert(appPreferences).values({ id: "singleton", amexEnabled: enabled });
+    }
 
-  revalidatePath("/transactions");
-  revalidatePath("/settings");
+    revalidatePath("/transactions");
+    revalidatePath("/settings");
+    return { success: true };
+  }, "Erreur lors de la mise à jour de la préférence AMEX");
 }
 
 export async function updateSeparateRecurring(enabled: boolean) {
-  const existing = await db.query.appPreferences.findFirst({
-    where: eq(appPreferences.id, "singleton"),
-  });
+  return safeAction(async () => {
+    const existing = await db.query.appPreferences.findFirst({
+      where: eq(appPreferences.id, "singleton"),
+    });
 
-  if (existing) {
-    await db.update(appPreferences).set({ separateRecurring: enabled }).where(eq(appPreferences.id, "singleton"));
-  } else {
-    await db.insert(appPreferences).values({ id: "singleton", separateRecurring: enabled });
-  }
+    if (existing) {
+      await db.update(appPreferences).set({ separateRecurring: enabled }).where(eq(appPreferences.id, "singleton"));
+    } else {
+      await db.insert(appPreferences).values({ id: "singleton", separateRecurring: enabled });
+    }
 
-  revalidatePath("/transactions");
-  revalidatePath("/settings");
+    revalidatePath("/transactions");
+    revalidatePath("/settings");
+    return { success: true };
+  }, "Erreur lors de la mise à jour de la préférence récurrentes");
 }
 
 export async function exportAllData(): Promise<string> {
@@ -160,7 +175,7 @@ export async function clearAllData(): Promise<{ success: true } | { error: strin
     revalidatePath("/");
     return { success: true };
   } catch (e) {
-    console.error("Erreur lors de la suppression des données:", e);
+    logger.error("Erreur lors de la suppression des données", { error: e instanceof Error ? e.message : String(e) });
     return { error: "Erreur lors de la suppression des données" };
   }
 }
@@ -255,6 +270,7 @@ export async function importAllData(
         subCategoryId: transaction.subCategoryId,
         bucketId: transaction.bucketId,
         isAmex: transaction.isAmex,
+        recurring: transaction.recurring ?? false,
         createdAt: toTimestamp(transaction.createdAt) as Date,
         updatedAt: toTimestamp(transaction.updatedAt) as Date,
       });
@@ -285,6 +301,7 @@ export async function importAllData(
       await db.insert(apiTokens).values({
         id: token.id,
         token: token.token,
+        tokenPrefix: token.tokenPrefix || token.token.slice(0, 8),
         name: token.name,
         createdAt: toTimestamp(token.createdAt) as Date,
       });
@@ -313,7 +330,7 @@ export async function importAllData(
     revalidatePath("/");
     return { success: true, counts };
   } catch (e) {
-    console.error("Erreur lors de l'import des données:", e);
+    logger.error("Erreur lors de l'import des données", { error: e instanceof Error ? e.message : String(e) });
     if (e instanceof SyntaxError) {
       return { error: "Le fichier n'est pas un JSON valide" };
     }
@@ -332,7 +349,7 @@ export async function recalculateAllBalances(): Promise<{ success: true; count: 
     revalidatePath("/");
     return { success: true, count: recalculated.length };
   } catch (e) {
-    console.error("Erreur lors du recalcul des soldes:", e);
+    logger.error("Erreur lors du recalcul des soldes", { error: e instanceof Error ? e.message : String(e) });
     return { error: "Erreur lors du recalcul des soldes mensuels" };
   }
 }

@@ -1,3 +1,5 @@
+import { env } from "@/lib/env";
+
 /** Round a number to 2 decimal places (avoids floating-point comparison issues on monetary values) */
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -36,7 +38,7 @@ export function toISOString(value: Date | string | null | undefined): string | n
  * The return type is `Date` to satisfy PgDb typing, but at runtime it may be a string.
  */
 export function toDbTimestamp(value: Date | string): Date {
-  const provider = process.env.DB_PROVIDER ?? "postgresql";
+  const provider = env.DB_PROVIDER;
   if (provider === "sqlite") {
     const s = value instanceof Date ? value.toISOString() : value;
     return s as unknown as Date;
@@ -49,7 +51,7 @@ export function toDbTimestamp(value: Date | string): Date {
  * PG date columns expect Date objects; SQLite text columns expect "YYYY-MM-DD" strings.
  */
 export function toDbDate(value: Date | string): Date {
-  const provider = process.env.DB_PROVIDER ?? "postgresql";
+  const provider = env.DB_PROVIDER;
   if (provider === "sqlite") {
     const d = value instanceof Date ? value : new Date(value);
     const s = d.toISOString().split("T")[0];

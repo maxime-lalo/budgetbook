@@ -4,14 +4,15 @@ import postgres from "postgres";
 import Database from "better-sqlite3";
 import * as pgSchema from "./schema/pg";
 import * as sqliteSchema from "./schema/sqlite";
+import { env } from "@/lib/env";
 
-export const provider = process.env.DB_PROVIDER ?? "postgresql";
+export const provider = env.DB_PROVIDER;
 
 type PgDb = ReturnType<typeof drizzlePg<typeof pgSchema>>;
 
 function createDb(): PgDb {
   if (provider === "sqlite") {
-    const dbPath = (process.env.DATABASE_URL ?? "file:./dev.db").replace("file:", "");
+    const dbPath = (env.DATABASE_URL ?? "file:./dev.db").replace("file:", "");
     const sqlite = new Database(dbPath);
     sqlite.pragma("journal_mode = WAL");
     sqlite.pragma("foreign_keys = ON");
@@ -19,7 +20,7 @@ function createDb(): PgDb {
     return drizzleSqlite(sqlite, { schema: sqliteSchema }) as unknown as PgDb;
   }
 
-  const connectionString = process.env.DATABASE_URL ?? "postgresql://comptes:comptes@localhost:5432/comptes";
+  const connectionString = env.DATABASE_URL ?? "postgresql://comptes:comptes@localhost:5432/comptes";
   const client = postgres(connectionString);
   return drizzlePg(client, { schema: pgSchema });
 }

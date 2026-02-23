@@ -41,7 +41,7 @@ export function BucketFormDialog({
       ? await updateBucket(bucket!.id, formData)
       : await createBucket(formData);
 
-    if (result.error) {
+    if ("error" in result) {
       toast.error("Erreur de validation");
       return;
     }

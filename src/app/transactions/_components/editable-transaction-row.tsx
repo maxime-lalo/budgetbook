@@ -29,44 +29,7 @@ import {
 } from "../_actions/transaction-actions";
 import { toast } from "sonner";
 import { format } from "date-fns";
-
-type Transaction = {
-  id: string;
-  label: string;
-  amount: number;
-  date: string | null;
-  month: number;
-  year: number;
-  status: string;
-  note: string | null;
-  accountId: string;
-  categoryId: string | null;
-  subCategoryId: string | null;
-  bucketId: string | null;
-  isAmex: boolean;
-  recurring: boolean;
-  destinationAccountId: string | null;
-  account: { name: string; color: string | null } | null;
-  destinationAccount: { name: string; color: string | null } | null;
-  category: { name: string; color: string | null } | null;
-  subCategory: { name: string } | null;
-  bucket: { name: string } | null;
-};
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-  buckets: { id: string; name: string }[];
-  linkedCards: { id: string; name: string }[];
-};
-
-type Category = {
-  id: string;
-  name: string;
-  color: string | null;
-  subCategories: { id: string; name: string }[];
-};
+import { type SerializedTransaction, type FormAccount, type FormCategory } from "@/lib/types";
 
 export function EditableTransactionRow({
   transaction,
@@ -74,9 +37,9 @@ export function EditableTransactionRow({
   categories,
   amexEnabled = true,
 }: {
-  transaction: Transaction;
-  accounts: Account[];
-  categories: Category[];
+  transaction: SerializedTransaction;
+  accounts: FormAccount[];
+  categories: FormCategory[];
   amexEnabled?: boolean;
 }) {
   const [label, setLabel] = useState(transaction.label);
@@ -120,7 +83,7 @@ export function EditableTransactionRow({
       rollback?: () => void
     ) => {
       const result = await updateTransactionField(transaction.id, fields);
-      if (!result.success) {
+      if ("error" in result) {
         toast.error("Erreur lors de la mise à jour");
         rollback?.();
       }
@@ -259,7 +222,7 @@ export function EditableTransactionRow({
       return;
     }
     const result = await cancelTransaction(transaction.id, cancelNote);
-    if (result.error) {
+    if ("error" in result) {
       toast.error(result.error as string);
       return;
     }
@@ -331,7 +294,7 @@ export function EditableTransactionRow({
     }
 
     const result = await updateTransactionField(transaction.id, fields);
-    if (!result.success) {
+    if ("error" in result) {
       toast.error("Erreur lors de la mise à jour");
       return;
     }
@@ -632,7 +595,7 @@ export function EditableTransactionRow({
                 setEditAccountId(v);
                 const newDest = v === editDestinationAccountId ? "" : editDestinationAccountId;
                 if (v === editDestinationAccountId) setEditDestinationAccountId("");
-                const isSav = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+                const isSav = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
                 const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
                 const srcAcct = accounts.find((a) => a.id === v);
                 const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
@@ -655,7 +618,7 @@ export function EditableTransactionRow({
               <Select value={editDestinationAccountId || "__none__"} onValueChange={(v) => {
                 const newDest = v === "__none__" ? "" : v;
                 setEditDestinationAccountId(newDest);
-                const isSav = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+                const isSav = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
                 const destAcct = newDest ? accounts.find((a) => a.id === newDest) : undefined;
                 const srcAcct = accounts.find((a) => a.id === editAccountId);
                 const ba = isSav(destAcct) ? destAcct : isSav(srcAcct) ? srcAcct : undefined;
@@ -675,7 +638,7 @@ export function EditableTransactionRow({
               </Select>
             </div>
             {(() => {
-              const isSavings = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+              const isSavings = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
               const destAcct = editDestinationAccountId ? accounts.find((a) => a.id === editDestinationAccountId) : undefined;
               const srcAcct = accounts.find((a) => a.id === editAccountId);
               const bucketAcct = isSavings(destAcct) ? destAcct : isSavings(srcAcct) ? srcAcct : undefined;

@@ -32,7 +32,7 @@ export function CategoryFormDialog({ category }: { category?: Category }) {
       ? await updateCategory(category!.id, formData)
       : await createCategory(formData);
 
-    if (result.error) {
+    if ("error" in result) {
       toast.error("Erreur de validation");
       return;
     }

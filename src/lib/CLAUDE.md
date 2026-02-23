@@ -30,8 +30,10 @@ Schémas Zod 4 centralisés pour toutes les entités. Conventions :
 | `bucketSchema` | `goal` = preprocess `""` → `null`, puis `number.nonnegative().nullable()` |
 | `categorySchema` | Basique (nom, couleur, icône, ordre) |
 | `subCategorySchema` | `categoryId` requis |
-| `transactionSchema` | `amount != 0`, `categoryId` requis, `date` optionnel (null si récurrent), `month`/`year` séparés, `isAmex` boolean, refine note si CANCELLED |
+| `transactionSchema` | `amount != 0`, `categoryId` nullable/optionnel, `date` optionnel (null si récurrent), `month`/`year` séparés, `isAmex` boolean, refine note si CANCELLED |
 | `budgetSchema` | `month` 1-12, `year` 2000-2100 |
+| `partialTransactionFieldSchema` | Validation partielle pour `updateTransactionField` (tous champs optionnels) |
+| `comptesExportSchema` | Validation du format d'export/import complet |
 
 Types exportés : `AccountInput`, `BucketInput`, `CategoryInput`, `SubCategoryInput`, `TransactionInput`, `BudgetInput`.
 
@@ -69,6 +71,8 @@ Authentification des API routes REST par Bearer token.
 
 Utilisé par toutes les routes `/api/*`. Le token est stocké dans la table `api_tokens` et géré depuis `/settings`.
 
+Les tokens sont hashés en SHA-256 avant comparaison avec la BDD. La fonction `hashToken(plain)` est aussi exportée pour le hashing lors de la création.
+
 ### utils.ts
 Fonction `cn()` : merge de classes Tailwind via `clsx` + `twMerge` (standard Shadcn/UI).
 
@@ -89,6 +93,80 @@ Hook React pour la navigation mensuelle par URL searchParams avec **persistance 
 - Persiste le mois sélectionné dans localStorage à chaque navigation
 
 **Utilisé par** : `MonthNavigator` (transactions et budgets).
+
+### safe-action.ts
+Wrapper générique pour les server actions. Catch les erreurs inattendues et les log.
+
+| Fonction | Description |
+|----------|-------------|
+| `safeAction<T>(fn, errorMessage?)` | Exécute `fn()`, retourne le résultat ou `{ error: string }` en cas d'exception |
+
+### types.ts
+Types TypeScript partagés, remplaçant les types locaux définis dans 9+ composants.
+
+| Export | Description |
+|--------|-------------|
+| `TRANSACTION_STATUSES` | `["PENDING", "COMPLETED", "CANCELLED", "PRÉVUE"] as const` |
+| `TransactionStatus` | Union type des statuts |
+| `SerializedTransaction` | Shape complète retournée par getTransactions |
+| `SerializedTransfer` | Shape pour les virements (avec account.type) |
+| `FormAccount` | Shape pour les formulaires (id, name, type, buckets, linkedCards) |
+| `FormCategory` | Shape pour les formulaires (id, name, subCategories) |
+
+### transaction-helpers.ts
+CRUD partagé pour transactions et transferts, évitant ~150 lignes de duplication.
+
+| Fonction | Description |
+|----------|-------------|
+| `insertTransaction(data, overrides?, errorMessage?)` | Validation Zod + insert + recompute + revalidate |
+| `updateTransactionById(id, data, overrides?, errorMessage?)` | Validation + update + gère changement de mois |
+| `deleteTransactionById(id, errorMessage?)` | Fetch year/month + delete + recompute + revalidate |
+
+`TransactionOverrides` : `{ forceNegativeAmount?, forceIsAmex?, forceRecurring? }` -- utilisé par les transferts.
+
+### env.ts
+Validation des variables d'environnement via Zod. Exporte un objet `env` typé.
+
+| Variable | Validation |
+|----------|------------|
+| `DB_PROVIDER` | `"postgresql"` ou `"sqlite"`, défaut `"postgresql"` |
+| `DATABASE_URL` | string optionnel |
+| `NODE_ENV` | `"development"`, `"production"`, `"test"`, défaut `"development"` |
+
+### logger.ts
+Logger structuré pour les server actions et l'API.
+
+| Fonction | Description |
+|----------|-------------|
+| `logger.error(message, meta?)` | Log d'erreur avec metadata optionnelle |
+| `logger.warn(message, meta?)` | Log d'avertissement |
+| `logger.info(message, meta?)` | Log d'information |
+
+### revalidate.ts
+Helper de revalidation centralisé.
+
+| Fonction | Description |
+|----------|-------------|
+| `revalidateTransactionPages()` | Appelle `revalidatePath` sur `/transactions`, `/transfers` et `/savings` |
+
+### api-rate-limit.ts
+Rate limiting en mémoire pour les API routes.
+
+| Fonction | Description |
+|----------|-------------|
+| `checkRateLimit(ip)` | Retourne `{ allowed: boolean, remaining: number }` |
+
+Configuration : 60 requêtes/minute par IP, max 10 000 entrées en mémoire avec éviction LRU.
+
+### __tests__/
+Tests unitaires Vitest (4 fichiers, 43 tests).
+
+| Fichier | Tests |
+|---------|-------|
+| `helpers.test.ts` | toNumber, round2, toDate, toISOString (17 tests) |
+| `formatters.test.ts` | formatCurrency, parseMonthParam, toMonthParam (11 tests) |
+| `validators.test.ts` | transactionSchema, refines (11 tests) |
+| `api-rate-limit.test.ts` | checkRateLimit (4 tests) |
 
 
 <claude-mem-context>

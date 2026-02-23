@@ -4,9 +4,10 @@ import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { createId } from "@paralleldrive/cuid2";
 import { validateApiToken, unauthorizedResponse } from "@/lib/api-auth";
+import { TRANSACTION_STATUSES } from "@/lib/types";
 import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
 import { revalidatePath } from "next/cache";
-import { toNumber, toDbDate } from "@/lib/db/helpers";
+import { toDbDate } from "@/lib/db/helpers";
 
 const apiTransactionSchema = z.object({
   label: z.string().min(1, "Le libellé est requis"),
@@ -15,7 +16,7 @@ const apiTransactionSchema = z.object({
   subCategoryId: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
   date: z.string().nullable().optional(),
-  status: z.enum(["PENDING", "COMPLETED", "CANCELLED"]).optional(),
+  status: z.enum(TRANSACTION_STATUSES).optional(),
   isAmex: z.boolean().optional(),
 });
 

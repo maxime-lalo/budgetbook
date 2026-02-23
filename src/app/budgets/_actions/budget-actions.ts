@@ -1,11 +1,12 @@
 "use server";
 
-import { db, categories, transactions, budgets } from "@/lib/db";
-import { eq, and, inArray, lt, sql } from "drizzle-orm";
+import { db, transactions, budgets } from "@/lib/db";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { revalidatePath } from "next/cache";
 import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
 import { toNumber, round2 } from "@/lib/db/helpers";
+import { safeAction } from "@/lib/safe-action";
 
 export async function getBudgetsWithSpent(year: number, month: number) {
   const allCategories = await db.query.categories.findMany({
@@ -58,89 +59,95 @@ export async function getBudgetsWithSpent(year: number, month: number) {
 }
 
 export async function upsertBudget(categoryId: string, year: number, month: number, amount: number) {
-  const existing = await db.query.budgets.findFirst({
-    where: and(eq(budgets.categoryId, categoryId), eq(budgets.year, year), eq(budgets.month, month)),
-  });
-
-  if (existing) {
-    await db.update(budgets).set({ amount: amount.toString() }).where(eq(budgets.id, existing.id));
-  } else {
-    await db.insert(budgets).values({
-      id: createId(),
-      categoryId,
-      year,
-      month,
-      amount: amount.toString(),
+  return safeAction(async () => {
+    const existing = await db.query.budgets.findFirst({
+      where: and(eq(budgets.categoryId, categoryId), eq(budgets.year, year), eq(budgets.month, month)),
     });
-  }
 
-  await recomputeMonthlyBalance(year, month);
-  revalidatePath("/budgets");
-  return { success: true };
+    if (existing) {
+      await db.update(budgets).set({ amount: amount.toString() }).where(eq(budgets.id, existing.id));
+    } else {
+      await db.insert(budgets).values({
+        id: createId(),
+        categoryId,
+        year,
+        month,
+        amount: amount.toString(),
+      });
+    }
+
+    await recomputeMonthlyBalance(year, month);
+    revalidatePath("/budgets");
+    return { success: true };
+  }, "Erreur lors de la mise à jour du budget");
 }
 
 export async function copyBudgetsFromPreviousMonth(year: number, month: number) {
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
+  return safeAction(async () => {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
 
-  const previousBudgets = await db.query.budgets.findMany({
-    where: and(eq(budgets.year, prevYear), eq(budgets.month, prevMonth)),
-  });
-
-  if (previousBudgets.length === 0) {
-    return { error: "Aucun budget trouvé pour le mois précédent" };
-  }
-
-  for (const budget of previousBudgets) {
-    const existing = await db.query.budgets.findFirst({
-      where: and(eq(budgets.categoryId, budget.categoryId), eq(budgets.year, year), eq(budgets.month, month)),
+    const previousBudgets = await db.query.budgets.findMany({
+      where: and(eq(budgets.year, prevYear), eq(budgets.month, prevMonth)),
     });
 
-    if (existing) {
-      await db.update(budgets).set({ amount: budget.amount }).where(eq(budgets.id, existing.id));
-    } else {
-      await db.insert(budgets).values({
-        id: createId(),
-        categoryId: budget.categoryId,
-        year,
-        month,
-        amount: budget.amount,
-      });
+    if (previousBudgets.length === 0) {
+      return { error: "Aucun budget trouvé pour le mois précédent" };
     }
-  }
 
-  await recomputeMonthlyBalance(year, month);
-  revalidatePath("/budgets");
-  return { success: true, count: previousBudgets.length };
+    for (const budget of previousBudgets) {
+      const existing = await db.query.budgets.findFirst({
+        where: and(eq(budgets.categoryId, budget.categoryId), eq(budgets.year, year), eq(budgets.month, month)),
+      });
+
+      if (existing) {
+        await db.update(budgets).set({ amount: budget.amount }).where(eq(budgets.id, existing.id));
+      } else {
+        await db.insert(budgets).values({
+          id: createId(),
+          categoryId: budget.categoryId,
+          year,
+          month,
+          amount: budget.amount,
+        });
+      }
+    }
+
+    await recomputeMonthlyBalance(year, month);
+    revalidatePath("/budgets");
+    return { success: true, count: previousBudgets.length };
+  }, "Erreur lors de la copie des budgets");
 }
 
 export async function calibrateBudgets(year: number, month: number) {
-  const budgetData: { id: string; spent: number; budgeted: number }[] = await getBudgetsWithSpent(year, month);
-  const overBudget = budgetData.filter((b) => b.spent > b.budgeted && b.spent > 0);
+  return safeAction(async () => {
+    const budgetData: { id: string; spent: number; budgeted: number }[] = await getBudgetsWithSpent(year, month);
+    const overBudget = budgetData.filter((b) => b.spent > b.budgeted && b.spent > 0);
 
-  if (overBudget.length === 0) {
-    return { error: "Aucun dépassement de budget à calibrer" };
-  }
-
-  for (const b of overBudget) {
-    const existing = await db.query.budgets.findFirst({
-      where: and(eq(budgets.categoryId, b.id), eq(budgets.year, year), eq(budgets.month, month)),
-    });
-
-    if (existing) {
-      await db.update(budgets).set({ amount: b.spent.toString() }).where(eq(budgets.id, existing.id));
-    } else {
-      await db.insert(budgets).values({
-        id: createId(),
-        categoryId: b.id,
-        year,
-        month,
-        amount: b.spent.toString(),
-      });
+    if (overBudget.length === 0) {
+      return { error: "Aucun dépassement de budget à calibrer" };
     }
-  }
 
-  await recomputeMonthlyBalance(year, month);
-  revalidatePath("/budgets");
-  return { success: true, count: overBudget.length };
+    for (const b of overBudget) {
+      const existing = await db.query.budgets.findFirst({
+        where: and(eq(budgets.categoryId, b.id), eq(budgets.year, year), eq(budgets.month, month)),
+      });
+
+      if (existing) {
+        await db.update(budgets).set({ amount: b.spent.toString() }).where(eq(budgets.id, existing.id));
+      } else {
+        await db.insert(budgets).values({
+          id: createId(),
+          categoryId: b.id,
+          year,
+          month,
+          amount: b.spent.toString(),
+        });
+      }
+    }
+
+    await recomputeMonthlyBalance(year, month);
+    revalidatePath("/budgets");
+    return { success: true, count: overBudget.length };
+  }, "Erreur lors de la calibration des budgets");
 }

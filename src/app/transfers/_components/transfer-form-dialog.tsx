@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,37 +23,7 @@ import { toast } from "sonner";
 import { ArrowUpDown, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { ACCOUNT_TYPE_LABELS } from "@/lib/formatters";
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-  color: string | null;
-  buckets: { id: string; name: string }[];
-};
-
-type Category = {
-  id: string;
-  name: string;
-  color: string | null;
-  subCategories: { id: string; name: string }[];
-};
-
-type Transfer = {
-  id: string;
-  label: string;
-  amount: number;
-  date: string | null;
-  month: number;
-  year: number;
-  status: string;
-  note: string | null;
-  accountId: string;
-  categoryId: string | null;
-  subCategoryId: string | null;
-  bucketId: string | null;
-  destinationAccountId: string | null;
-};
+import { type FormAccount, type FormCategory, type SerializedTransfer } from "@/lib/types";
 
 export function TransferFormDialog({
   accounts,
@@ -64,11 +34,11 @@ export function TransferFormDialog({
   open: controlledOpen,
   onOpenChange,
 }: {
-  accounts: Account[];
-  categories: Category[];
+  accounts: FormAccount[];
+  categories: FormCategory[];
   year: number;
   month: number;
-  transfer?: Transfer;
+  transfer?: SerializedTransfer;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -82,20 +52,20 @@ export function TransferFormDialog({
   const [accountId, setAccountId] = useState(transfer?.accountId ?? accounts[0]?.id ?? "");
   const [destinationAccountId, setDestinationAccountId] = useState(transfer?.destinationAccountId ?? accounts[1]?.id ?? "");
   const [categoryId, setCategoryId] = useState(defaultCategoryId);
-  const [status, setStatus] = useState(transfer?.status ?? "PENDING");
+  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE">((transfer?.status as "PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE") ?? "PENDING");
   const [dateValue, setDateValue] = useState(transfer?.date ? transfer.date.slice(0, 10) : format(new Date(), "yyyy-MM-dd"));
   const [bucketId, setBucketId] = useState(transfer?.bucketId ?? "");
 
-  useEffect(() => {
-    if (open && transfer) {
+  const handleOpenChange = useCallback((value: boolean) => {
+    if (value && transfer) {
       setAccountId(transfer.accountId);
       setDestinationAccountId(transfer.destinationAccountId ?? accounts[1]?.id ?? "");
       setCategoryId(transfer.categoryId ?? "");
-      setStatus(transfer.status);
+      setStatus(transfer.status as typeof status);
       setDateValue(transfer.date ? transfer.date.slice(0, 10) : format(new Date(), "yyyy-MM-dd"));
       setBucketId(transfer.bucketId ?? "");
     }
-    if (open && !transfer) {
+    if (value && !transfer) {
       setAccountId(accounts[0]?.id ?? "");
       setDestinationAccountId(accounts[1]?.id ?? "");
       setCategoryId(findTransferCategory(categories) ?? "");
@@ -103,31 +73,34 @@ export function TransferFormDialog({
       setDateValue(format(new Date(), "yyyy-MM-dd"));
       setBucketId("");
     }
-  }, [open, transfer, accounts, categories]);
+    setOpen(value);
+  }, [transfer, accounts, categories, setOpen]);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const destinationAccount = accounts.find((a) => a.id === destinationAccountId);
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
-  const isSavingsType = (a?: Account) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+  const isSavingsType = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
   const showBucket = isSavingsType(destinationAccount) || isSavingsType(selectedAccount);
   const bucketAccount = isSavingsType(destinationAccount) ? destinationAccount! : isSavingsType(selectedAccount) ? selectedAccount! : null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data: Record<string, unknown> = {
-      label: formData.get("label"),
+    const data = {
+      label: formData.get("label") as string,
       amount: Number(formData.get("amount")),
-      date: dateValue || null,
+      date: dateValue ? new Date(dateValue) : null,
       month,
       year,
       status,
-      note: formData.get("note") || null,
+      note: (formData.get("note") as string) || null,
       accountId,
       categoryId,
-      subCategoryId: formData.get("subCategoryId") || null,
+      subCategoryId: (formData.get("subCategoryId") as string) || null,
       bucketId: bucketId || null,
+      isAmex: false,
+      recurring: false,
       destinationAccountId,
     };
 
@@ -148,20 +121,20 @@ export function TransferFormDialog({
     <>
       {!isEdit && (
         <>
-          <Button className="hidden sm:inline-flex" onClick={() => setOpen(true)}>
+          <Button className="hidden sm:inline-flex" onClick={() => handleOpenChange(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Nouveau virement
           </Button>
           <Button
             className="sm:hidden fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg p-0"
-            onClick={() => setOpen(true)}
+            onClick={() => handleOpenChange(true)}
           >
             <Plus className="h-6 w-6" />
           </Button>
         </>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEdit ? "Modifier le virement" : "Nouveau virement"}</DialogTitle>
@@ -354,7 +327,7 @@ export function TransferFormDialog({
 
             <div className="space-y-2">
               <Label>Statut</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -388,7 +361,7 @@ export function TransferFormDialog({
   );
 }
 
-function findTransferCategory(categories: Category[]): string | undefined {
+function findTransferCategory(categories: FormCategory[]): string | undefined {
   const keywords = ["virement", "épargne", "epargne", "transfert"];
   for (const cat of categories) {
     const lower = cat.name.toLowerCase();

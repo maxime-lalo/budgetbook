@@ -38,7 +38,7 @@ export function SubCategoryFormDialog({
       ? await updateSubCategory(subCategory!.id, formData)
       : await createSubCategory(formData);
 
-    if (result.error) {
+    if ("error" in result) {
       toast.error("Erreur de validation");
       return;
     }

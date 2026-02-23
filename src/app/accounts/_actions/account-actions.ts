@@ -6,6 +6,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { accountSchema, bucketSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 import { toNumber } from "@/lib/db/helpers";
+import { safeAction } from "@/lib/safe-action";
 
 export async function getAccounts() {
   const result = await db.query.accounts.findMany({
@@ -71,13 +72,15 @@ export async function createAccount(formData: FormData) {
   const parsed = accountSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await db.insert(accounts).values({
-    id: createId(),
-    ...parsed.data,
-    linkedAccountId: parsed.data.linkedAccountId || null,
-  });
-  revalidatePath("/accounts");
-  return { success: true };
+  return safeAction(async () => {
+    await db.insert(accounts).values({
+      id: createId(),
+      ...parsed.data,
+      linkedAccountId: parsed.data.linkedAccountId || null,
+    });
+    revalidatePath("/accounts");
+    return { success: true };
+  }, "Erreur lors de la création du compte");
 }
 
 export async function updateAccount(id: string, formData: FormData) {
@@ -86,18 +89,22 @@ export async function updateAccount(id: string, formData: FormData) {
   const parsed = accountSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await db.update(accounts).set({
-    ...parsed.data,
-    linkedAccountId: parsed.data.linkedAccountId || null,
-  }).where(eq(accounts.id, id));
-  revalidatePath("/accounts");
-  return { success: true };
+  return safeAction(async () => {
+    await db.update(accounts).set({
+      ...parsed.data,
+      linkedAccountId: parsed.data.linkedAccountId || null,
+    }).where(eq(accounts.id, id));
+    revalidatePath("/accounts");
+    return { success: true };
+  }, "Erreur lors de la mise à jour du compte");
 }
 
 export async function deleteAccount(id: string) {
-  await db.delete(accounts).where(eq(accounts.id, id));
-  revalidatePath("/accounts");
-  return { success: true };
+  return safeAction(async () => {
+    await db.delete(accounts).where(eq(accounts.id, id));
+    revalidatePath("/accounts");
+    return { success: true };
+  }, "Erreur lors de la suppression du compte");
 }
 
 export async function createBucket(formData: FormData) {
@@ -105,14 +112,16 @@ export async function createBucket(formData: FormData) {
   const parsed = bucketSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await db.insert(buckets).values({
-    id: createId(),
-    ...parsed.data,
-    goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
-    baseAmount: parsed.data.baseAmount.toString(),
-  });
-  revalidatePath("/accounts");
-  return { success: true };
+  return safeAction(async () => {
+    await db.insert(buckets).values({
+      id: createId(),
+      ...parsed.data,
+      goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
+      baseAmount: parsed.data.baseAmount.toString(),
+    });
+    revalidatePath("/accounts");
+    return { success: true };
+  }, "Erreur lors de la création du bucket");
 }
 
 export async function updateBucket(id: string, formData: FormData) {
@@ -120,19 +129,23 @@ export async function updateBucket(id: string, formData: FormData) {
   const parsed = bucketSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
-  await db.update(buckets).set({
-    ...parsed.data,
-    goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
-    baseAmount: parsed.data.baseAmount.toString(),
-  }).where(eq(buckets.id, id));
-  revalidatePath("/accounts");
-  return { success: true };
+  return safeAction(async () => {
+    await db.update(buckets).set({
+      ...parsed.data,
+      goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
+      baseAmount: parsed.data.baseAmount.toString(),
+    }).where(eq(buckets.id, id));
+    revalidatePath("/accounts");
+    return { success: true };
+  }, "Erreur lors de la mise à jour du bucket");
 }
 
 export async function deleteBucket(id: string) {
-  await db.delete(buckets).where(eq(buckets.id, id));
-  revalidatePath("/accounts");
-  return { success: true };
+  return safeAction(async () => {
+    await db.delete(buckets).where(eq(buckets.id, id));
+    revalidatePath("/accounts");
+    return { success: true };
+  }, "Erreur lors de la suppression du bucket");
 }
 
 export async function getBucketBalance(bucketId: string): Promise<number> {

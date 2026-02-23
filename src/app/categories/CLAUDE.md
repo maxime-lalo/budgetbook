@@ -29,7 +29,7 @@ Champs :
 
 ### Suppression
 - Supprimer une catégorie supprime aussi toutes ses sous-catégories (cascade)
-- **Impossible de supprimer une catégorie utilisée par des transactions** (`onDelete: Restrict`) — `categoryId` est requis (non nullable) sur les transactions
+- **Impossible de supprimer une catégorie utilisée par des transactions** (`onDelete: Restrict` sur la FK) — `categoryId` est nullable en base mais requis par la validation Zod côté UI
 - Confirmation via `confirm()` browser
 
 ## Server Actions (_actions/category-actions.ts)

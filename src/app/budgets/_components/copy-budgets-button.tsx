@@ -22,7 +22,7 @@ export function CopyBudgetsButton({ year, month }: { year: number; month: number
   async function handleConfirm() {
     const result = await copyBudgetsFromPreviousMonth(year, month);
     setOpen(false);
-    if (result.error) {
+    if ("error" in result) {
       toast.error(result.error);
       return;
     }

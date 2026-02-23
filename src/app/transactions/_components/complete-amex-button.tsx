@@ -30,6 +30,11 @@ export function CompleteAmexButton({
   async function handleConfirm() {
     setLoading(true);
     const result = await completeAmexTransactions(year, month);
+    if ("error" in result) {
+      toast.error(result.error as string);
+      setLoading(false);
+      return;
+    }
     toast.success(`${result.count} transaction(s) AMEX passée(s) en réalisé`);
     window.location.reload();
   }

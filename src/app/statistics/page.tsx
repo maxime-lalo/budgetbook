@@ -50,7 +50,7 @@ export default async function StatisticsPage({
         </div>
         <Suspense fallback={<Skeleton className="h-10 w-[300px]" />}>
           <StatisticsFilters
-            accounts={accounts}
+            accounts={accounts.map((a) => ({ id: a.id, name: a.name, type: a.type, color: a.color, buckets: [] }))}
             currentYear={year}
             currentAccountId={accountId}
           />

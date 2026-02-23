@@ -1,3 +1,60 @@
+# Schema Drizzle ORM (dual PostgreSQL / SQLite)
+
+Deux fichiers de schéma (`pg.ts` et `sqlite.ts`) avec les mêmes tables et colonnes, adaptés au dialecte SQL.
+
+## Architecture
+
+- **Tables** : définies avec `pgTable` / `sqliteTable` selon le provider
+- **Relations** : définies inline dans chaque fichier via `relations()` de drizzle-orm (pas de fichier partagé -- nécessaire pour l'inférence de types Drizzle)
+- **FK constraints** : définies via `foreignKey()` au niveau table (pas `.references()` sur les colonnes -- bug Drizzle #4308 qui casse l'inférence de types des `one()` relations)
+- **Index** : composites pour les requêtes fréquentes (year+month+status, accountId+status, etc.)
+
+## Tables
+
+| Table | Description | PK |
+|-------|-------------|-----|
+| `accounts` | Comptes bancaires (CHECKING, CREDIT_CARD, SAVINGS, INVESTMENT) | text id |
+| `buckets` | Sous-comptes d'épargne (goal, baseAmount) | text id |
+| `categories` | Catégories de dépenses (name unique, color) | text id |
+| `subCategories` | Sous-catégories (lié à category) | text id |
+| `transactions` | Transactions financières (montant, date, statut, etc.) | text id |
+| `budgets` | Budgets mensuels par catégorie | text id |
+| `monthlyBalances` | Surplus mensuel matérialisé (forecast, committed, surplus) | text id |
+| `apiTokens` | Tokens API hashés (token SHA-256, tokenPrefix 8 chars) | text id |
+| `appPreferences` | Préférences app (amexEnabled, separateRecurring) -- singleton | text id |
+
+## FK Constraints (via foreignKey() table-level)
+
+| Source | Target | onDelete |
+|--------|--------|----------|
+| accounts.linkedAccountId | accounts.id | SET NULL |
+| buckets.accountId | accounts.id | CASCADE |
+| subCategories.categoryId | categories.id | CASCADE |
+| transactions.accountId | accounts.id | RESTRICT |
+| transactions.destinationAccountId | accounts.id | SET NULL |
+| transactions.categoryId | categories.id | RESTRICT |
+| transactions.subCategoryId | subCategories.id | SET NULL |
+| transactions.bucketId | buckets.id | SET NULL |
+| budgets.categoryId | categories.id | CASCADE |
+
+## Différences PG vs SQLite
+
+| Aspect | PostgreSQL | SQLite |
+|--------|-----------|--------|
+| Montants | `numeric(12,2)` (string) | `real` (number) |
+| Dates | `date({ mode: "date" })` (Date) | `text` (string ISO) |
+| Timestamps | `timestamp({ mode: "date" })` | `text` (string ISO) |
+| Booleans | `boolean` | `integer({ mode: "boolean" })` |
+| Enums | `pgEnum` | `text({ enum: [...] })` |
+
+## Index composites
+
+- `transactions_year_month_status_idx` -- requêtes mensuelles filtrées par statut
+- `transactions_accountId_status_idx` -- soldes par compte
+- `budgets_categoryId_year_month_key` -- unicité budget par catégorie/mois (unique)
+- `monthly_balances_year_month_key` -- unicité solde par mois (unique)
+
+
 <claude-mem-context>
 # Recent Activity
 

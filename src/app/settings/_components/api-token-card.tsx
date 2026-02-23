@@ -20,11 +20,12 @@ import { toast } from "sonner";
 import { regenerateApiToken } from "@/app/settings/_actions/settings-actions";
 
 interface ApiTokenCardProps {
-  initialToken: { token: string; createdAt: string } | null;
+  initialToken: { tokenPrefix: string; createdAt: string } | null;
 }
 
 export function ApiTokenCard({ initialToken }: ApiTokenCardProps) {
   const [tokenData, setTokenData] = useState(initialToken);
+  const [plainToken, setPlainToken] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -32,9 +33,10 @@ export function ApiTokenCard({ initialToken }: ApiTokenCardProps) {
     setLoading(true);
     try {
       const result = await regenerateApiToken();
-      setTokenData(result);
+      setTokenData({ tokenPrefix: result.tokenPrefix, createdAt: result.createdAt });
+      setPlainToken(result.token);
       setVisible(true);
-      toast.success("Token généré avec succès");
+      toast.success("Token généré. Copiez-le maintenant, il ne sera plus visible.");
     } catch {
       toast.error("Erreur lors de la génération du token");
     } finally {
@@ -43,10 +45,16 @@ export function ApiTokenCard({ initialToken }: ApiTokenCardProps) {
   }
 
   async function handleCopy() {
-    if (!tokenData) return;
-    await navigator.clipboard.writeText(tokenData.token);
+    if (!plainToken) return;
+    await navigator.clipboard.writeText(plainToken);
     toast.success("Token copié dans le presse-papiers");
   }
+
+  const displayValue = plainToken && visible
+    ? plainToken
+    : tokenData
+      ? `${tokenData.tokenPrefix}••••••••••••••••••••••••••••`
+      : "";
 
   const createdDate = tokenData
     ? new Date(tokenData.createdAt).toLocaleDateString("fr-FR", {
@@ -76,20 +84,24 @@ export function ApiTokenCard({ initialToken }: ApiTokenCardProps) {
             <div className="flex items-center gap-2">
               <Input
                 readOnly
-                value={visible ? tokenData.token : "••••••••••••••••••••••••••••••••••••"}
+                value={displayValue}
                 className="font-mono text-sm"
               />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setVisible(!visible)}
-                title={visible ? "Masquer" : "Afficher"}
-              >
-                {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-              <Button variant="outline" size="icon" onClick={handleCopy} title="Copier">
-                <Copy className="h-4 w-4" />
-              </Button>
+              {plainToken && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setVisible(!visible)}
+                    title={visible ? "Masquer" : "Afficher"}
+                  >
+                    {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={handleCopy} title="Copier">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
 
             <p className="text-sm text-muted-foreground">

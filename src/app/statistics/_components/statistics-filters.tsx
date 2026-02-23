@@ -8,18 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type Account = {
-  id: string;
-  name: string;
-};
+import { type FormAccount } from "@/lib/types";
 
 export function StatisticsFilters({
   accounts,
   currentYear,
   currentAccountId,
 }: {
-  accounts: Account[];
+  accounts: FormAccount[];
   currentYear: number;
   currentAccountId?: string;
 }) {

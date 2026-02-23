@@ -22,7 +22,7 @@ export function CopyRecurringButton({ year, month }: { year: number; month: numb
   async function handleConfirm() {
     const result = await copyRecurringTransactions(year, month);
     setOpen(false);
-    if (result.error) {
+    if ("error" in result) {
       toast.error(result.error);
       return;
     }

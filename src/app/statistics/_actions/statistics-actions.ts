@@ -16,34 +16,35 @@ async function getAccountFilter(accountId?: string) {
 export async function getYearlyOverview(year: number, accountId?: string) {
   const accountIds = await getAccountFilter(accountId);
 
-  const data = [];
-  for (let month = 1; month <= 12; month++) {
-    const baseWhere = and(
-      eq(transactions.year, year),
-      eq(transactions.month, month),
-      inArray(transactions.status, ["COMPLETED", "PENDING"]),
-      isNull(transactions.destinationAccountId),
-      inArray(transactions.accountId, accountIds)
-    );
+  const result = await db
+    .select({
+      month: transactions.month,
+      income: sql<string>`coalesce(sum(CASE WHEN ${transactions.amount} > 0 THEN ${transactions.amount} ELSE 0 END), 0)`,
+      expenses: sql<string>`coalesce(sum(CASE WHEN ${transactions.amount} < 0 THEN ${transactions.amount} ELSE 0 END), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.year, year),
+        inArray(transactions.status, ["COMPLETED", "PENDING"]),
+        isNull(transactions.destinationAccountId),
+        inArray(transactions.accountId, accountIds)
+      )
+    )
+    .groupBy(transactions.month);
 
-    const [income, expenses] = await Promise.all([
-      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(and(baseWhere, sql`${transactions.amount} > 0`)),
-      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(and(baseWhere, sql`${transactions.amount} < 0`)),
-    ]);
+  const resultMap = new Map(result.map((r) => [r.month, r]));
 
-    data.push({
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = i + 1;
+    const row = resultMap.get(month);
+    return {
       month,
-      monthLabel: new Date(year, month - 1).toLocaleDateString("fr-FR", { month: "short" }),
-      income: toNumber(income[0].total),
-      expenses: Math.abs(toNumber(expenses[0].total)),
-    });
-  }
-
-  return data;
+      monthLabel: new Date(year, i).toLocaleDateString("fr-FR", { month: "short" }),
+      income: row ? toNumber(row.income) : 0,
+      expenses: row ? Math.abs(toNumber(row.expenses)) : 0,
+    };
+  });
 }
 
 export async function getCategoryBreakdown(year: number, month: number, accountId?: string) {
@@ -242,6 +243,7 @@ export async function getSavingsOverview(year: number) {
 
   const statusFilter = ["COMPLETED", "PENDING"] as const;
 
+  // Previous years totals + base amounts (4 queries)
   const [prevStandalone, prevIncoming, prevOutgoing, totalBaseAmount] = await Promise.all([
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
@@ -263,34 +265,39 @@ export async function getSavingsOverview(year: number) {
     toNumber(prevOutgoing[0].total) +
     toNumber(totalBaseAmount[0].total);
 
-  const data = [];
+  // Current year monthly data (3 GROUP BY queries instead of 36 individual queries)
+  const [standaloneByMonth, incomingByMonth, outgoingByMonth] = await Promise.all([
+    db.select({ month: transactions.month, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
+      .groupBy(transactions.month),
+    db.select({ month: transactions.month, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
+      .groupBy(transactions.month),
+    db.select({ month: transactions.month, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(and(inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
+      .groupBy(transactions.month),
+  ]);
 
-  for (let month = 1; month <= 12; month++) {
-    const [standalone, incoming, outgoing] = await Promise.all([
-      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(and(inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year), eq(transactions.month, month))),
-      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(and(inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), eq(transactions.year, year), eq(transactions.month, month))),
-      db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-        .from(transactions)
-        .where(and(inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year), eq(transactions.month, month))),
-    ]);
+  const standaloneMap = new Map(standaloneByMonth.map((r) => [r.month, toNumber(r.total)]));
+  const incomingMap = new Map(incomingByMonth.map((r) => [r.month, toNumber(r.total)]));
+  const outgoingMap = new Map(outgoingByMonth.map((r) => [r.month, toNumber(r.total)]));
 
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = i + 1;
     cumulative +=
-      -(toNumber(standalone[0].total)) +
-      -(toNumber(incoming[0].total)) +
-      toNumber(outgoing[0].total);
+      -(standaloneMap.get(month) ?? 0) +
+      -(incomingMap.get(month) ?? 0) +
+      (outgoingMap.get(month) ?? 0);
 
-    data.push({
+    return {
       month,
-      monthLabel: new Date(year, month - 1).toLocaleDateString("fr-FR", { month: "short" }),
+      monthLabel: new Date(year, i).toLocaleDateString("fr-FR", { month: "short" }),
       total: cumulative,
-    });
-  }
-
-  return data;
+    };
+  });
 }
 
 export async function getAccounts() {

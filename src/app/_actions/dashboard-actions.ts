@@ -76,42 +76,53 @@ async function getAccountsWithBalance() {
     orderBy: [asc(accounts.sortOrder)],
   });
 
-  const balances = await Promise.all(
-    allAccounts.map(async (a) => {
-      const isSavingsType = a.type === "SAVINGS" || a.type === "INVESTMENT";
+  if (allAccounts.length === 0) return [];
 
-      const [outgoing, incoming, baseAmounts] = await Promise.all([
-        db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-          .from(transactions)
-          .where(and(eq(transactions.accountId, a.id), eq(transactions.status, "COMPLETED"))),
-        db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
-          .from(transactions)
-          .where(and(eq(transactions.destinationAccountId, a.id), eq(transactions.status, "COMPLETED"))),
-        isSavingsType
-          ? db.select({ total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)` })
-              .from(buckets)
-              .where(eq(buckets.accountId, a.id))
-          : Promise.resolve([{ total: "0" }]),
-      ]);
-
-      const outgoingTotal = toNumber(outgoing[0].total);
-      const incomingTotal = toNumber(incoming[0].total);
-      const baseTotal = toNumber(baseAmounts[0].total);
-      const balance = isSavingsType
-        ? round2(baseTotal + -(outgoingTotal) + -(incomingTotal))
-        : round2(outgoingTotal + -(incomingTotal));
-
-      return {
-        id: a.id,
-        name: a.name,
-        type: a.type,
-        color: a.color,
-        balance,
-      };
+  // 3 aggregate queries instead of 2-3 per account
+  const [outgoingByAccount, incomingByAccount, baseByAccount] = await Promise.all([
+    db.select({
+      accountId: transactions.accountId,
+      total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
     })
-  );
+      .from(transactions)
+      .where(eq(transactions.status, "COMPLETED"))
+      .groupBy(transactions.accountId),
+    db.select({
+      accountId: transactions.destinationAccountId,
+      total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
+    })
+      .from(transactions)
+      .where(and(eq(transactions.status, "COMPLETED"), isNotNull(transactions.destinationAccountId)))
+      .groupBy(transactions.destinationAccountId),
+    db.select({
+      accountId: buckets.accountId,
+      total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)`,
+    })
+      .from(buckets)
+      .groupBy(buckets.accountId),
+  ]);
 
-  return balances;
+  const outgoingMap = new Map(outgoingByAccount.map((r) => [r.accountId, toNumber(r.total)]));
+  const incomingMap = new Map(incomingByAccount.map((r) => [r.accountId!, toNumber(r.total)]));
+  const baseMap = new Map(baseByAccount.map((r) => [r.accountId, toNumber(r.total)]));
+
+  return allAccounts.map((a) => {
+    const isSavingsType = a.type === "SAVINGS" || a.type === "INVESTMENT";
+    const outgoingTotal = outgoingMap.get(a.id) ?? 0;
+    const incomingTotal = incomingMap.get(a.id) ?? 0;
+    const baseTotal = baseMap.get(a.id) ?? 0;
+    const balance = isSavingsType
+      ? round2(baseTotal + -(outgoingTotal) + -(incomingTotal))
+      : round2(outgoingTotal + -(incomingTotal));
+
+    return {
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      color: a.color,
+      balance,
+    };
+  });
 }
 
 async function getOverBudgetCategories(year: number, month: number) {

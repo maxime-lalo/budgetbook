@@ -1,7 +1,7 @@
 "use server";
 
 import { db, transactions, accounts, buckets } from "@/lib/db";
-import { eq, and, or, inArray, isNotNull, sql, asc } from "drizzle-orm";
+import { eq, and, or, inArray, sql, asc } from "drizzle-orm";
 import { toNumber, toISOString, round2 } from "@/lib/db/helpers";
 
 export async function getSavingsTransactions(year: number) {
@@ -70,8 +70,6 @@ export async function getSavingsTotals(year: number) {
   if (savingsIds.length === 0) {
     return { real: 0, pending: 0, planned: 0, forecast: 0 };
   }
-
-  const statusFilter = ["COMPLETED", "PENDING"] as const;
 
   const [completed, pending, incomingCompleted, incomingPending, baseAmounts] = await Promise.all([
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })

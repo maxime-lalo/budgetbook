@@ -52,7 +52,7 @@ export function AccountFormDialog({
       ? await updateAccount(account!.id, formData)
       : await createAccount(formData);
 
-    if (result.error) {
+    if ("error" in result) {
       toast.error("Erreur de validation");
       return;
     }

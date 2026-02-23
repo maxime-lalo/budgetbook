@@ -47,11 +47,11 @@ Le montant saisi est toujours positif ; la server action applique `-Math.abs()` 
 |----------|-------------|
 | `getTransfers(year, month)` | Virements du mois (filtre `isNotNull(destinationAccountId)`), avec relations account/destinationAccount/category/subCategory/bucket |
 | `getTransferFormData()` | Comptes (avec buckets, couleur, type) + catégories (avec sous-catégories), triées par `localeCompare('fr')` |
-| `createTransfer(data)` | Création avec `-Math.abs(amount)`, `isAmex: false`, validation via `transactionSchema` |
-| `updateTransfer(id, data)` | Mise à jour, gère changement de mois |
-| `deleteTransfer(id)` | Suppression |
+| `createTransfer(data)` | Délègue à `insertTransaction()` avec `TRANSFER_OVERRIDES` (`forceNegativeAmount: true, forceIsAmex: false`) |
+| `updateTransfer(id, data)` | Délègue à `updateTransactionById()` avec `TRANSFER_OVERRIDES`, gère changement de mois |
+| `deleteTransfer(id)` | Délègue à `deleteTransactionById()` |
 
-Toutes les mutations appellent `recomputeMonthlyBalance` et `revalidatePath` sur `/transfers`, `/transactions` et `/savings`.
+Toutes les mutations sont wrappées avec `safeAction()`. La revalidation et le recompute sont gérés par `transaction-helpers.ts` via `revalidateTransactionPages()` et `recomputeMonthlyBalance()`.
 
 ## Point technique : Radix Select et swap
 

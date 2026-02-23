@@ -3,10 +3,12 @@
 import { db, transactions, accounts, buckets } from "@/lib/db";
 import { eq, and, inArray, sql, asc, desc, gte, lte, or } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { transactionSchema } from "@/lib/validators";
-import { revalidatePath } from "next/cache";
+import { partialTransactionFieldSchema, type TransactionInput } from "@/lib/validators";
+import { revalidateTransactionPages } from "@/lib/revalidate";
 import { recomputeMonthlyBalance, getCarryOver } from "@/lib/monthly-balance";
 import { toNumber, toISOString, toDbDate, round2 } from "@/lib/db/helpers";
+import { safeAction } from "@/lib/safe-action";
+import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
 
 export async function getTransactions(year: number, month: number) {
   const result = await db.query.transactions.findMany({
@@ -94,150 +96,79 @@ export async function getTransactionTotals(year: number, month: number) {
   };
 }
 
-export async function createTransaction(data: Record<string, unknown>) {
-  const parsed = transactionSchema.safeParse(data);
-  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
-
-  await db.insert(transactions).values({
-    id: createId(),
-    label: parsed.data.label,
-    amount: parsed.data.amount.toString(),
-    date: parsed.data.date ? toDbDate(parsed.data.date) : null,
-    month: parsed.data.month,
-    year: parsed.data.year,
-    status: parsed.data.status,
-    note: parsed.data.note || null,
-    accountId: parsed.data.accountId,
-    categoryId: parsed.data.categoryId,
-    subCategoryId: parsed.data.subCategoryId || null,
-    bucketId: parsed.data.bucketId || null,
-    isAmex: parsed.data.isAmex,
-    recurring: parsed.data.recurring,
-    destinationAccountId: parsed.data.destinationAccountId || null,
-  });
-  await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true };
+export async function createTransaction(data: TransactionInput) {
+  return insertTransaction(data, undefined, "Erreur lors de la création de la transaction");
 }
 
-export async function updateTransaction(id: string, data: Record<string, unknown>) {
-  const parsed = transactionSchema.safeParse(data);
-  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
-
-  const oldTransaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
-
-  await db.update(transactions).set({
-    label: parsed.data.label,
-    amount: parsed.data.amount.toString(),
-    date: parsed.data.date ? toDbDate(parsed.data.date) : null,
-    month: parsed.data.month,
-    year: parsed.data.year,
-    status: parsed.data.status,
-    note: parsed.data.note || null,
-    accountId: parsed.data.accountId,
-    categoryId: parsed.data.categoryId,
-    subCategoryId: parsed.data.subCategoryId || null,
-    bucketId: parsed.data.bucketId || null,
-    isAmex: parsed.data.isAmex,
-    recurring: parsed.data.recurring,
-    destinationAccountId: parsed.data.destinationAccountId || null,
-  }).where(eq(transactions.id, id));
-
-  await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
-  if (oldTransaction && (oldTransaction.year !== parsed.data.year || oldTransaction.month !== parsed.data.month)) {
-    await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
-  }
-
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true };
+export async function updateTransaction(id: string, data: TransactionInput) {
+  return updateTransactionById(id, data, undefined, "Erreur lors de la mise à jour de la transaction");
 }
 
 export async function deleteTransaction(id: string) {
-  const transaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
-
-  await db.delete(transactions).where(eq(transactions.id, id));
-
-  if (transaction) {
-    await recomputeMonthlyBalance(transaction.year, transaction.month);
-  }
-
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true };
+  return deleteTransactionById(id, "Erreur lors de la suppression de la transaction");
 }
 
 export async function markTransactionCompleted(id: string) {
-  const transaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
+  return safeAction(async () => {
+    const transaction = await db.query.transactions.findFirst({
+      where: eq(transactions.id, id),
+      columns: { year: true, month: true },
+    });
 
-  await db.update(transactions).set({ status: "COMPLETED" }).where(eq(transactions.id, id));
+    await db.update(transactions).set({ status: "COMPLETED" }).where(eq(transactions.id, id));
 
-  if (transaction) {
-    await recomputeMonthlyBalance(transaction.year, transaction.month);
-  }
+    if (transaction) {
+      await recomputeMonthlyBalance(transaction.year, transaction.month);
+    }
 
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true };
+    revalidateTransactionPages();
+    return { success: true };
+  }, "Erreur lors de la validation de la transaction");
 }
 
 export async function completeAmexTransactions(year: number, month: number) {
-  const amexWhere = and(
-    eq(transactions.year, year),
-    eq(transactions.month, month),
-    eq(transactions.status, "PENDING"),
-    eq(transactions.isAmex, true)
-  );
+  return safeAction(async () => {
+    const amexWhere = and(
+      eq(transactions.year, year),
+      eq(transactions.month, month),
+      eq(transactions.status, "PENDING"),
+      eq(transactions.isAmex, true)
+    );
 
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(transactions)
-    .where(amexWhere);
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(transactions)
+      .where(amexWhere);
 
-  await db
-    .update(transactions)
-    .set({ status: "COMPLETED" })
-    .where(amexWhere);
+    await db
+      .update(transactions)
+      .set({ status: "COMPLETED" })
+      .where(amexWhere);
 
-  await recomputeMonthlyBalance(year, month);
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { count: Number(count) };
+    await recomputeMonthlyBalance(year, month);
+    revalidateTransactionPages();
+    return { count: Number(count) };
+  }, "Erreur lors de la validation des transactions AMEX");
 }
 
 export async function cancelTransaction(id: string, note: string) {
   if (!note.trim()) return { error: "Une note est requise pour annuler" };
 
-  const transaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
+  return safeAction(async () => {
+    const transaction = await db.query.transactions.findFirst({
+      where: eq(transactions.id, id),
+      columns: { year: true, month: true },
+    });
 
-  await db.update(transactions).set({ status: "CANCELLED", note }).where(eq(transactions.id, id));
+    await db.update(transactions).set({ status: "CANCELLED", note }).where(eq(transactions.id, id));
 
-  if (transaction) {
-    await recomputeMonthlyBalance(transaction.year, transaction.month);
-  }
+    if (transaction) {
+      await recomputeMonthlyBalance(transaction.year, transaction.month);
+    }
 
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true };
+    revalidateTransactionPages();
+    return { success: true };
+  }, "Erreur lors de l'annulation de la transaction");
 }
 
 export async function updateTransactionField(
@@ -259,101 +190,104 @@ export async function updateTransactionField(
     destinationAccountId: string | null;
   }>
 ) {
-  const oldTransaction = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
+  const validated = partialTransactionFieldSchema.safeParse(fields);
+  if (!validated.success) return { error: validated.error.flatten().fieldErrors };
 
-  const data: Record<string, unknown> = {};
+  return safeAction(async () => {
+    const oldTransaction = await db.query.transactions.findFirst({
+      where: eq(transactions.id, id),
+      columns: { year: true, month: true },
+    });
 
-  if (fields.label !== undefined) data.label = fields.label;
-  if (fields.amount !== undefined) data.amount = fields.amount.toString();
-  if (fields.date !== undefined) {
-    if (fields.date === null) {
-      data.date = null;
-    } else {
-      data.date = toDbDate(new Date(fields.date));
+    const data: Record<string, unknown> = {};
+
+    if (fields.label !== undefined) data.label = fields.label;
+    if (fields.amount !== undefined) data.amount = fields.amount.toString();
+    if (fields.date !== undefined) {
+      if (fields.date === null) {
+        data.date = null;
+      } else {
+        data.date = toDbDate(new Date(fields.date));
+      }
     }
-  }
-  if (fields.month !== undefined) data.month = fields.month;
-  if (fields.year !== undefined) data.year = fields.year;
-  if (fields.accountId !== undefined) data.accountId = fields.accountId;
-  if (fields.categoryId !== undefined) data.categoryId = fields.categoryId;
-  if (fields.subCategoryId !== undefined) data.subCategoryId = fields.subCategoryId;
-  if (fields.bucketId !== undefined) data.bucketId = fields.bucketId;
-  if (fields.status !== undefined) data.status = fields.status;
-  if (fields.note !== undefined) data.note = fields.note;
-  if (fields.isAmex !== undefined) data.isAmex = fields.isAmex;
-  if (fields.recurring !== undefined) data.recurring = fields.recurring;
-  if (fields.destinationAccountId !== undefined) data.destinationAccountId = fields.destinationAccountId;
+    if (fields.month !== undefined) data.month = fields.month;
+    if (fields.year !== undefined) data.year = fields.year;
+    if (fields.accountId !== undefined) data.accountId = fields.accountId;
+    if (fields.categoryId !== undefined) data.categoryId = fields.categoryId;
+    if (fields.subCategoryId !== undefined) data.subCategoryId = fields.subCategoryId;
+    if (fields.bucketId !== undefined) data.bucketId = fields.bucketId;
+    if (fields.status !== undefined) data.status = fields.status;
+    if (fields.note !== undefined) data.note = fields.note;
+    if (fields.isAmex !== undefined) data.isAmex = fields.isAmex;
+    if (fields.recurring !== undefined) data.recurring = fields.recurring;
+    if (fields.destinationAccountId !== undefined) data.destinationAccountId = fields.destinationAccountId;
 
-  await db.update(transactions).set(data).where(eq(transactions.id, id));
+    await db.update(transactions).set(data).where(eq(transactions.id, id));
 
-  const updated = await db.query.transactions.findFirst({
-    where: eq(transactions.id, id),
-    columns: { year: true, month: true },
-  });
+    const updated = await db.query.transactions.findFirst({
+      where: eq(transactions.id, id),
+      columns: { year: true, month: true },
+    });
 
-  if (updated) {
-    await recomputeMonthlyBalance(updated.year, updated.month);
-  }
-  if (oldTransaction && updated && (oldTransaction.year !== updated.year || oldTransaction.month !== updated.month)) {
-    await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
-  }
+    if (updated) {
+      await recomputeMonthlyBalance(updated.year, updated.month);
+    }
+    if (oldTransaction && updated && (oldTransaction.year !== updated.year || oldTransaction.month !== updated.month)) {
+      await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
+    }
 
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true };
+    revalidateTransactionPages();
+    return { success: true };
+  }, "Erreur lors de la mise à jour du champ");
 }
 
 export async function copyRecurringTransactions(year: number, month: number) {
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
+  return safeAction(async () => {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
 
-  const previousRecurring = await db.query.transactions.findMany({
-    where: and(
-      eq(transactions.year, prevYear),
-      eq(transactions.month, prevMonth),
-      eq(transactions.recurring, true)
-    ),
-  });
-
-  if (previousRecurring.length === 0) {
-    return { error: "Aucune transaction récurrente trouvée pour le mois précédent" };
-  }
-
-  // Supprimer les récurrentes existantes du mois cible
-  await db.delete(transactions).where(
-    and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.recurring, true))
-  );
-
-  // Copier avec status PENDING et sans note
-  for (const t of previousRecurring) {
-    await db.insert(transactions).values({
-      id: createId(),
-      label: t.label,
-      amount: t.amount,
-      date: null,
-      month,
-      year,
-      status: "PENDING",
-      note: null,
-      accountId: t.accountId,
-      categoryId: t.categoryId,
-      subCategoryId: t.subCategoryId,
-      bucketId: t.bucketId,
-      isAmex: t.isAmex,
-      recurring: true,
-      destinationAccountId: t.destinationAccountId,
+    const previousRecurring = await db.query.transactions.findMany({
+      where: and(
+        eq(transactions.year, prevYear),
+        eq(transactions.month, prevMonth),
+        eq(transactions.recurring, true)
+      ),
     });
-  }
 
-  await recomputeMonthlyBalance(year, month);
-  revalidatePath("/transactions");
-  revalidatePath("/transfers");
-  revalidatePath("/savings");
-  return { success: true, count: previousRecurring.length };
+    if (previousRecurring.length === 0) {
+      return { error: "Aucune transaction récurrente trouvée pour le mois précédent" };
+    }
+
+    // Supprimer les récurrentes existantes du mois cible
+    await db.delete(transactions).where(
+      and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.recurring, true))
+    );
+
+    // Copier avec status PENDING et sans note (batch insert)
+    await db.insert(transactions).values(
+      previousRecurring.map((t) => ({
+        id: createId(),
+        label: t.label,
+        amount: t.amount,
+        date: null,
+        month,
+        year,
+        status: "PENDING" as const,
+        note: null,
+        accountId: t.accountId,
+        categoryId: t.categoryId,
+        subCategoryId: t.subCategoryId,
+        bucketId: t.bucketId,
+        isAmex: t.isAmex,
+        recurring: true,
+        destinationAccountId: t.destinationAccountId,
+      }))
+    );
+
+    await recomputeMonthlyBalance(year, month);
+    revalidateTransactionPages();
+    return { success: true, count: previousRecurring.length };
+  }, "Erreur lors de la copie des transactions récurrentes");
 }
 
 export async function getPreviousMonthBudgetRemaining(year: number, month: number) {

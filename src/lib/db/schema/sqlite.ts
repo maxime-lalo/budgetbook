@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
   sqliteTable,
   text,
@@ -6,7 +5,9 @@ import {
   real,
   index,
   uniqueIndex,
+  foreignKey,
 } from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
 
 // --- Tables ---
 
@@ -20,7 +21,9 @@ export const accounts = sqliteTable("accounts", {
   linkedAccountId: text("linkedAccountId"),
   createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdate(() => new Date().toISOString()),
-});
+}, (t) => [
+  foreignKey({ columns: [t.linkedAccountId], foreignColumns: [t.id] }).onDelete("set null"),
+]);
 
 export const buckets = sqliteTable(
   "buckets",
@@ -35,7 +38,10 @@ export const buckets = sqliteTable(
     createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdate(() => new Date().toISOString()),
   },
-  (t) => [index("buckets_accountId_idx").on(t.accountId)]
+  (t) => [
+    index("buckets_accountId_idx").on(t.accountId),
+    foreignKey({ columns: [t.accountId], foreignColumns: [accounts.id] }).onDelete("cascade"),
+  ]
 );
 
 export const categories = sqliteTable("categories", {
@@ -58,7 +64,10 @@ export const subCategories = sqliteTable(
     createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdate(() => new Date().toISOString()),
   },
-  (t) => [uniqueIndex("sub_categories_categoryId_name_key").on(t.categoryId, t.name)]
+  (t) => [
+    uniqueIndex("sub_categories_categoryId_name_key").on(t.categoryId, t.name),
+    foreignKey({ columns: [t.categoryId], foreignColumns: [categories.id] }).onDelete("cascade"),
+  ]
 );
 
 export const transactions = sqliteTable(
@@ -87,9 +96,15 @@ export const transactions = sqliteTable(
     index("transactions_categoryId_idx").on(t.categoryId),
     index("transactions_date_idx").on(t.date),
     index("transactions_status_idx").on(t.status),
-    index("transactions_year_month_idx").on(t.year, t.month),
     index("transactions_isAmex_status_idx").on(t.isAmex, t.status),
     index("transactions_destinationAccountId_idx").on(t.destinationAccountId),
+    index("transactions_year_month_status_idx").on(t.year, t.month, t.status),
+    index("transactions_accountId_status_idx").on(t.accountId, t.status),
+    foreignKey({ columns: [t.accountId], foreignColumns: [accounts.id] }).onDelete("restrict"),
+    foreignKey({ columns: [t.destinationAccountId], foreignColumns: [accounts.id] }).onDelete("set null"),
+    foreignKey({ columns: [t.categoryId], foreignColumns: [categories.id] }).onDelete("restrict"),
+    foreignKey({ columns: [t.subCategoryId], foreignColumns: [subCategories.id] }).onDelete("set null"),
+    foreignKey({ columns: [t.bucketId], foreignColumns: [buckets.id] }).onDelete("set null"),
   ]
 );
 
@@ -107,6 +122,7 @@ export const budgets = sqliteTable(
   (t) => [
     uniqueIndex("budgets_categoryId_year_month_key").on(t.categoryId, t.year, t.month),
     index("budgets_year_month_idx").on(t.year, t.month),
+    foreignKey({ columns: [t.categoryId], foreignColumns: [categories.id] }).onDelete("cascade"),
   ]
 );
 
@@ -124,13 +140,13 @@ export const monthlyBalances = sqliteTable(
   },
   (t) => [
     uniqueIndex("monthly_balances_year_month_key").on(t.year, t.month),
-    index("monthly_balances_year_month_idx").on(t.year, t.month),
   ]
 );
 
 export const apiTokens = sqliteTable("api_tokens", {
   id: text("id").primaryKey(),
   token: text("token").notNull().unique(),
+  tokenPrefix: text("tokenPrefix").notNull().default(""),
   name: text("name").notNull().default("default"),
   createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
 });
@@ -142,7 +158,7 @@ export const appPreferences = sqliteTable("app_preferences", {
   updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdate(() => new Date().toISOString()),
 });
 
-// --- Relations (identical to PG) ---
+// --- Relations ---
 
 export const accountsRelations = relations(accounts, ({ one, many }) => ({
   linkedAccount: one(accounts, {

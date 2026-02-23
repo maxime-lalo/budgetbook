@@ -15,21 +15,7 @@ import { Check, CreditCard } from "lucide-react";
 import { STATUS_LABELS } from "@/lib/formatters";
 import { createTransaction } from "../_actions/transaction-actions";
 import { toast } from "sonner";
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-  buckets: { id: string; name: string }[];
-  linkedCards: { id: string; name: string }[];
-};
-
-type Category = {
-  id: string;
-  name: string;
-  color: string | null;
-  subCategories: { id: string; name: string }[];
-};
+import { type FormAccount, type FormCategory } from "@/lib/types";
 
 export function NewTransactionRow({
   accounts,
@@ -40,8 +26,8 @@ export function NewTransactionRow({
   defaultAccountId,
   defaultCategoryId,
 }: {
-  accounts: Account[];
-  categories: Category[];
+  accounts: FormAccount[];
+  categories: FormCategory[];
   year: number;
   month: number;
   amexEnabled?: boolean;
@@ -53,7 +39,7 @@ export function NewTransactionRow({
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? "");
   const [subCategoryId, setSubCategoryId] = useState("");
-  const [status, setStatus] = useState("PENDING");
+  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE">("PENDING");
   const [accountId, setAccountId] = useState(defaultAccountId ?? accounts[0]?.id ?? "");
   const [isAmex, setIsAmex] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,7 +72,7 @@ export function NewTransactionRow({
     const result = await createTransaction({
       label: label.trim(),
       amount: Number(amount),
-      date: date || new Date().toISOString().split("T")[0],
+      date: date ? new Date(date) : new Date(),
       month,
       year,
       status,
@@ -96,12 +82,13 @@ export function NewTransactionRow({
       subCategoryId: subCategoryId || null,
       bucketId: null,
       isAmex,
+      recurring: false,
       destinationAccountId: null,
     });
 
     setIsSubmitting(false);
 
-    if (result.error) {
+    if ("error" in result) {
       toast.error("Erreur lors de la création");
       return;
     }
@@ -213,7 +200,7 @@ export function NewTransactionRow({
 
       {/* Statut */}
       <TableCell className="p-1 whitespace-nowrap">
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
           <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
             <SelectValue />
           </SelectTrigger>

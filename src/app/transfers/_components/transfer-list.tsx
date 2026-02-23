@@ -5,47 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
-import { formatCurrency, formatDate, ACCOUNT_TYPE_LABELS } from "@/lib/formatters";
+import { formatCurrency, formatDate } from "@/lib/formatters";
 import { deleteTransfer } from "../_actions/transfer-actions";
 import { TransferFormDialog } from "./transfer-form-dialog";
 import { toast } from "sonner";
-
-type Transfer = {
-  id: string;
-  label: string;
-  amount: number;
-  date: string | null;
-  month: number;
-  year: number;
-  status: string;
-  note: string | null;
-  accountId: string;
-  categoryId: string | null;
-  subCategoryId: string | null;
-  bucketId: string | null;
-  isAmex: boolean;
-  destinationAccountId: string | null;
-  account: { name: string; color: string | null; type: string } | null;
-  destinationAccount: { name: string; color: string | null; type: string } | null;
-  category: { name: string; color: string | null } | null;
-  subCategory: { name: string } | null;
-  bucket: { name: string } | null;
-};
-
-type Account = {
-  id: string;
-  name: string;
-  type: string;
-  color: string | null;
-  buckets: { id: string; name: string }[];
-};
-
-type Category = {
-  id: string;
-  name: string;
-  color: string | null;
-  subCategories: { id: string; name: string }[];
-};
+import { type FormAccount, type FormCategory, type SerializedTransfer } from "@/lib/types";
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className: string }> = {
   PENDING: { label: "En attente", variant: "outline", className: "border-orange-400 text-orange-600" },
@@ -60,13 +24,13 @@ export function TransferList({
   year,
   month,
 }: {
-  transfers: Transfer[];
-  accounts: Account[];
-  categories: Category[];
+  transfers: SerializedTransfer[];
+  accounts: FormAccount[];
+  categories: FormCategory[];
   year: number;
   month: number;
 }) {
-  const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<SerializedTransfer | null>(null);
 
   async function handleDelete(id: string) {
     const result = await deleteTransfer(id);

@@ -7,7 +7,7 @@
 - **Compte** : sélecteur avec option "Tous les comptes"
 - Les filtres mettent à jour les searchParams URL (`?year=2026&account=xxx`)
 
-### 5 graphiques et tableaux
+### 6 graphiques et tableaux
 
 #### 1. Vue annuelle (YearlyOverviewChart)
 - **Type** : AreaChart
@@ -40,23 +40,30 @@
 - Ligne de totaux en pied de tableau
 - Occupe 2 colonnes (`lg:col-span-2`)
 
+#### 6. Heatmap par catégorie (CategoryHeatmap)
+- **Type** : Grille de chaleur (tableau HTML avec couleurs)
+- **Données** : dépenses par catégorie et par mois sur l'année
+- Intensité de couleur proportionnelle au montant dépensé
+
 ## Server Actions (_actions/statistics-actions.ts)
 
 | Fonction | Description |
 |----------|-------------|
 | `getYearlyOverview(year, accountId?)` | Agrège revenus/dépenses par mois (boucle 12 mois) |
-| `getCategoryBreakdown(year, accountId?)` | `groupBy` categoryId, dépenses de l'année |
+| `getCategoryBreakdown(year, month, accountId?)` | `groupBy` categoryId, dépenses de l'année |
 | `getSubCategoryBreakdown(year, accountId?)` | `groupBy` categoryId + subCategoryId, retourne `{ items, categories }` |
 | `getCategoryYearComparison(year, month, accountId?)` | Comparaison par catégorie : mois actuel, moyenne, total annuel, N-1 |
 | `getSavingsOverview(year)` | Solde cumulé des comptes épargne/investissement par mois (signe inversé) |
+| `getCategoryMonthlyHeatmap(year, accountId?)` | Heatmap dépenses par catégorie et par mois |
 | `getAccounts()` | Liste des comptes pour le filtre |
 
 ## Points techniques
 - Les agrégations utilisent `db.select().groupBy()` et `sql` template literals (Drizzle)
 - Les montants numériques sont convertis en `number` via `toNumber()` côté serveur
 - Le filtrage par compte est optionnel (si `accountId` est fourni, ajouté au `where`)
-- Les données sont fetchées en parallèle dans `page.tsx` (6 appels concurrents)
+- Les données sont fetchées en parallèle dans `page.tsx` (7 appels concurrents)
 - Le tri des catégories utilise `localeCompare('fr')` en JavaScript pour gérer les accents français
+- Les fonctions `getYearlyOverview` et `getSavingsOverview` utilisent des requêtes `GROUP BY` agrégées (pas de boucle N+1)
 
 
 <claude-mem-context>

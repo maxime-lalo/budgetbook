@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -10,7 +9,9 @@ import {
   boolean,
   index,
   uniqueIndex,
+  foreignKey,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 // --- Enums ---
 
@@ -40,7 +41,9 @@ export const accounts = pgTable("accounts", {
   linkedAccountId: text("linkedAccountId"),
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  foreignKey({ columns: [t.linkedAccountId], foreignColumns: [t.id] }).onDelete("set null"),
+]);
 
 export const buckets = pgTable(
   "buckets",
@@ -55,7 +58,10 @@ export const buckets = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (t) => [index("buckets_accountId_idx").on(t.accountId)]
+  (t) => [
+    index("buckets_accountId_idx").on(t.accountId),
+    foreignKey({ columns: [t.accountId], foreignColumns: [accounts.id] }).onDelete("cascade"),
+  ]
 );
 
 export const categories = pgTable("categories", {
@@ -78,7 +84,10 @@ export const subCategories = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
-  (t) => [uniqueIndex("sub_categories_categoryId_name_key").on(t.categoryId, t.name)]
+  (t) => [
+    uniqueIndex("sub_categories_categoryId_name_key").on(t.categoryId, t.name),
+    foreignKey({ columns: [t.categoryId], foreignColumns: [categories.id] }).onDelete("cascade"),
+  ]
 );
 
 export const transactions = pgTable(
@@ -107,9 +116,15 @@ export const transactions = pgTable(
     index("transactions_categoryId_idx").on(t.categoryId),
     index("transactions_date_idx").on(t.date),
     index("transactions_status_idx").on(t.status),
-    index("transactions_year_month_idx").on(t.year, t.month),
     index("transactions_isAmex_status_idx").on(t.isAmex, t.status),
     index("transactions_destinationAccountId_idx").on(t.destinationAccountId),
+    index("transactions_year_month_status_idx").on(t.year, t.month, t.status),
+    index("transactions_accountId_status_idx").on(t.accountId, t.status),
+    foreignKey({ columns: [t.accountId], foreignColumns: [accounts.id] }).onDelete("restrict"),
+    foreignKey({ columns: [t.destinationAccountId], foreignColumns: [accounts.id] }).onDelete("set null"),
+    foreignKey({ columns: [t.categoryId], foreignColumns: [categories.id] }).onDelete("restrict"),
+    foreignKey({ columns: [t.subCategoryId], foreignColumns: [subCategories.id] }).onDelete("set null"),
+    foreignKey({ columns: [t.bucketId], foreignColumns: [buckets.id] }).onDelete("set null"),
   ]
 );
 
@@ -127,6 +142,7 @@ export const budgets = pgTable(
   (t) => [
     uniqueIndex("budgets_categoryId_year_month_key").on(t.categoryId, t.year, t.month),
     index("budgets_year_month_idx").on(t.year, t.month),
+    foreignKey({ columns: [t.categoryId], foreignColumns: [categories.id] }).onDelete("cascade"),
   ]
 );
 
@@ -144,13 +160,13 @@ export const monthlyBalances = pgTable(
   },
   (t) => [
     uniqueIndex("monthly_balances_year_month_key").on(t.year, t.month),
-    index("monthly_balances_year_month_idx").on(t.year, t.month),
   ]
 );
 
 export const apiTokens = pgTable("api_tokens", {
   id: text("id").primaryKey(),
   token: text("token").notNull().unique(),
+  tokenPrefix: text("tokenPrefix").notNull().default(""),
   name: text("name").notNull().default("default"),
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
