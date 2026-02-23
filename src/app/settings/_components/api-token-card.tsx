@@ -33,6 +33,10 @@ export function ApiTokenCard({ initialToken }: ApiTokenCardProps) {
     setLoading(true);
     try {
       const result = await regenerateApiToken();
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       setTokenData({ tokenPrefix: result.tokenPrefix, createdAt: result.createdAt });
       setPlainToken(result.token);
       setVisible(true);

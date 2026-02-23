@@ -26,7 +26,7 @@ export const transactionStatusEnum = pgEnum("TransactionStatus", [
   "PENDING",
   "COMPLETED",
   "CANCELLED",
-  "PRÉVUE",
+  "PLANNED",
 ]);
 
 // --- Tables ---

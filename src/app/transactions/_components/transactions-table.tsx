@@ -26,7 +26,7 @@ type SortDirection = "asc" | "desc";
 const STATUS_ORDER: Record<string, number> = {
   COMPLETED: 0,
   PENDING: 1,
-  PRÉVUE: 2,
+  PLANNED: 2,
   CANCELLED: 3,
 };
 

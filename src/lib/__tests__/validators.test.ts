@@ -35,8 +35,8 @@ describe("transactionSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("validates PRÉVUE status", () => {
-    const result = transactionSchema.safeParse({ ...validTransaction, status: "PRÉVUE" });
+  it("validates PLANNED status", () => {
+    const result = transactionSchema.safeParse({ ...validTransaction, status: "PLANNED" });
     expect(result.success).toBe(true);
   });
 

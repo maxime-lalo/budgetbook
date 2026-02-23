@@ -52,7 +52,7 @@ export function TransferFormDialog({
   const [accountId, setAccountId] = useState(transfer?.accountId ?? accounts[0]?.id ?? "");
   const [destinationAccountId, setDestinationAccountId] = useState(transfer?.destinationAccountId ?? accounts[1]?.id ?? "");
   const [categoryId, setCategoryId] = useState(defaultCategoryId);
-  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE">((transfer?.status as "PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE") ?? "PENDING");
+  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED">((transfer?.status as "PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED") ?? "PENDING");
   const [dateValue, setDateValue] = useState(transfer?.date ? transfer.date.slice(0, 10) : format(new Date(), "yyyy-MM-dd"));
   const [bucketId, setBucketId] = useState(transfer?.bucketId ?? "");
 

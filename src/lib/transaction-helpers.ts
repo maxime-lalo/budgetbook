@@ -33,7 +33,7 @@ function buildTransactionValues(parsed: {
   date: Date | null;
   month: number;
   year: number;
-  status: "PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE";
+  status: "PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED";
   note?: string | null;
   accountId: string;
   categoryId?: string | null;

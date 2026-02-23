@@ -42,7 +42,7 @@ export function TransactionFormDialog({
 
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [categoryId, setCategoryId] = useState("");
-  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE">("PENDING");
+  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED">("PENDING");
   const [isAmex, setIsAmex] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [dateValue, setDateValue] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -284,7 +284,7 @@ export function TransactionFormDialog({
                 <SelectContent>
                   <SelectItem value="PENDING">En attente</SelectItem>
                   <SelectItem value="COMPLETED">Réalisé</SelectItem>
-                  <SelectItem value="PRÉVUE">Prévu</SelectItem>
+                  <SelectItem value="PLANNED">Prévu</SelectItem>
                   <SelectItem value="CANCELLED">Annulé</SelectItem>
                 </SelectContent>
               </Select>

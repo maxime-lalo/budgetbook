@@ -1,6 +1,6 @@
 // --- Transaction Statuses ---
 
-export const TRANSACTION_STATUSES = ["PENDING", "COMPLETED", "CANCELLED", "PRÉVUE"] as const;
+export const TRANSACTION_STATUSES = ["PENDING", "COMPLETED", "CANCELLED", "PLANNED"] as const;
 export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number];
 
 // --- Serialized entities (returned by server actions) ---
@@ -12,7 +12,7 @@ export type SerializedTransaction = {
   date: string | null;
   month: number;
   year: number;
-  status: string;
+  status: TransactionStatus;
   note: string | null;
   accountId: string;
   categoryId: string | null;
@@ -35,7 +35,7 @@ export type SerializedTransfer = {
   date: string | null;
   month: number;
   year: number;
-  status: string;
+  status: TransactionStatus;
   note: string | null;
   accountId: string;
   categoryId: string | null;

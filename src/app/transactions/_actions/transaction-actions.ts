@@ -6,7 +6,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { partialTransactionFieldSchema, type TransactionInput } from "@/lib/validators";
 import { revalidateTransactionPages } from "@/lib/revalidate";
 import { recomputeMonthlyBalance, getCarryOver } from "@/lib/monthly-balance";
-import { toNumber, toISOString, toDbDate, round2 } from "@/lib/db/helpers";
+import { toNumber, toISOString, toDbDate, round2, getCheckingAccountIds } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
 import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
 
@@ -53,11 +53,7 @@ export async function getTransactions(year: number, month: number) {
 }
 
 export async function getTransactionTotals(year: number, month: number) {
-  const checkingAccounts = await db
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(eq(accounts.type, "CHECKING"));
-  const checkingIds = checkingAccounts.map((a) => a.id);
+  const checkingIds = await getCheckingAccountIds();
 
   if (checkingIds.length === 0) {
     return { real: 0, pending: 0, planned: 0, forecast: 0 };
@@ -72,7 +68,7 @@ export async function getTransactionTotals(year: number, month: number) {
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.accountId, checkingIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PRÉVUE"), inArray(transactions.accountId, checkingIds))),
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PLANNED"), inArray(transactions.accountId, checkingIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, checkingIds))),
@@ -81,7 +77,7 @@ export async function getTransactionTotals(year: number, month: number) {
       .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, checkingIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PRÉVUE"), inArray(transactions.destinationAccountId, checkingIds))),
+      .where(and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.status, "PLANNED"), inArray(transactions.destinationAccountId, checkingIds))),
   ]);
 
   const realTotal = round2(toNumber(completed[0].total) + -(toNumber(incomingCompleted[0].total)));
@@ -323,7 +319,7 @@ export async function searchTransactionsAcrossMonths(
     conditions.push(eq(transactions.accountId, filters.accountId));
   }
   if (filters.status) {
-    conditions.push(eq(transactions.status, filters.status as "PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE"));
+    conditions.push(eq(transactions.status, filters.status as "PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED"));
   }
   if (filters.amountMin !== undefined) {
     conditions.push(gte(transactions.amount, filters.amountMin.toString()));

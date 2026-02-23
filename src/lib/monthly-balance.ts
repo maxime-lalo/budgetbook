@@ -1,20 +1,16 @@
-import { db, transactions, budgets, monthlyBalances, accounts } from "@/lib/db";
+import { db, transactions, budgets, monthlyBalances } from "@/lib/db";
 import { eq, and, or, inArray, lt } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { toNumber, round2 } from "@/lib/db/helpers";
+import { toNumber, round2, getCheckingAccountIds } from "@/lib/db/helpers";
 
 export async function recomputeMonthlyBalance(year: number, month: number) {
   // 1. Forecast = même logique que getTransactionTotals (comptes CHECKING uniquement + virements entrants)
-  const checkingAccounts = await db
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(eq(accounts.type, "CHECKING"));
-  const checkingIds = checkingAccounts.map((a) => a.id);
+  const checkingIds = await getCheckingAccountIds();
 
   let totalForecast = 0;
   if (checkingIds.length > 0) {
-    const statusFilter = inArray(transactions.status, ["COMPLETED", "PENDING", "PRÉVUE"]);
+    const statusFilter = inArray(transactions.status, ["COMPLETED", "PENDING", "PLANNED"]);
     const monthFilter = and(eq(transactions.year, year), eq(transactions.month, month));
 
     const [onChecking, incomingToChecking] = await Promise.all([
@@ -41,7 +37,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
-        inArray(transactions.status, ["COMPLETED", "PENDING", "PRÉVUE"])
+        inArray(transactions.status, ["COMPLETED", "PENDING", "PLANNED"])
       )
     )
     .groupBy(transactions.categoryId);

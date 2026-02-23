@@ -45,5 +45,12 @@ export const STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente",
   COMPLETED: "Réalisé",
   CANCELLED: "Annulé",
-  PRÉVUE: "Prévu",
+  PLANNED: "Prévu",
+};
+
+export const STATUS_COLORS: Record<string, string> = {
+  PENDING: "bg-orange-500",
+  COMPLETED: "bg-green-500",
+  PLANNED: "bg-purple-500",
+  CANCELLED: "bg-red-500",
 };

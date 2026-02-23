@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Check, CreditCard } from "lucide-react";
-import { STATUS_LABELS } from "@/lib/formatters";
+import { STATUS_LABELS, STATUS_COLORS } from "@/lib/formatters";
 import { createTransaction } from "../_actions/transaction-actions";
 import { toast } from "sonner";
 import { type FormAccount, type FormCategory } from "@/lib/types";
@@ -39,7 +39,7 @@ export function NewTransactionRow({
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(defaultCategoryId ?? "");
   const [subCategoryId, setSubCategoryId] = useState("");
-  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PRÉVUE">("PENDING");
+  const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED">("PENDING");
   const [accountId, setAccountId] = useState(defaultAccountId ?? accounts[0]?.id ?? "");
   const [isAmex, setIsAmex] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -205,24 +205,14 @@ export function NewTransactionRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="PENDING">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full shrink-0 bg-orange-500" />
-                {STATUS_LABELS.PENDING}
-              </div>
-            </SelectItem>
-            <SelectItem value="COMPLETED">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full shrink-0 bg-green-500" />
-                {STATUS_LABELS.COMPLETED}
-              </div>
-            </SelectItem>
-            <SelectItem value="PRÉVUE">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full shrink-0 bg-purple-500" />
-                {STATUS_LABELS.PRÉVUE}
-              </div>
-            </SelectItem>
+            {(["PENDING", "COMPLETED", "PLANNED"] as const).map((s) => (
+              <SelectItem key={s} value={s}>
+                <div className="flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${STATUS_COLORS[s]}`} />
+                  {STATUS_LABELS[s]}
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </TableCell>

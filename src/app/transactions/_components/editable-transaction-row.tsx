@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Pencil, Trash2, CreditCard, ArrowRightLeft, RefreshCw } from "lucide-react";
-import { STATUS_LABELS } from "@/lib/formatters";
+import { STATUS_LABELS, STATUS_COLORS } from "@/lib/formatters";
 import {
   updateTransactionField,
   cancelTransaction,
@@ -29,7 +29,7 @@ import {
 } from "../_actions/transaction-actions";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { type SerializedTransaction, type FormAccount, type FormCategory } from "@/lib/types";
+import { type SerializedTransaction, type FormAccount, type FormCategory, type TransactionStatus } from "@/lib/types";
 
 export function EditableTransactionRow({
   transaction,
@@ -207,13 +207,14 @@ export function EditableTransactionRow({
   }
 
   function handleStatusChange(value: string) {
-    if (value === "CANCELLED") {
+    const newStatus = value as TransactionStatus;
+    if (newStatus === "CANCELLED") {
       setCancelDialogOpen(true);
       return;
     }
     const prev = status;
-    setStatus(value);
-    saveField({ status: value }, () => setStatus(prev));
+    setStatus(newStatus);
+    saveField({ status: newStatus }, () => setStatus(prev));
   }
 
   async function handleCancelConfirm() {
@@ -405,30 +406,14 @@ export function EditableTransactionRow({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="PENDING">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0 bg-orange-500" />
-                  {STATUS_LABELS.PENDING}
-                </div>
-              </SelectItem>
-              <SelectItem value="COMPLETED">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0 bg-green-500" />
-                  {STATUS_LABELS.COMPLETED}
-                </div>
-              </SelectItem>
-              <SelectItem value="PRÉVUE">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0 bg-purple-500" />
-                  {STATUS_LABELS.PRÉVUE}
-                </div>
-              </SelectItem>
-              <SelectItem value="CANCELLED">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full shrink-0 bg-red-500" />
-                  {STATUS_LABELS.CANCELLED}
-                </div>
-              </SelectItem>
+              {(["PENDING", "COMPLETED", "PLANNED", "CANCELLED"] as const).map((s) => (
+                <SelectItem key={s} value={s}>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${STATUS_COLORS[s]}`} />
+                    {STATUS_LABELS[s]}
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </TableCell>

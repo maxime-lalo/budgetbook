@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { eq } from "drizzle-orm";
 
 /** Round a number to 2 decimal places (avoids floating-point comparison issues on monetary values) */
 export function round2(n: number): number {
@@ -58,4 +59,11 @@ export function toDbDate(value: Date | string): Date {
     return s as unknown as Date;
   }
   return value instanceof Date ? value : new Date(value);
+}
+
+/** Get all CHECKING account IDs */
+export async function getCheckingAccountIds(): Promise<string[]> {
+  const { db, accounts } = await import("@/lib/db");
+  const result = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.type, "CHECKING"));
+  return result.map((a) => a.id);
 }
