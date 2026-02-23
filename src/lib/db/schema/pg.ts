@@ -156,6 +156,7 @@ export const apiTokens = pgTable("api_tokens", {
 export const appPreferences = pgTable("app_preferences", {
   id: text("id").primaryKey().default("singleton"),
   amexEnabled: boolean("amexEnabled").notNull().default(true),
+  separateRecurring: boolean("separateRecurring").notNull().default(true),
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

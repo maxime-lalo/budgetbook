@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getApiToken, getAppPreferences } from "@/app/settings/_actions/settings-actions";
 import { AmexToggleCard } from "@/app/settings/_components/amex-toggle-card";
+import { RecurringToggleCard } from "@/app/settings/_components/recurring-toggle-card";
 import { ApiTokenCard } from "@/app/settings/_components/api-token-card";
 import { ExportDataCard } from "@/app/settings/_components/export-data-card";
 import { ImportDataCard } from "@/app/settings/_components/import-data-card";
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Réglages</h1>
       <AmexToggleCard initialEnabled={prefs.amexEnabled} />
+      <RecurringToggleCard initialEnabled={prefs.separateRecurring} />
       <ApiTokenCard initialToken={token} />
       <RecalculateBalancesCard />
       <ExportDataCard />

@@ -127,6 +127,7 @@ export function TransactionsTable({
   amexPendingCount,
   amexMonthlyTotal,
   amexEnabled = true,
+  separateRecurring = true,
   hideCopyRecurring = false,
   flatLayout = false,
   defaultAccountId,
@@ -142,6 +143,7 @@ export function TransactionsTable({
   amexPendingCount: number;
   amexMonthlyTotal: number;
   amexEnabled?: boolean;
+  separateRecurring?: boolean;
   hideCopyRecurring?: boolean;
   flatLayout?: boolean;
   defaultAccountId?: string;
@@ -302,6 +304,16 @@ export function TransactionsTable({
       />
     ));
   } else if (flatLayout) {
+    transactionRows = filtered.map((t) => (
+      <EditableTransactionRow
+        key={t.id}
+        transaction={t}
+        accounts={accounts}
+        categories={categories}
+        amexEnabled={amexEnabled}
+      />
+    ));
+  } else if (!separateRecurring) {
     transactionRows = filtered.map((t) => (
       <EditableTransactionRow
         key={t.id}

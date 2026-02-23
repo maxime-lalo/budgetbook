@@ -76,6 +76,7 @@ export default async function TransactionsPage({
         amexPendingCount={amexPendingCount}
         amexMonthlyTotal={amexMonthlyTotal}
         amexEnabled={amexEnabled}
+        separateRecurring={prefs.separateRecurring}
       />
     </div>
   );

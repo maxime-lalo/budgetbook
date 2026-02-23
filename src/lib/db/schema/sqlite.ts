@@ -137,6 +137,7 @@ export const apiTokens = sqliteTable("api_tokens", {
 export const appPreferences = sqliteTable("app_preferences", {
   id: text("id").primaryKey().default("singleton"),
   amexEnabled: integer("amexEnabled", { mode: "boolean" }).notNull().default(true),
+  separateRecurring: integer("separateRecurring", { mode: "boolean" }).notNull().default(true),
   updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdate(() => new Date().toISOString()),
 });
 

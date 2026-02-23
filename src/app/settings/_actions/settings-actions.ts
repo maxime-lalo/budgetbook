@@ -52,11 +52,17 @@ export async function getAppPreferences() {
   });
 
   if (!prefs) {
-    await db.insert(appPreferences).values({ id: "singleton", amexEnabled: true });
-    prefs = { id: "singleton", amexEnabled: true, updatedAt: new Date().toISOString() as unknown as Date };
+    await db.insert(appPreferences).values({ id: "singleton", amexEnabled: true, separateRecurring: true });
+    prefs = { id: "singleton", amexEnabled: true, separateRecurring: true, updatedAt: new Date().toISOString() as unknown as Date };
   }
 
-  return { amexEnabled: prefs.amexEnabled };
+  // Migrer les lignes existantes sans separateRecurring
+  if (prefs.separateRecurring === null || prefs.separateRecurring === undefined) {
+    await db.update(appPreferences).set({ separateRecurring: true }).where(eq(appPreferences.id, "singleton"));
+    prefs = { ...prefs, separateRecurring: true };
+  }
+
+  return { amexEnabled: prefs.amexEnabled, separateRecurring: prefs.separateRecurring };
 }
 
 export async function updateAmexEnabled(enabled: boolean) {
@@ -68,6 +74,21 @@ export async function updateAmexEnabled(enabled: boolean) {
     await db.update(appPreferences).set({ amexEnabled: enabled }).where(eq(appPreferences.id, "singleton"));
   } else {
     await db.insert(appPreferences).values({ id: "singleton", amexEnabled: enabled });
+  }
+
+  revalidatePath("/transactions");
+  revalidatePath("/settings");
+}
+
+export async function updateSeparateRecurring(enabled: boolean) {
+  const existing = await db.query.appPreferences.findFirst({
+    where: eq(appPreferences.id, "singleton"),
+  });
+
+  if (existing) {
+    await db.update(appPreferences).set({ separateRecurring: enabled }).where(eq(appPreferences.id, "singleton"));
+  } else {
+    await db.insert(appPreferences).values({ id: "singleton", separateRecurring: enabled });
   }
 
   revalidatePath("/transactions");
@@ -115,7 +136,7 @@ export async function exportAllData(): Promise<string> {
       budgets: serialize(bdgs),
       monthlyBalances: serialize(mbs),
       apiTokens: serialize(tokens),
-      appPreferences: prefs ? { amexEnabled: prefs.amexEnabled } : null,
+      appPreferences: prefs ? { amexEnabled: prefs.amexEnabled, separateRecurring: prefs.separateRecurring } : null,
     },
   };
 
@@ -275,10 +296,11 @@ export async function importAllData(
       const existingPrefs = await db.query.appPreferences.findFirst({
         where: eq(appPreferences.id, "singleton"),
       });
+      const prefsData = { amexEnabled: data.appPreferences.amexEnabled, separateRecurring: data.appPreferences.separateRecurring ?? true };
       if (existingPrefs) {
-        await db.update(appPreferences).set({ amexEnabled: data.appPreferences.amexEnabled }).where(eq(appPreferences.id, "singleton"));
+        await db.update(appPreferences).set(prefsData).where(eq(appPreferences.id, "singleton"));
       } else {
-        await db.insert(appPreferences).values({ id: "singleton", amexEnabled: data.appPreferences.amexEnabled });
+        await db.insert(appPreferences).values({ id: "singleton", ...prefsData });
       }
     }
 

@@ -176,6 +176,7 @@ const exportApiTokenSchema = z.object({
 
 const exportAppPreferencesSchema = z.object({
   amexEnabled: z.boolean(),
+  separateRecurring: z.boolean().optional(),
 }).nullable().optional();
 
 export const comptesExportSchema = z.object({
