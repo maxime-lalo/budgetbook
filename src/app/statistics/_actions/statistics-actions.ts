@@ -65,7 +65,7 @@ export async function getCategoryBreakdown(year: number, month: number, accountI
     )
     .groupBy(transactions.categoryId);
 
-  const catIds = result.map((r) => r.categoryId);
+  const catIds = result.map((r) => r.categoryId).filter((id): id is string => id != null);
   if (catIds.length === 0) return [];
 
   const cats = await db.query.categories.findMany({
@@ -75,7 +75,7 @@ export async function getCategoryBreakdown(year: number, month: number, accountI
 
   return result
     .map((r) => {
-      const cat = catMap.get(r.categoryId);
+      const cat = r.categoryId ? catMap.get(r.categoryId) : null;
       return {
         category: cat?.name ?? "Sans catégorie",
         color: cat?.color ?? "#6b7280",
@@ -106,7 +106,7 @@ export async function getSubCategoryBreakdown(year: number, month: number, accou
     )
     .groupBy(transactions.categoryId, transactions.subCategoryId);
 
-  const categoryIds = [...new Set(result.map((r) => r.categoryId))];
+  const categoryIds = [...new Set(result.map((r) => r.categoryId).filter((id): id is string => id != null))];
   const subCategoryIds = result.map((r) => r.subCategoryId).filter((id): id is string => id !== null);
 
   if (categoryIds.length === 0) return { items: [], categories: [] };
@@ -122,10 +122,10 @@ export async function getSubCategoryBreakdown(year: number, month: number, accou
   const subMap = new Map((subs as { id: string; name: string }[]).map((s) => [s.id, s]));
 
   const items = result.map((r) => {
-    const cat = catMap.get(r.categoryId);
+    const cat = r.categoryId ? catMap.get(r.categoryId) : null;
     const sub = r.subCategoryId ? subMap.get(r.subCategoryId) : null;
     return {
-      categoryId: r.categoryId,
+      categoryId: r.categoryId ?? "__uncategorized",
       subCategory: sub?.name ?? "?",
       color: cat?.color ?? "#6b7280",
       amount: -(toNumber(r.total)),
@@ -164,7 +164,7 @@ export async function getCategoryYearComparison(year: number, month: number, acc
       ...currentMonthData.map((r) => r.categoryId),
       ...currentYearData.map((r) => r.categoryId),
       ...prevYearData.map((r) => r.categoryId),
-    ]),
+    ].filter((id): id is string => id != null)),
   ];
 
   if (allCatIds.length === 0) {
@@ -177,13 +177,13 @@ export async function getCategoryYearComparison(year: number, month: number, acc
   const catMap = new Map(cats.map((c) => [c.id, c]));
 
   const currentMonthMap = new Map(
-    currentMonthData.map((r) => [r.categoryId, -(toNumber(r.total))])
+    currentMonthData.filter((r) => r.categoryId != null).map((r) => [r.categoryId as string, -(toNumber(r.total))])
   );
   const currentYearMap = new Map(
-    currentYearData.map((r) => [r.categoryId, -(toNumber(r.total))])
+    currentYearData.filter((r) => r.categoryId != null).map((r) => [r.categoryId as string, -(toNumber(r.total))])
   );
   const prevYearMap = new Map(
-    prevYearData.map((r) => [r.categoryId, -(toNumber(r.total))])
+    prevYearData.filter((r) => r.categoryId != null).map((r) => [r.categoryId as string, -(toNumber(r.total))])
   );
 
   const currentYearAbsTotal = [...currentYearMap.values()].reduce((a, b) => a + Math.abs(b), 0);
@@ -331,7 +331,7 @@ export async function getCategoryMonthlyHeatmap(year: number, accountId?: string
       .groupBy(transactions.categoryId, transactions.subCategoryId, transactions.month),
   ]);
 
-  const catIds = [...new Set(result.map((r) => r.categoryId))];
+  const catIds = [...new Set(result.map((r) => r.categoryId).filter((id): id is string => id != null))];
   if (catIds.length === 0) return { categories: [], data: {}, subCategoryData: {} };
 
   const subCatIds = [...new Set(subResult.map((r) => r.subCategoryId).filter((id): id is string => id !== null))];
@@ -351,8 +351,9 @@ export async function getCategoryMonthlyHeatmap(year: number, accountId?: string
 
   const data: Record<string, Record<number, number>> = {};
   for (const r of result) {
-    if (!data[r.categoryId]) data[r.categoryId] = {};
-    data[r.categoryId][r.month] = Math.abs(toNumber(r.total));
+    const catId = r.categoryId ?? "__uncategorized";
+    if (!data[catId]) data[catId] = {};
+    data[catId][r.month] = Math.abs(toNumber(r.total));
   }
 
   // Build sub-category data keyed by categoryId
@@ -365,14 +366,15 @@ export async function getCategoryMonthlyHeatmap(year: number, accountId?: string
   for (const r of subResult) {
     const subId = r.subCategoryId;
     if (!subId) continue;
+    const catId = r.categoryId ?? "__uncategorized";
 
-    if (!subCategoryData[r.categoryId]) {
-      subCategoryData[r.categoryId] = { subCategories: [], data: {} };
+    if (!subCategoryData[catId]) {
+      subCategoryData[catId] = { subCategories: [], data: {} };
     }
-    if (!subCategoryData[r.categoryId].data[subId]) {
-      subCategoryData[r.categoryId].data[subId] = {};
+    if (!subCategoryData[catId].data[subId]) {
+      subCategoryData[catId].data[subId] = {};
     }
-    subCategoryData[r.categoryId].data[subId][r.month] = Math.abs(toNumber(r.total));
+    subCategoryData[catId].data[subId][r.month] = Math.abs(toNumber(r.total));
   }
 
   // Populate sub-category names and sort

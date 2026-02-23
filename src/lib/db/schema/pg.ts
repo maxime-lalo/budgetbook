@@ -93,7 +93,7 @@ export const transactions = pgTable(
     note: text("note"),
     accountId: text("accountId").notNull(),
     destinationAccountId: text("destinationAccountId"),
-    categoryId: text("categoryId").notNull(),
+    categoryId: text("categoryId"),
     subCategoryId: text("subCategoryId"),
     bucketId: text("bucketId"),
     isAmex: boolean("isAmex").notNull().default(false),

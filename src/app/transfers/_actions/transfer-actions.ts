@@ -40,11 +40,11 @@ export async function getTransfers(year: number, month: number) {
     bucketId: t.bucketId,
     isAmex: t.isAmex,
     destinationAccountId: t.destinationAccountId,
-    account: { name: t.account.name, color: t.account.color, type: t.account.type },
+    account: t.account ? { name: t.account.name, color: t.account.color, type: t.account.type } : null,
     destinationAccount: t.destinationAccount
       ? { name: t.destinationAccount.name, color: t.destinationAccount.color, type: t.destinationAccount.type }
       : null,
-    category: { name: t.category.name, color: t.category.color },
+    category: t.category ? { name: t.category.name, color: t.category.color } : null,
     subCategory: t.subCategory ? { name: t.subCategory.name } : null,
     bucket: t.bucket ? { name: t.bucket.name } : null,
   }));

@@ -1,7 +1,7 @@
 "use server";
 
-import { db, categories, subCategories } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { db, categories, subCategories, transactions, budgets } from "@/lib/db";
+import { eq, sql, inArray } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { categorySchema, subCategorySchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
@@ -16,6 +16,14 @@ export async function getCategories() {
       ...c,
       subCategories: c.subCategories.sort((a, b) => a.name.localeCompare(b.name, "fr")),
     }));
+}
+
+export async function getCategoryUsageCount(id: string) {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(transactions)
+    .where(eq(transactions.categoryId, id));
+  return result.count;
 }
 
 export async function createCategory(formData: FormData) {
@@ -42,8 +50,36 @@ export async function updateCategory(id: string, formData: FormData) {
 }
 
 export async function deleteCategory(id: string) {
+  // Récupérer les sous-catégories de cette catégorie
+  const subs = await db
+    .select({ id: subCategories.id })
+    .from(subCategories)
+    .where(eq(subCategories.categoryId, id));
+  const subIds = subs.map((s) => s.id);
+
+  // Détacher les transactions : nullifier categoryId et subCategoryId
+  await db
+    .update(transactions)
+    .set({ categoryId: null, subCategoryId: null })
+    .where(eq(transactions.categoryId, id));
+
+  if (subIds.length > 0) {
+    await db
+      .update(transactions)
+      .set({ subCategoryId: null })
+      .where(inArray(transactions.subCategoryId, subIds));
+  }
+
+  // Supprimer les budgets liés
+  await db.delete(budgets).where(eq(budgets.categoryId, id));
+
+  // Supprimer les sous-catégories puis la catégorie
+  await db.delete(subCategories).where(eq(subCategories.categoryId, id));
   await db.delete(categories).where(eq(categories.id, id));
+
   revalidatePath("/categories");
+  revalidatePath("/transactions");
+  revalidatePath("/budgets");
   return { success: true };
 }
 

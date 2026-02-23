@@ -49,7 +49,7 @@ type Transfer = {
   status: string;
   note: string | null;
   accountId: string;
-  categoryId: string;
+  categoryId: string | null;
   subCategoryId: string | null;
   bucketId: string | null;
   destinationAccountId: string | null;
@@ -90,7 +90,7 @@ export function TransferFormDialog({
     if (open && transfer) {
       setAccountId(transfer.accountId);
       setDestinationAccountId(transfer.destinationAccountId ?? accounts[1]?.id ?? "");
-      setCategoryId(transfer.categoryId);
+      setCategoryId(transfer.categoryId ?? "");
       setStatus(transfer.status);
       setDateValue(transfer.date ? transfer.date.slice(0, 10) : format(new Date(), "yyyy-MM-dd"));
       setBucketId(transfer.bucketId ?? "");

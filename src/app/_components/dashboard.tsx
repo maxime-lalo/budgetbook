@@ -14,8 +14,8 @@ type DashboardData = {
   carryOver: number;
   accounts: { id: string; name: string; type: string; color: string | null; balance: number }[];
   overBudgetCategories: { id: string; name: string; color: string | null; budgeted: number; spent: number; remaining: number }[];
-  recentTransactions: { id: string; label: string; amount: number; date: string | null; status: string; category: { name: string; color: string | null }; account: { name: string; color: string | null } }[];
-  recentTransfers: { id: string; label: string; amount: number; date: string | null; status: string; account: { name: string; color: string | null }; destinationAccount: { name: string; color: string | null } | null }[];
+  recentTransactions: { id: string; label: string; amount: number; date: string | null; status: string; category: { name: string; color: string | null } | null; account: { name: string; color: string | null } | null }[];
+  recentTransfers: { id: string; label: string; amount: number; date: string | null; status: string; account: { name: string; color: string | null } | null; destinationAccount: { name: string; color: string | null } | null }[];
 };
 
 export function SummaryCards({ totals, income, expenses, carryOver }: Pick<DashboardData, "totals" | "income" | "expenses" | "carryOver">) {
@@ -165,13 +165,15 @@ export function RecentTransactions({ recentTransactions }: Pick<DashboardData, "
                 <div className="flex-1 min-w-0">
                   <div className="text-sm truncate">{t.label}</div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] px-1.5 py-0"
-                      style={{ borderColor: t.category.color ?? undefined, color: t.category.color ?? undefined }}
-                    >
-                      {t.category.name}
-                    </Badge>
+                    {t.category && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0"
+                        style={{ borderColor: t.category.color ?? undefined, color: t.category.color ?? undefined }}
+                      >
+                        {t.category.name}
+                      </Badge>
+                    )}
                     {t.date && <span>{formatDate(t.date)}</span>}
                   </div>
                 </div>
@@ -214,9 +216,9 @@ export function RecentTransfers({ recentTransfers }: Pick<DashboardData, "recent
                     <span className="flex items-center gap-1">
                       <span
                         className="h-2 w-2 rounded-full inline-block"
-                        style={{ backgroundColor: t.account.color ?? "#6b7280" }}
+                        style={{ backgroundColor: t.account?.color ?? "#6b7280" }}
                       />
-                      {t.account.name}
+                      {t.account?.name ?? "—"}
                     </span>
                     <span>→</span>
                     {t.destinationAccount && (

@@ -41,9 +41,9 @@ export async function getTransactions(year: number, month: number) {
     bucketId: t.bucketId,
     isAmex: t.isAmex,
     destinationAccountId: t.destinationAccountId,
-    account: { name: t.account.name, color: t.account.color },
+    account: t.account ? { name: t.account.name, color: t.account.color } : null,
     destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,
-    category: { name: t.category.name, color: t.category.color },
+    category: t.category ? { name: t.category.name, color: t.category.color } : null,
     subCategory: t.subCategory ? { name: t.subCategory.name } : null,
     bucket: t.bucket ? { name: t.bucket.name } : null,
   }));
@@ -405,8 +405,8 @@ export async function searchTransactionsAcrossMonths(
     month: t.month,
     year: t.year,
     status: t.status,
-    category: { name: t.category.name, color: t.category.color },
-    account: { name: t.account.name },
+    category: t.category ? { name: t.category.name, color: t.category.color } : null,
+    account: t.account ? { name: t.account.name } : null,
   }));
 }
 

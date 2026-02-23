@@ -174,8 +174,8 @@ function TransactionPrintRow({ transaction: t }: { transaction: {
   amount: number;
   date: string | null;
   status: string;
-  category: { name: string; color: string | null };
-  account: { name: string; color: string | null };
+  category: { name: string; color: string | null } | null;
+  account: { name: string; color: string | null } | null;
 } }) {
   const isCancelled = t.status === "CANCELLED";
   return (
@@ -188,16 +188,16 @@ function TransactionPrintRow({ transaction: t }: { transaction: {
         <div className="flex items-center gap-1.5">
           <div
             className="h-2 w-2 rounded-full shrink-0 print:border print:border-gray-400"
-            style={{ backgroundColor: t.category.color ?? "#6b7280" }}
+            style={{ backgroundColor: t.category?.color ?? "#6b7280" }}
           />
-          <span className="text-xs">{t.category.name}</span>
+          <span className="text-xs">{t.category?.name ?? "Sans catégorie"}</span>
         </div>
       </td>
       <td className="py-1.5 px-2 text-xs">{STATUS_LABELS[t.status] ?? t.status}</td>
       <td className={`py-1.5 px-2 text-right tabular-nums font-medium ${t.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
         {formatCurrency(t.amount)}
       </td>
-      <td className="py-1.5 px-2 text-xs text-muted-foreground">{t.account.name}</td>
+      <td className="py-1.5 px-2 text-xs text-muted-foreground">{t.account?.name ?? "—"}</td>
     </tr>
   );
 }

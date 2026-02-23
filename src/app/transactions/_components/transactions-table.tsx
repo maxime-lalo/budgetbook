@@ -29,14 +29,14 @@ type Transaction = {
   status: string;
   note: string | null;
   accountId: string;
-  categoryId: string;
+  categoryId: string | null;
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
   destinationAccountId: string | null;
-  account: { name: string; color: string | null };
+  account: { name: string; color: string | null } | null;
   destinationAccount: { name: string; color: string | null } | null;
-  category: { name: string; color: string | null };
+  category: { name: string; color: string | null } | null;
   subCategory: { name: string } | null;
   bucket: { name: string } | null;
 };
@@ -73,8 +73,8 @@ type CrossMonthResult = {
   month: number;
   year: number;
   status: string;
-  category: { name: string; color: string | null };
-  account: { name: string };
+  category: { name: string; color: string | null } | null;
+  account: { name: string } | null;
 };
 
 function SortableHeader({

@@ -139,9 +139,9 @@ async function getOverBudgetCategories(year: number, month: number) {
     .groupBy(transactions.categoryId);
 
   const spentMap = new Map<string, number>(
-    spent.map((s) => {
+    spent.filter((s) => s.categoryId != null).map((s) => {
       const net = toNumber(s.total);
-      return [s.categoryId, net < 0 ? round2(Math.abs(net)) : 0];
+      return [s.categoryId as string, net < 0 ? round2(Math.abs(net)) : 0];
     })
   );
 
@@ -179,8 +179,8 @@ async function getRecentTransactions(year: number, month: number) {
     amount: toNumber(t.amount),
     date: t.date ? toISOString(t.date) : null,
     status: t.status,
-    category: { name: t.category.name, color: t.category.color },
-    account: { name: t.account.name, color: t.account.color },
+    category: t.category ? { name: t.category.name, color: t.category.color } : null,
+    account: t.account ? { name: t.account.name, color: t.account.color } : null,
   }));
 }
 
@@ -205,7 +205,7 @@ async function getRecentTransfers(year: number, month: number) {
     amount: toNumber(t.amount),
     date: t.date ? toISOString(t.date) : null,
     status: t.status,
-    account: { name: t.account.name, color: t.account.color },
+    account: t.account ? { name: t.account.name, color: t.account.color } : null,
     destinationAccount: t.destinationAccount
       ? { name: t.destinationAccount.name, color: t.destinationAccount.color }
       : null,

@@ -13,8 +13,8 @@ type SearchResult = {
   month: number;
   year: number;
   status: string;
-  category: { name: string; color: string | null };
-  account: { name: string };
+  category: { name: string; color: string | null } | null;
+  account: { name: string } | null;
 };
 
 export function CrossMonthResults({
@@ -68,15 +68,17 @@ export function CrossMonthResults({
                 {formatCurrency(r.amount)}
               </td>
               <td className="p-2">
-                <Badge
-                  variant="outline"
-                  className="text-[10px] px-1.5 py-0"
-                  style={{ borderColor: r.category.color ?? undefined, color: r.category.color ?? undefined }}
-                >
-                  {r.category.name}
-                </Badge>
+                {r.category && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0"
+                    style={{ borderColor: r.category.color ?? undefined, color: r.category.color ?? undefined }}
+                  >
+                    {r.category.name}
+                  </Badge>
+                )}
               </td>
-              <td className="p-2 text-muted-foreground">{r.account.name}</td>
+              <td className="p-2 text-muted-foreground">{r.account?.name ?? "—"}</td>
               <td className="p-2">
                 <Link
                   href={`/transactions?month=${toMonthParam(r.year, r.month)}`}

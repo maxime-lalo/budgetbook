@@ -54,9 +54,9 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
   // 4. committed = Σ max(0, budgété - dépensé_net) par catégorie
   const budgetMap = new Map(monthBudgets.map((b) => [b.categoryId, toNumber(b.amount)]));
   const spentMap = new Map(
-    netByCategory.map((s) => {
+    netByCategory.filter((s) => s.categoryId != null).map((s) => {
       const net = toNumber(s.total);
-      return [s.categoryId, net < 0 ? round2(Math.abs(net)) : 0];
+      return [s.categoryId as string, net < 0 ? round2(Math.abs(net)) : 0];
     })
   );
 

@@ -74,7 +74,7 @@ export const transactions = sqliteTable(
     note: text("note"),
     accountId: text("accountId").notNull(),
     destinationAccountId: text("destinationAccountId"),
-    categoryId: text("categoryId").notNull(),
+    categoryId: text("categoryId"),
     subCategoryId: text("subCategoryId"),
     bucketId: text("bucketId"),
     isAmex: integer("isAmex", { mode: "boolean" }).notNull().default(false),

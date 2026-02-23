@@ -20,14 +20,14 @@ type Transfer = {
   status: string;
   note: string | null;
   accountId: string;
-  categoryId: string;
+  categoryId: string | null;
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
   destinationAccountId: string | null;
-  account: { name: string; color: string | null; type: string };
+  account: { name: string; color: string | null; type: string } | null;
   destinationAccount: { name: string; color: string | null; type: string } | null;
-  category: { name: string; color: string | null };
+  category: { name: string; color: string | null } | null;
   subCategory: { name: string } | null;
   bucket: { name: string } | null;
 };
@@ -112,9 +112,9 @@ export function TransferList({
                       <span className="flex items-center gap-1">
                         <span
                           className="h-2 w-2 rounded-full inline-block"
-                          style={{ backgroundColor: t.account.color ?? "#6b7280" }}
+                          style={{ backgroundColor: t.account?.color ?? "#6b7280" }}
                         />
-                        {t.account.name}
+                        {t.account?.name ?? "—"}
                       </span>
                       <span className="text-muted-foreground">→</span>
                       {t.destinationAccount && (
@@ -129,13 +129,15 @@ export function TransferList({
                     </div>
 
                     <div className="flex items-center flex-wrap gap-2 text-xs">
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] px-1.5 py-0"
-                        style={{ borderColor: t.category.color ?? undefined, color: t.category.color ?? undefined }}
-                      >
-                        {t.category.name}
-                      </Badge>
+                      {t.category && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0"
+                          style={{ borderColor: t.category.color ?? undefined, color: t.category.color ?? undefined }}
+                        >
+                          {t.category.name}
+                        </Badge>
+                      )}
                       {t.bucket && (
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                           {t.bucket.name}

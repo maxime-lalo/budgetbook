@@ -40,14 +40,14 @@ type Transaction = {
   status: string;
   note: string | null;
   accountId: string;
-  categoryId: string;
+  categoryId: string | null;
   subCategoryId: string | null;
   bucketId: string | null;
   isAmex: boolean;
   destinationAccountId: string | null;
-  account: { name: string; color: string | null };
+  account: { name: string; color: string | null } | null;
   destinationAccount: { name: string; color: string | null } | null;
-  category: { name: string; color: string | null };
+  category: { name: string; color: string | null } | null;
   subCategory: { name: string } | null;
   bucket: { name: string } | null;
 };
@@ -385,9 +385,9 @@ export function EditableTransactionRow({
         {/* Catégorie + Sous-catégorie */}
         <TableCell className="p-1 whitespace-nowrap">
           <div className="flex items-center gap-1">
-            <Select value={categoryId} onValueChange={handleCategoryChange}>
-              <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-                <SelectValue />
+            <Select value={categoryId ?? ""} onValueChange={handleCategoryChange}>
+              <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!categoryId ? "border-destructive" : "border-transparent"}`}>
+                <SelectValue placeholder="Sans catégorie" />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
@@ -455,7 +455,7 @@ export function EditableTransactionRow({
           {isTransfer ? (
             <div className="flex items-center gap-1.5 text-sm px-2">
               <ArrowRightLeft className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-              <span className="truncate">{transaction.account.name}</span>
+              <span className="truncate">{transaction.account?.name ?? "—"}</span>
               <span className="text-muted-foreground">→</span>
               <span className="truncate">{transaction.destinationAccount?.name}</span>
             </div>

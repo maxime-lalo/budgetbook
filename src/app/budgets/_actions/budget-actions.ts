@@ -33,9 +33,9 @@ export async function getBudgetsWithSpent(year: number, month: number) {
     .groupBy(transactions.categoryId);
 
   const spentMap = new Map<string, number>(
-    spent.map((s) => {
+    spent.filter((s) => s.categoryId != null).map((s) => {
       const net = toNumber(s.total);
-      return [s.categoryId, net < 0 ? round2(Math.abs(net)) : 0];
+      return [s.categoryId as string, net < 0 ? round2(Math.abs(net)) : 0];
     })
   );
 
