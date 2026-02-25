@@ -126,8 +126,15 @@ export function TransactionsTable({
     (newFilters: TransactionFilterValues) => {
       setFilters(newFilters);
 
-      // Trigger cross-month search
-      if (newFilters.crossMonth && newFilters.search.trim()) {
+      // Trigger cross-month search when any filter is active
+      const hasAnyFilter = newFilters.search.trim() ||
+        newFilters.categoryId !== FILTER_ALL ||
+        newFilters.accountId !== FILTER_ALL ||
+        newFilters.status !== FILTER_ALL ||
+        newFilters.amountMin ||
+        newFilters.amountMax;
+
+      if (newFilters.crossMonth && hasAnyFilter) {
         startTransition(async () => {
           const results = await searchTransactionsAcrossMonths(
             newFilters.search,
@@ -141,7 +148,7 @@ export function TransactionsTable({
           );
           setCrossMonthResults(results);
         });
-      } else if (!newFilters.crossMonth || !newFilters.search.trim()) {
+      } else if (!newFilters.crossMonth || !hasAnyFilter) {
         setCrossMonthResults([]);
       }
     },
@@ -355,7 +362,14 @@ export function TransactionsTable({
     );
   }
 
-  const showCrossMonth = filters.crossMonth && filters.search.trim();
+  const showCrossMonth = filters.crossMonth && (
+    filters.search.trim() ||
+    filters.categoryId !== FILTER_ALL ||
+    filters.accountId !== FILTER_ALL ||
+    filters.status !== FILTER_ALL ||
+    filters.amountMin ||
+    filters.amountMax
+  );
 
   return (
     <>

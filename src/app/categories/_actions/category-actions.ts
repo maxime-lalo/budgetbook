@@ -62,23 +62,21 @@ export async function deleteCategory(id: string) {
       .where(eq(subCategories.categoryId, id));
     const subIds = subs.map((s) => s.id);
 
-    await db.transaction(async (tx) => {
-      await tx
+    await db
+      .update(transactions)
+      .set({ categoryId: null, subCategoryId: null })
+      .where(eq(transactions.categoryId, id));
+
+    if (subIds.length > 0) {
+      await db
         .update(transactions)
-        .set({ categoryId: null, subCategoryId: null })
-        .where(eq(transactions.categoryId, id));
+        .set({ subCategoryId: null })
+        .where(inArray(transactions.subCategoryId, subIds));
+    }
 
-      if (subIds.length > 0) {
-        await tx
-          .update(transactions)
-          .set({ subCategoryId: null })
-          .where(inArray(transactions.subCategoryId, subIds));
-      }
-
-      await tx.delete(budgets).where(eq(budgets.categoryId, id));
-      await tx.delete(subCategories).where(eq(subCategories.categoryId, id));
-      await tx.delete(categories).where(eq(categories.id, id));
-    });
+    await db.delete(budgets).where(eq(budgets.categoryId, id));
+    await db.delete(subCategories).where(eq(subCategories.categoryId, id));
+    await db.delete(categories).where(eq(categories.id, id));
 
     revalidatePath("/categories");
     revalidatePath("/transactions");

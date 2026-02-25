@@ -119,7 +119,7 @@ export function TransactionFilters({
           Filtres avancés
           {showAdvanced ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
         </Button>
-        {filters.crossMonth && filters.search && (
+        {filters.crossMonth && (
           <span className="text-xs text-muted-foreground">Recherche tous mois</span>
         )}
       </div>
