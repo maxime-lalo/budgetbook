@@ -296,6 +296,8 @@ export async function searchTransactionsAcrossMonths(
     status?: string;
     amountMin?: number;
     amountMax?: number;
+    dateFrom?: string;
+    dateTo?: string;
   }
 ) {
   const conditions = [];
@@ -325,15 +327,23 @@ export async function searchTransactionsAcrossMonths(
   if (filters.amountMax !== undefined) {
     conditions.push(lte(transactions.amount, filters.amountMax.toString()));
   }
+  if (filters.dateFrom) {
+    conditions.push(gte(transactions.date, toDbDate(new Date(filters.dateFrom))));
+  }
+  if (filters.dateTo) {
+    conditions.push(lte(transactions.date, toDbDate(new Date(filters.dateTo))));
+  }
 
   const result = await db.query.transactions.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
     with: {
-      category: true,
       account: true,
+      category: true,
+      subCategory: true,
+      bucket: true,
+      destinationAccount: { columns: { name: true, color: true } },
     },
     orderBy: [desc(transactions.year), desc(transactions.month), desc(transactions.date)],
-    limit: 50,
   });
 
   return result.map((t) => ({
@@ -344,8 +354,19 @@ export async function searchTransactionsAcrossMonths(
     month: t.month,
     year: t.year,
     status: t.status,
+    note: t.note,
+    accountId: t.accountId,
+    categoryId: t.categoryId,
+    subCategoryId: t.subCategoryId,
+    bucketId: t.bucketId,
+    isAmex: t.isAmex,
+    recurring: t.recurring,
+    destinationAccountId: t.destinationAccountId,
+    account: t.account ? { name: t.account.name, color: t.account.color } : null,
+    destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,
     category: t.category ? { name: t.category.name, color: t.category.color } : null,
-    account: t.account ? { name: t.account.name } : null,
+    subCategory: t.subCategory ? { name: t.subCategory.name } : null,
+    bucket: t.bucket ? { name: t.bucket.name } : null,
   }));
 }
 

@@ -21,7 +21,8 @@ export type TransactionFilterValues = {
   status: string;
   amountMin: string;
   amountMax: string;
-  crossMonth: boolean;
+  dateFrom: string;
+  dateTo: string;
 };
 
 export function TransactionFilters({
@@ -51,7 +52,7 @@ export function TransactionFilters({
   }, [searchInput]);
 
   const updateFilter = useCallback(
-    (key: keyof TransactionFilterValues, value: string | boolean) => {
+    (key: keyof TransactionFilterValues, value: string) => {
       onFilterChange({ ...filters, [key]: value });
     },
     [filters, onFilterChange]
@@ -119,8 +120,8 @@ export function TransactionFilters({
           Filtres avancés
           {showAdvanced ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
         </Button>
-        {filters.crossMonth && (
-          <span className="text-xs text-muted-foreground">Recherche tous mois</span>
+        {(filters.dateFrom || filters.dateTo) && (
+          <span className="text-xs text-muted-foreground">Recherche par dates</span>
         )}
       </div>
 
@@ -140,15 +141,20 @@ export function TransactionFilters({
             onChange={(e) => updateFilter("amountMax", e.target.value)}
             className="h-9 text-sm"
           />
-          <label className="flex items-center gap-2 text-sm col-span-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.crossMonth}
-              onChange={(e) => updateFilter("crossMonth", e.target.checked)}
-              className="rounded"
-            />
-            Rechercher tous les mois
-          </label>
+          <Input
+            type="date"
+            placeholder="Date début"
+            value={filters.dateFrom}
+            onChange={(e) => updateFilter("dateFrom", e.target.value)}
+            className="h-9 text-sm"
+          />
+          <Input
+            type="date"
+            placeholder="Date fin"
+            value={filters.dateTo}
+            onChange={(e) => updateFilter("dateTo", e.target.value)}
+            className="h-9 text-sm"
+          />
         </div>
       )}
     </div>

@@ -261,7 +261,7 @@ export async function getSavingsOverview(year: number) {
   ]);
 
   let cumulative =
-    -(toNumber(prevStandalone[0].total)) +
+    toNumber(prevStandalone[0].total) +
     -(toNumber(prevIncoming[0].total)) +
     toNumber(prevOutgoing[0].total) +
     toNumber(totalBaseAmount[0].total);
@@ -289,7 +289,7 @@ export async function getSavingsOverview(year: number) {
   return Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
     cumulative +=
-      -(standaloneMap.get(month) ?? 0) +
+      (standaloneMap.get(month) ?? 0) +
       -(incomingMap.get(month) ?? 0) +
       (outgoingMap.get(month) ?? 0);
 

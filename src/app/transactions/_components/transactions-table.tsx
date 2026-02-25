@@ -15,25 +15,12 @@ import { NewTransactionRow } from "./new-transaction-row";
 import { CopyRecurringButton } from "./copy-recurring-button";
 import { CompleteAmexButton } from "./complete-amex-button";
 import { TransactionFilters, type TransactionFilterValues } from "./transaction-filters";
-import { CrossMonthResults } from "./cross-month-results";
 import { searchTransactionsAcrossMonths } from "../_actions/transaction-actions";
 import { formatCurrency, STATUS_ORDER, FILTER_ALL } from "@/lib/formatters";
 import { type SerializedTransaction, type FormAccount, type FormCategory } from "@/lib/types";
 
 type SortColumn = "date" | "status" | "amount";
 type SortDirection = "asc" | "desc";
-
-type CrossMonthResult = {
-  id: string;
-  label: string;
-  amount: number;
-  date: string | null;
-  month: number;
-  year: number;
-  status: string;
-  category: { name: string; color: string | null } | null;
-  account: { name: string } | null;
-};
 
 function SortableHeader({
   column,
@@ -117,24 +104,19 @@ export function TransactionsTable({
     status: FILTER_ALL,
     amountMin: "",
     amountMax: "",
-    crossMonth: false,
+    dateFrom: "",
+    dateTo: "",
   });
-  const [crossMonthResults, setCrossMonthResults] = useState<CrossMonthResult[]>([]);
+  const [dateRangeResults, setDateRangeResults] = useState<SerializedTransaction[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const handleFilterChange = useCallback(
     (newFilters: TransactionFilterValues) => {
       setFilters(newFilters);
 
-      // Trigger cross-month search when any filter is active
-      const hasAnyFilter = newFilters.search.trim() ||
-        newFilters.categoryId !== FILTER_ALL ||
-        newFilters.accountId !== FILTER_ALL ||
-        newFilters.status !== FILTER_ALL ||
-        newFilters.amountMin ||
-        newFilters.amountMax;
+      const hasDateRange = newFilters.dateFrom || newFilters.dateTo;
 
-      if (newFilters.crossMonth && hasAnyFilter) {
+      if (hasDateRange) {
         startTransition(async () => {
           const results = await searchTransactionsAcrossMonths(
             newFilters.search,
@@ -144,12 +126,14 @@ export function TransactionsTable({
               status: newFilters.status !== FILTER_ALL ? newFilters.status : undefined,
               amountMin: newFilters.amountMin ? parseFloat(newFilters.amountMin) : undefined,
               amountMax: newFilters.amountMax ? parseFloat(newFilters.amountMax) : undefined,
+              dateFrom: newFilters.dateFrom || undefined,
+              dateTo: newFilters.dateTo || undefined,
             }
           );
-          setCrossMonthResults(results);
+          setDateRangeResults(results);
         });
-      } else if (!newFilters.crossMonth || !hasAnyFilter) {
-        setCrossMonthResults([]);
+      } else {
+        setDateRangeResults([]);
       }
     },
     []
@@ -187,6 +171,8 @@ export function TransactionsTable({
       const matchAmount = formatCurrency(t.amount).includes(q);
       if (!matchLabel && !matchNote && !matchAmount) return false;
     }
+    if (filters.dateFrom && (!t.date || t.date < filters.dateFrom)) return false;
+    if (filters.dateTo && (!t.date || t.date > filters.dateTo)) return false;
     return true;
   });
 
@@ -362,14 +348,39 @@ export function TransactionsTable({
     );
   }
 
-  const showCrossMonth = filters.crossMonth && (
-    filters.search.trim() ||
-    filters.categoryId !== FILTER_ALL ||
-    filters.accountId !== FILTER_ALL ||
-    filters.status !== FILTER_ALL ||
-    filters.amountMin ||
-    filters.amountMax
-  );
+  const isDateRangeActive = !!(filters.dateFrom || filters.dateTo);
+
+  let dateRangeRows: React.ReactNode = null;
+  if (isDateRangeActive) {
+    if (isPending) {
+      dateRangeRows = (
+        <TableRow>
+          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+            Recherche en cours...
+          </TableCell>
+        </TableRow>
+      );
+    } else if (dateRangeResults.length === 0) {
+      dateRangeRows = (
+        <TableRow>
+          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+            Aucun résultat trouvé pour cette période.
+          </TableCell>
+        </TableRow>
+      );
+    } else {
+      const sorted = sortColumn ? [...dateRangeResults].sort(compareFn) : dateRangeResults;
+      dateRangeRows = sorted.map((t) => (
+        <EditableTransactionRow
+          key={t.id}
+          transaction={t}
+          accounts={accounts}
+          categories={categories}
+          amexEnabled={amexEnabled}
+        />
+      ));
+    }
+  }
 
   return (
     <>
@@ -381,24 +392,22 @@ export function TransactionsTable({
         onFilterChange={handleFilterChange}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2">
-        {!hideCopyRecurring && <CopyRecurringButton year={year} month={month} />}
-        {amexEnabled && amexPendingCount > 0 && (
-          <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
-        )}
-        {amexEnabled && amexMonthlyTotal !== 0 && (
-          <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground border rounded-md h-9 px-3">
-            <CreditCard className="h-4 w-4" />
-            <span>AMEX</span>
-            <span className={`font-medium ${amexMonthlyTotal < 0 ? "text-red-600" : "text-green-600"}`}>
-              {formatCurrency(amexMonthlyTotal)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {showCrossMonth && (
-        <CrossMonthResults results={crossMonthResults} loading={isPending} />
+      {!isDateRangeActive && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2">
+          {!hideCopyRecurring && <CopyRecurringButton year={year} month={month} />}
+          {amexEnabled && amexPendingCount > 0 && (
+            <CompleteAmexButton year={year} month={month} pendingCount={amexPendingCount} />
+          )}
+          {amexEnabled && amexMonthlyTotal !== 0 && (
+            <div className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground border rounded-md h-9 px-3">
+              <CreditCard className="h-4 w-4" />
+              <span>AMEX</span>
+              <span className={`font-medium ${amexMonthlyTotal < 0 ? "text-red-600" : "text-green-600"}`}>
+                {formatCurrency(amexMonthlyTotal)}
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       <div className="rounded-md border overflow-x-auto">
@@ -435,17 +444,23 @@ export function TransactionsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {carryOverRow}
-            {transactionRows}
-            <NewTransactionRow
-              accounts={accounts}
-              categories={categories}
-              year={year}
-              month={month}
-              amexEnabled={amexEnabled}
-              defaultAccountId={defaultAccountId}
-              defaultCategoryId={defaultCategoryId}
-            />
+            {isDateRangeActive ? (
+              dateRangeRows
+            ) : (
+              <>
+                {carryOverRow}
+                {transactionRows}
+                <NewTransactionRow
+                  accounts={accounts}
+                  categories={categories}
+                  year={year}
+                  month={month}
+                  amexEnabled={amexEnabled}
+                  defaultAccountId={defaultAccountId}
+                  defaultCategoryId={defaultCategoryId}
+                />
+              </>
+            )}
           </TableBody>
         </Table>
       </div>
