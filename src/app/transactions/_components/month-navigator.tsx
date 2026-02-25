@@ -50,6 +50,7 @@ export function MonthNavigator() {
         <Button
           variant="outline"
           size="sm"
+          className="hidden sm:inline-flex"
           onClick={() => navigateToMonth(now.getFullYear(), now.getMonth() + 1)}
         >
           Aujourd&apos;hui
@@ -62,7 +63,7 @@ export function MonthNavigator() {
         value={String(month)}
         onValueChange={(value) => navigateToMonth(year, Number(value))}
       >
-        <SelectTrigger size="sm" className="font-semibold">
+        <SelectTrigger size="sm" className="w-[130px] font-semibold *:data-[slot=select-value]:flex-1 *:data-[slot=select-value]:justify-center">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

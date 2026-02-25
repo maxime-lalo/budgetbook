@@ -18,12 +18,18 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Réglages</h1>
-      <AmexToggleCard initialEnabled={prefs.amexEnabled} />
-      <RecurringToggleCard initialEnabled={prefs.separateRecurring} />
-      <ApiTokenCard initialToken={token} />
-      <RecalculateBalancesCard />
-      <ExportDataCard />
-      <ImportDataCard />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <AmexToggleCard initialEnabled={prefs.amexEnabled} />
+        <RecurringToggleCard initialEnabled={prefs.separateRecurring} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <ImportDataCard />
+        <ExportDataCard />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <ApiTokenCard initialToken={token} />
+        <RecalculateBalancesCard />
+      </div>
       <ClearDataCard />
     </div>
   );

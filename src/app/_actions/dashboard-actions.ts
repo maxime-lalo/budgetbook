@@ -109,13 +109,12 @@ async function getAccountsWithBalance() {
   const baseMap = new Map(baseByAccount.map((r) => [r.accountId, toNumber(r.total)]));
 
   return allAccounts.map((a) => {
-    const isSavingsType = a.type === "SAVINGS" || a.type === "INVESTMENT";
     const outgoingTotal = outgoingMap.get(a.id) ?? 0;
     const incomingTotal = incomingMap.get(a.id) ?? 0;
     const baseTotal = baseMap.get(a.id) ?? 0;
-    const balance = isSavingsType
-      ? round2(baseTotal + -(outgoingTotal) + -(incomingTotal))
-      : round2(outgoingTotal + -(incomingTotal));
+    // Same formula for all account types:
+    // outgoing (standalone + transfers out) + negated incoming transfers + bucket base amounts
+    const balance = round2(outgoingTotal + -(incomingTotal) + baseTotal);
 
     return {
       id: a.id,

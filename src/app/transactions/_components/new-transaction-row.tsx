@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Check, CreditCard } from "lucide-react";
 import { STATUS_LABELS, STATUS_COLORS, DEFAULT_COLOR, FILTER_NONE } from "@/lib/formatters";
 import { createTransaction } from "../_actions/transaction-actions";
+import { BucketSelectionDialog } from "./bucket-selection-dialog";
 import { toast } from "sonner";
 import { type FormAccount, type FormCategory } from "@/lib/types";
 
@@ -42,6 +43,13 @@ export function NewTransactionRow({
   const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED">("PENDING");
   const [accountId, setAccountId] = useState(defaultAccountId ?? accounts[0]?.id ?? "");
   const [isAmex, setIsAmex] = useState(false);
+  const [bucketId, setBucketId] = useState(() => {
+    const initAcct = accounts.find((a) => a.id === (defaultAccountId ?? accounts[0]?.id));
+    return initAcct && (initAcct.type === "SAVINGS" || initAcct.type === "INVESTMENT") && initAcct.buckets.length > 0
+      ? initAcct.buckets[0].id : "";
+  });
+  const [bucketDialogOpen, setBucketDialogOpen] = useState(false);
+  const [pendingBucketSubmit, setPendingBucketSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const labelRef = useRef<HTMLInputElement>(null);
 
@@ -54,6 +62,9 @@ export function NewTransactionRow({
     !isNaN(Number(amount)) &&
     categoryId !== "";
 
+  const isSavingsWithBuckets = (a?: FormAccount) =>
+    a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
+
   function resetFields() {
     setLabel("");
     setDate(new Date().toISOString().split("T")[0]);
@@ -61,12 +72,30 @@ export function NewTransactionRow({
     setCategoryId(defaultCategoryId ?? "");
     setSubCategoryId("");
     setStatus("PENDING");
-    setAccountId(defaultAccountId ?? accounts[0]?.id ?? "");
+    const resetAcctId = defaultAccountId ?? accounts[0]?.id ?? "";
+    setAccountId(resetAcctId);
     setIsAmex(false);
+    const resetAcct = accounts.find((a) => a.id === resetAcctId);
+    setBucketId(isSavingsWithBuckets(resetAcct) ? resetAcct!.buckets[0].id : "");
   }
 
   async function handleSubmit() {
     if (!canSubmit || isSubmitting) return;
+
+    // If savings account with buckets and no bucket selected, prompt
+    const acct = accounts.find((a) => a.id === accountId);
+    if (isSavingsWithBuckets(acct) && !bucketId) {
+      setBucketId(acct!.buckets[0].id);
+      setPendingBucketSubmit(true);
+      setBucketDialogOpen(true);
+      return;
+    }
+
+    await doCreate();
+  }
+
+  async function doCreate() {
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     const result = await createTransaction({
@@ -80,7 +109,7 @@ export function NewTransactionRow({
       accountId,
       categoryId,
       subCategoryId: subCategoryId || null,
-      bucketId: null,
+      bucketId: bucketId || null,
       isAmex,
       recurring: false,
       destinationAccountId: null,
@@ -96,6 +125,19 @@ export function NewTransactionRow({
     toast.success("Transaction créée");
     resetFields();
     setTimeout(() => labelRef.current?.focus(), 0);
+  }
+
+  function handleBucketConfirm() {
+    setBucketDialogOpen(false);
+    if (pendingBucketSubmit) {
+      setPendingBucketSubmit(false);
+      doCreate();
+    }
+  }
+
+  function handleBucketCancel() {
+    setBucketDialogOpen(false);
+    setPendingBucketSubmit(false);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -116,146 +158,163 @@ export function NewTransactionRow({
     if (newAccount?.type !== "CHECKING") {
       setIsAmex(false);
     }
+    if (isSavingsWithBuckets(newAccount)) {
+      setBucketId(newAccount!.buckets[0].id);
+      setBucketDialogOpen(true);
+    } else {
+      setBucketId("");
+    }
   }
 
   return (
-    <TableRow className="border-t border-dashed border-muted-foreground/30 bg-muted/20">
-      <TableCell className="p-1">
-        <Input
-          ref={labelRef}
-          type="text"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Nouveau..."
-          className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input"
-        />
-      </TableCell>
+    <>
+      <TableRow className="border-t border-dashed border-muted-foreground/30 bg-muted/20">
+        <TableCell className="p-1">
+          <Input
+            ref={labelRef}
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Nouveau..."
+            className="h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input"
+          />
+        </TableCell>
 
-      <TableCell className="p-1 whitespace-nowrap text-center">
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[130px] text-muted-foreground"
-        />
-      </TableCell>
+        <TableCell className="p-1 whitespace-nowrap text-center">
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-[130px] text-muted-foreground"
+          />
+        </TableCell>
 
-      <TableCell className="p-1 whitespace-nowrap">
-        <Input
-          type="number"
-          step="0.01"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="0.00"
-          className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-full font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-            amount === "" ? "" : Number(amount) < 0 ? "text-red-600" : "text-green-600"
-          }`}
-        />
-      </TableCell>
+        <TableCell className="p-1 whitespace-nowrap">
+          <Input
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="0.00"
+            className={`h-8 text-sm text-center border-transparent bg-transparent hover:border-input focus:border-input w-full font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+              amount === "" ? "" : Number(amount) < 0 ? "text-red-600" : "text-green-600"
+            }`}
+          />
+        </TableCell>
 
-      <TableCell className="p-1 whitespace-nowrap">
-        <div className="flex items-center gap-1">
-          <Select value={categoryId} onValueChange={handleCategoryChange}>
-            <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!categoryId ? "border-dashed border-muted-foreground/40" : "border-transparent"}`}>
-              <SelectValue placeholder="Catégorie" />
+        <TableCell className="p-1 whitespace-nowrap">
+          <div className="flex items-center gap-1">
+            <Select value={categoryId} onValueChange={handleCategoryChange}>
+              <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!categoryId ? "border-dashed border-muted-foreground/40" : "border-transparent"}`}>
+                <SelectValue placeholder="Catégorie" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: c.color ?? DEFAULT_COLOR }}
+                        aria-label={c.name}
+                      />
+                      {c.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedCategory && selectedCategory.subCategories.length > 0 && (
+              <Select value={subCategoryId || FILTER_NONE} onValueChange={(v) => setSubCategoryId(v === FILTER_NONE ? "" : v)}>
+                <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!subCategoryId ? "border-orange-500" : "border-transparent"}`}>
+                  <SelectValue placeholder="Sous-cat." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={FILTER_NONE}>Aucune</SelectItem>
+                  {selectedCategory.subCategories.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="p-1 whitespace-nowrap">
+          <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+            <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
+              {(["PENDING", "COMPLETED", "PLANNED"] as const).map((s) => (
+                <SelectItem key={s} value={s}>
                   <div className="flex items-center gap-1.5">
-                    <span
-                      className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: c.color ?? DEFAULT_COLOR }}
-                      aria-label={c.name}
-                    />
-                    {c.name}
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${STATUS_COLORS[s]}`} />
+                    {STATUS_LABELS[s]}
                   </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {selectedCategory && selectedCategory.subCategories.length > 0 && (
-            <Select value={subCategoryId || FILTER_NONE} onValueChange={(v) => setSubCategoryId(v === FILTER_NONE ? "" : v)}>
-              <SelectTrigger className={`w-full h-8 text-sm bg-transparent hover:border-input focus:border-input ${!subCategoryId ? "border-orange-500" : "border-transparent"}`}>
-                <SelectValue placeholder="Sous-cat." />
+        </TableCell>
+
+        <TableCell className="p-1 whitespace-nowrap">
+          <div className="flex items-center gap-1">
+            {amexEnabled && selectedAccount?.type === "CHECKING" && (
+              <button
+                type="button"
+                onClick={() => setIsAmex(!isAmex)}
+                aria-label={isAmex ? "AMEX activé" : "AMEX désactivé"}
+                title={isAmex ? "AMEX activé" : "Activer AMEX"}
+                className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <Select value={accountId} onValueChange={handleAccountChange}>
+              <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={FILTER_NONE}>Aucune</SelectItem>
-                {selectedCategory.subCategories.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
-        </div>
-      </TableCell>
+          </div>
+        </TableCell>
 
-      <TableCell className="p-1 whitespace-nowrap">
-        <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-          <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(["PENDING", "COMPLETED", "PLANNED"] as const).map((s) => (
-              <SelectItem key={s} value={s}>
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${STATUS_COLORS[s]}`} />
-                  {STATUS_LABELS[s]}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-
-      <TableCell className="p-1 whitespace-nowrap">
-        <div className="flex items-center gap-1">
-          {amexEnabled && selectedAccount?.type === "CHECKING" && (
-            <button
-              type="button"
-              onClick={() => setIsAmex(!isAmex)}
-              aria-label={isAmex ? "AMEX activé" : "AMEX désactivé"}
-              title={isAmex ? "AMEX activé" : "Activer AMEX"}
-              className={`shrink-0 p-1 rounded ${isAmex ? "text-blue-600 bg-blue-100 dark:bg-blue-900/40" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
+        <TableCell className="p-1">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-green-600 hover:text-green-700 disabled:opacity-30"
+              onClick={handleSubmit}
+              disabled={!canSubmit || isSubmitting}
+              aria-label="Créer la transaction"
+              title="Créer la transaction"
             >
-              <CreditCard className="h-3.5 w-3.5" />
-            </button>
-          )}
-          <Select value={accountId} onValueChange={handleAccountChange}>
-            <SelectTrigger className="w-full h-8 text-sm border-transparent bg-transparent hover:border-input focus:border-input">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </TableCell>
+              <Check className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
 
-      <TableCell className="p-1">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-green-600 hover:text-green-700 disabled:opacity-30"
-            onClick={handleSubmit}
-            disabled={!canSubmit || isSubmitting}
-            aria-label="Créer la transaction"
-            title="Créer la transaction"
-          >
-            <Check className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
+      <BucketSelectionDialog
+        open={bucketDialogOpen}
+        buckets={selectedAccount?.buckets ?? []}
+        selectedBucketId={bucketId}
+        onBucketChange={setBucketId}
+        onConfirm={handleBucketConfirm}
+        onCancel={handleBucketCancel}
+      />
+    </>
   );
 }

@@ -47,8 +47,10 @@ async function getBucketBalances(bucketIds: string[]) {
     let totalSum = 0;
     for (const t of txs) {
       const amt = toNumber(t.amount);
-      const isOutgoing = t.accountId === bucketAccountId && t.destinationAccountId !== null;
-      const effective = isOutgoing ? amt : -amt;
+      // Incoming transfer (source is another account) → negate to get positive contribution
+      // Outgoing transfer or standalone → use amount as-is
+      const isIncoming = t.accountId !== bucketAccountId;
+      const effective = isIncoming ? -amt : amt;
       totalSum += effective;
       if (t.year < currentYear || (t.year === currentYear && t.month <= currentMonth)) {
         currentSum += effective;
@@ -114,10 +116,10 @@ export default async function AccountsPage() {
           }
 
           const bucketsBaseAmount = account.buckets.reduce((sum, b) => sum + (b.baseAmount ?? 0), 0);
-          const standaloneBalance = isSavingsOrInvestment ? -currentStandalone : currentStandalone;
-          const standaloneForecast = isSavingsOrInvestment ? -totalStandalone : totalStandalone;
-          const balance = standaloneBalance + currentOutgoing + (-currentIncoming) + bucketsBaseAmount;
-          const forecast = standaloneForecast + totalOutgoing + (-totalIncoming) + bucketsBaseAmount;
+          // Standalone transactions use normal sign convention (positive = credit)
+          // regardless of account type — no inversion needed
+          const balance = currentStandalone + currentOutgoing + (-currentIncoming) + bucketsBaseAmount;
+          const forecast = totalStandalone + totalOutgoing + (-totalIncoming) + bucketsBaseAmount;
           const hasForecast = Math.abs(forecast - balance) > 0.005;
 
           return (

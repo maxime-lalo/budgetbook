@@ -31,17 +31,22 @@ export function TransactionFormDialog({
   year,
   month,
   amexEnabled = true,
+  defaultAccountId,
+  defaultCategoryId,
 }: {
   accounts: FormAccount[];
   categories: FormCategory[];
   year: number;
   month: number;
   amexEnabled?: boolean;
+  defaultAccountId?: string;
+  defaultCategoryId?: string;
 }) {
   const [open, setOpen] = useState(false);
 
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
-  const [categoryId, setCategoryId] = useState("");
+  const initialAccountId = defaultAccountId ?? accounts[0]?.id ?? "";
+  const [accountId, setAccountId] = useState(initialAccountId);
+  const [categoryId, setCategoryId] = useState(defaultCategoryId ?? "");
   const [status, setStatus] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | "PLANNED">("PENDING");
   const [isAmex, setIsAmex] = useState(false);
   const [recurring, setRecurring] = useState(false);
@@ -52,18 +57,22 @@ export function TransactionFormDialog({
 
   const handleOpenChange = useCallback((value: boolean) => {
     if (value) {
-      setAccountId(accounts[0]?.id ?? "");
-      setCategoryId("");
+      const initAcctId = defaultAccountId ?? accounts[0]?.id ?? "";
+      setAccountId(initAcctId);
+      setCategoryId(defaultCategoryId ?? "");
       setStatus("PENDING");
       setIsAmex(false);
       setRecurring(false);
       setDateValue(format(new Date(), "yyyy-MM-dd"));
       setIsExpense(true);
-      setBucketId("");
+      // Pre-select first bucket if default account is savings with buckets
+      const initAcct = accounts.find((a) => a.id === initAcctId);
+      const initHasBuckets = initAcct && (initAcct.type === "SAVINGS" || initAcct.type === "INVESTMENT") && initAcct.buckets.length > 0;
+      setBucketId(initHasBuckets ? initAcct.buckets[0].id : "");
       setBudgetMonth(`${year}-${String(month).padStart(2, "0")}`);
     }
     setOpen(value);
-  }, [accounts, year, month]);
+  }, [accounts, year, month, defaultAccountId, defaultCategoryId]);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
   const selectedCategory = categories.find((c) => c.id === categoryId);

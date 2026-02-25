@@ -164,8 +164,10 @@ export async function getBucketBalance(bucketId: string): Promise<number> {
   let sum = 0;
   for (const t of txs) {
     const amt = toNumber(t.amount);
-    const isOutgoing = t.accountId === bucketAccountId && t.destinationAccountId !== null;
-    sum += isOutgoing ? amt : -amt;
+    // Incoming transfer (source is another account) → negate to get positive contribution
+    // Outgoing transfer or standalone → use amount as-is
+    const isIncoming = t.accountId !== bucketAccountId;
+    sum += isIncoming ? -amt : amt;
   }
   return sum + base;
 }

@@ -42,6 +42,8 @@ export default async function SavingsPage({
             year={year}
             month={month}
             amexEnabled={false}
+            defaultAccountId={defaultAccountId}
+            defaultCategoryId={defaultCategoryId}
           />
           <Suspense fallback={<Skeleton className="h-10 w-[250px]" />}>
             <YearNavigator />
