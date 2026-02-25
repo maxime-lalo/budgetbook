@@ -11,8 +11,14 @@ import { safeAction } from "@/lib/safe-action";
 import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
 
 export async function getTransactions(year: number, month: number) {
+  const checkingIds = await getCheckingAccountIds();
+
   const result = await db.query.transactions.findMany({
-    where: and(eq(transactions.year, year), eq(transactions.month, month)),
+    where: and(
+      eq(transactions.year, year),
+      eq(transactions.month, month),
+      checkingIds.length > 0 ? inArray(transactions.accountId, checkingIds) : undefined
+    ),
     with: {
       account: true,
       category: true,

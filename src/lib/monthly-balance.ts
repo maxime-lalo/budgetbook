@@ -27,6 +27,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
 
   // 2. Montant NET par catégorie (inclut remboursements)
   // Même logique que getBudgetsWithSpent : net < 0 → dépense, sinon 0
+  // Filtré sur comptes CHECKING uniquement (cohérent avec le forecast)
   const netByCategory = await db
     .select({
       categoryId: transactions.categoryId,
@@ -37,7 +38,8 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
-        inArray(transactions.status, ["COMPLETED", "PENDING", "PLANNED"])
+        inArray(transactions.status, ["COMPLETED", "PENDING", "PLANNED"]),
+        checkingIds.length > 0 ? inArray(transactions.accountId, checkingIds) : undefined
       )
     )
     .groupBy(transactions.categoryId);
