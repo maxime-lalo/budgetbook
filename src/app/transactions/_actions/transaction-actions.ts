@@ -384,6 +384,7 @@ export async function searchTransactionsAcrossMonths(
     bucketId: t.bucketId,
     isAmex: t.isAmex,
     recurring: t.recurring,
+    sortOrder: t.sortOrder ?? 0,
     destinationAccountId: t.destinationAccountId,
     account: t.account ? { name: t.account.name, color: t.account.color } : null,
     destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,
