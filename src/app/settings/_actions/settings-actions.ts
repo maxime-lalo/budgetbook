@@ -250,10 +250,10 @@ export async function importAllData(
       });
     }
 
-    // 6. Insérer les transactions (avec sortOrder incrémental par mois/section si absent)
+    // 6. Insérer les transactions (avec sortOrder incrémental par mois si absent)
     const sortCounters = new Map<string, number>();
     for (const transaction of data.transactions) {
-      const key = `${transaction.year}-${transaction.month}-${transaction.recurring ? 1 : 0}`;
+      const key = `${transaction.year}-${transaction.month}`;
       let sortOrder: number;
       if (transaction.sortOrder != null && transaction.sortOrder > 0) {
         sortOrder = transaction.sortOrder;

@@ -26,10 +26,7 @@ export async function getTransactions(year: number, month: number) {
       bucket: true,
       destinationAccount: { columns: { name: true, color: true } },
     },
-    orderBy: [
-      sql`CASE WHEN ${transactions.recurring} THEN 0 ELSE 1 END`,
-      asc(transactions.sortOrder),
-    ],
+    orderBy: [asc(transactions.sortOrder)],
   });
 
   return result.map((t) => ({
@@ -262,6 +259,13 @@ export async function copyRecurringTransactions(year: number, month: number) {
       and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.recurring, true))
     );
 
+    // Calculer le prochain sortOrder après les transactions restantes du mois
+    const [maxRow] = await db
+      .select({ max: sql<number>`coalesce(max(${transactions.sortOrder}), -1)` })
+      .from(transactions)
+      .where(and(eq(transactions.year, year), eq(transactions.month, month)));
+    const startOrder = (maxRow?.max ?? -1) + 1;
+
     // Copier avec status PENDING et sans note (batch insert)
     await db.insert(transactions).values(
       previousRecurring.map((t, index) => ({
@@ -279,7 +283,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
         bucketId: t.bucketId,
         isAmex: t.isAmex,
         recurring: true,
-        sortOrder: index,
+        sortOrder: startOrder + index,
         destinationAccountId: t.destinationAccountId,
       }))
     );

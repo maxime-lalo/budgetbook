@@ -117,10 +117,7 @@ export function TransactionsTable({
     if (Object.keys(orderMap).length === 0) return transactions;
     return [...transactions]
       .map((t) => (t.id in orderMap ? { ...t, sortOrder: orderMap[t.id] } : t))
-      .sort((a, b) => {
-        if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
-        return a.sortOrder - b.sortOrder;
-      });
+      .sort((a, b) => a.sortOrder - b.sortOrder);
   }, [transactions, orderMap]);
 
   const handleSwap = useCallback((idA: string, idB: string) => {

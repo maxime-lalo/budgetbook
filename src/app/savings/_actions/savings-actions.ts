@@ -28,12 +28,7 @@ export async function getSavingsTransactions(year: number) {
       bucket: true,
       destinationAccount: { columns: { name: true, color: true } },
     },
-    orderBy: [
-      sql`CASE WHEN ${transactions.recurring} THEN 0 ELSE 1 END`,
-      asc(transactions.date),
-      asc(transactions.createdAt),
-      asc(transactions.label),
-    ],
+    orderBy: [asc(transactions.sortOrder)],
   });
 
   return result.map((t) => ({

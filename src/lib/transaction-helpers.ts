@@ -76,8 +76,7 @@ export async function insertTransaction(
       .from(transactions)
       .where(and(
         eq(transactions.year, parsed.data.year),
-        eq(transactions.month, parsed.data.month),
-        eq(transactions.recurring, parsed.data.recurring)
+        eq(transactions.month, parsed.data.month)
       ));
     await db.insert(transactions).values({
       id: createId(),

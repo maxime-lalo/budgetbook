@@ -73,8 +73,7 @@ export async function POST(request: Request) {
     .from(transactions)
     .where(and(
       eq(transactions.year, year),
-      eq(transactions.month, month),
-      eq(transactions.recurring, false)
+      eq(transactions.month, month)
     ));
 
   const id = createId();
