@@ -250,8 +250,18 @@ export async function importAllData(
       });
     }
 
-    // 6. Insérer les transactions
+    // 6. Insérer les transactions (avec sortOrder incrémental par mois/section si absent)
+    const sortCounters = new Map<string, number>();
     for (const transaction of data.transactions) {
+      const key = `${transaction.year}-${transaction.month}-${transaction.recurring ? 1 : 0}`;
+      let sortOrder: number;
+      if (transaction.sortOrder != null && transaction.sortOrder > 0) {
+        sortOrder = transaction.sortOrder;
+      } else {
+        sortOrder = sortCounters.get(key) ?? 0;
+      }
+      sortCounters.set(key, Math.max(sortCounters.get(key) ?? 0, sortOrder + 1));
+
       await db.insert(transactions).values({
         id: transaction.id,
         label: transaction.label,
@@ -268,6 +278,7 @@ export async function importAllData(
         bucketId: transaction.bucketId,
         isAmex: transaction.isAmex,
         recurring: transaction.recurring ?? false,
+        sortOrder,
         createdAt: toTimestamp(transaction.createdAt) as Date,
         updatedAt: toTimestamp(transaction.updatedAt) as Date,
       });

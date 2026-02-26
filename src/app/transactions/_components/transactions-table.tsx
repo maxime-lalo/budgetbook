@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useTransition } from "react";
+import { useState, useCallback, useTransition, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -15,7 +15,8 @@ import { NewTransactionRow } from "./new-transaction-row";
 import { CopyRecurringButton } from "./copy-recurring-button";
 import { CompleteAmexButton } from "./complete-amex-button";
 import { TransactionFilters, type TransactionFilterValues } from "./transaction-filters";
-import { searchTransactionsAcrossMonths } from "../_actions/transaction-actions";
+import { searchTransactionsAcrossMonths, swapTransactionOrder } from "../_actions/transaction-actions";
+import { toast } from "sonner";
 import { formatCurrency, STATUS_ORDER, FILTER_ALL } from "@/lib/formatters";
 import { type SerializedTransaction, type FormAccount, type FormCategory } from "@/lib/types";
 
@@ -110,6 +111,51 @@ export function TransactionsTable({
   const [dateRangeResults, setDateRangeResults] = useState<SerializedTransaction[]>([]);
   const [isPending, startTransition] = useTransition();
 
+  // Ordre local des transactions (sortOrder swappé côté client)
+  const [orderMap, setOrderMap] = useState<Record<string, number>>({});
+  const orderedTransactions = useMemo(() => {
+    if (Object.keys(orderMap).length === 0) return transactions;
+    return [...transactions]
+      .map((t) => (t.id in orderMap ? { ...t, sortOrder: orderMap[t.id] } : t))
+      .sort((a, b) => {
+        if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+        return a.sortOrder - b.sortOrder;
+      });
+  }, [transactions, orderMap]);
+
+  const handleSwap = useCallback((idA: string, idB: string) => {
+    const rowA = document.querySelector(`[data-transaction-id="${idA}"]`) as HTMLElement | null;
+    const rowB = document.querySelector(`[data-transaction-id="${idB}"]`) as HTMLElement | null;
+
+    const applySwap = () => {
+      setOrderMap((prev) => {
+        const list = Object.keys(prev).length > 0
+          ? transactions.map((t) => ({ id: t.id, sortOrder: prev[t.id] ?? t.sortOrder }))
+          : transactions.map((t) => ({ id: t.id, sortOrder: t.sortOrder }));
+        const a = list.find((t) => t.id === idA);
+        const b = list.find((t) => t.id === idB);
+        if (!a || !b) return prev;
+        return { ...prev, [idA]: b.sortOrder, [idB]: a.sortOrder };
+      });
+      swapTransactionOrder(idA, idB).then((result) => {
+        if ("error" in result) toast.error("Erreur lors du changement d'ordre");
+      });
+    };
+
+    if (rowA && rowB) {
+      const deltaY = rowB.getBoundingClientRect().top - rowA.getBoundingClientRect().top;
+      const duration = 200;
+      const opts: KeyframeAnimationOptions = { duration, easing: "ease-in-out" };
+
+      rowA.animate([{ transform: "translateY(0)" }, { transform: `translateY(${deltaY}px)` }], opts);
+      rowB.animate([{ transform: "translateY(0)" }, { transform: `translateY(${-deltaY}px)` }], opts);
+
+      setTimeout(applySwap, duration);
+    } else {
+      applySwap();
+    }
+  }, [transactions]);
+
   const handleFilterChange = useCallback(
     (newFilters: TransactionFilterValues) => {
       setFilters(newFilters);
@@ -152,7 +198,7 @@ export function TransactionsTable({
   }
 
   // Apply all filters
-  const filtered = transactions.filter((t) => {
+  const filtered = orderedTransactions.filter((t) => {
     if (filters.categoryId !== FILTER_ALL && t.categoryId !== filters.categoryId) return false;
     if (filters.accountId !== FILTER_ALL && t.accountId !== filters.accountId) return false;
     if (filters.status !== FILTER_ALL && t.status !== filters.status) return false;
@@ -199,7 +245,7 @@ export function TransactionsTable({
     return 0;
   }
 
-  if (transactions.length === 0 && budgetCarryOver === 0) {
+  if (orderedTransactions.length === 0 && budgetCarryOver === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         Aucune transaction pour ce mois.
@@ -226,6 +272,9 @@ export function TransactionsTable({
       <TableCell />
     </TableRow>
   );
+
+  const isDateRangeActive = !!(filters.dateFrom || filters.dateTo);
+  const showReorderArrows = sortColumn === null && !isDateRangeActive;
 
   const noFilterResults = filtered.length === 0 && (filters.categoryId !== FILTER_ALL || filters.search || filters.accountId !== FILTER_ALL || filters.status !== FILTER_ALL);
 
@@ -255,32 +304,34 @@ export function TransactionsTable({
       />
     ));
   } else if (flatLayout) {
-    transactionRows = filtered.map((t) => (
+    transactionRows = filtered.map((t, index) => (
       <EditableTransactionRow
         key={t.id}
         transaction={t}
         accounts={accounts}
         categories={categories}
         amexEnabled={amexEnabled}
+        showReorderArrows={showReorderArrows}
+        isFirst={index === 0}
+        isLast={index === filtered.length - 1}
+        onMoveUp={() => handleSwap(t.id, filtered[index - 1].id)}
+        onMoveDown={() => handleSwap(t.id, filtered[index + 1].id)}
       />
     ));
   } else if (!separateRecurring) {
-    const mixed = [...filtered].sort((a, b) => {
-      if (!a.date && b.date) return 1;
-      if (a.date && !b.date) return -1;
-      if (a.date && b.date) {
-        const cmp = a.date.localeCompare(b.date);
-        if (cmp !== 0) return cmp;
-      }
-      return a.label.localeCompare(b.label);
-    });
-    transactionRows = mixed.map((t) => (
+    const mixed = filtered;
+    transactionRows = mixed.map((t, index) => (
       <EditableTransactionRow
         key={t.id}
         transaction={t}
         accounts={accounts}
         categories={categories}
         amexEnabled={amexEnabled}
+        showReorderArrows={showReorderArrows}
+        isFirst={index === 0}
+        isLast={index === mixed.length - 1}
+        onMoveUp={() => handleSwap(t.id, mixed[index - 1].id)}
+        onMoveDown={() => handleSwap(t.id, mixed[index + 1].id)}
       />
     ));
   } else {
@@ -323,13 +374,18 @@ export function TransactionsTable({
               </TableCell>
             </TableRow>
             {recurringOpen &&
-              recurring.map((t) => (
+              recurring.map((t, index) => (
                 <EditableTransactionRow
                   key={t.id}
                   transaction={t}
                   accounts={accounts}
                   categories={categories}
                   amexEnabled={amexEnabled}
+                  showReorderArrows={showReorderArrows}
+                  isFirst={index === 0}
+                  isLast={index === recurring.length - 1}
+                  onMoveUp={() => handleSwap(t.id, recurring[index - 1].id)}
+                  onMoveDown={() => handleSwap(t.id, recurring[index + 1].id)}
                 />
               ))}
           </>
@@ -344,20 +400,23 @@ export function TransactionsTable({
             </TableCell>
           </TableRow>
         )}
-        {nonRecurring.map((t) => (
+        {nonRecurring.map((t, index) => (
           <EditableTransactionRow
             key={t.id}
             transaction={t}
             accounts={accounts}
             categories={categories}
             amexEnabled={amexEnabled}
+            showReorderArrows={showReorderArrows}
+            isFirst={index === 0}
+            isLast={index === nonRecurring.length - 1}
+            onMoveUp={() => handleSwap(t.id, nonRecurring[index - 1].id)}
+            onMoveDown={() => handleSwap(t.id, nonRecurring[index + 1].id)}
           />
         ))}
       </>
     );
   }
-
-  const isDateRangeActive = !!(filters.dateFrom || filters.dateTo);
 
   let dateRangeRows: React.ReactNode = null;
   if (isDateRangeActive) {

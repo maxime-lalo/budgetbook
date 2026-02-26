@@ -28,9 +28,7 @@ export async function getTransactions(year: number, month: number) {
     },
     orderBy: [
       sql`CASE WHEN ${transactions.recurring} THEN 0 ELSE 1 END`,
-      asc(transactions.date),
-      asc(transactions.createdAt),
-      asc(transactions.label),
+      asc(transactions.sortOrder),
     ],
   });
 
@@ -49,6 +47,7 @@ export async function getTransactions(year: number, month: number) {
     bucketId: t.bucketId,
     isAmex: t.isAmex,
     recurring: t.recurring,
+    sortOrder: t.sortOrder ?? 0,
     destinationAccountId: t.destinationAccountId,
     account: t.account ? { name: t.account.name, color: t.account.color } : null,
     destinationAccount: t.destinationAccount ? { name: t.destinationAccount.name, color: t.destinationAccount.color } : null,
@@ -265,7 +264,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
 
     // Copier avec status PENDING et sans note (batch insert)
     await db.insert(transactions).values(
-      previousRecurring.map((t) => ({
+      previousRecurring.map((t, index) => ({
         id: createId(),
         label: t.label,
         amount: t.amount,
@@ -280,6 +279,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
         bucketId: t.bucketId,
         isAmex: t.isAmex,
         recurring: true,
+        sortOrder: index,
         destinationAccountId: t.destinationAccountId,
       }))
     );
@@ -288,6 +288,23 @@ export async function copyRecurringTransactions(year: number, month: number) {
     revalidateTransactionPages();
     return { success: true, count: previousRecurring.length };
   }, "Erreur lors de la copie des transactions récurrentes");
+}
+
+export async function swapTransactionOrder(idA: string, idB: string) {
+  return safeAction(async () => {
+    const [a, b] = await Promise.all([
+      db.query.transactions.findFirst({ where: eq(transactions.id, idA), columns: { sortOrder: true } }),
+      db.query.transactions.findFirst({ where: eq(transactions.id, idB), columns: { sortOrder: true } }),
+    ]);
+    if (!a || !b) return { error: "Transaction introuvable" };
+    await Promise.all([
+      db.update(transactions).set({ sortOrder: b.sortOrder }).where(eq(transactions.id, idA)),
+      db.update(transactions).set({ sortOrder: a.sortOrder }).where(eq(transactions.id, idB)),
+    ]);
+    // Pas de revalidateTransactionPages() — l'update optimiste côté client suffit
+    // et évite un rechargement complet de la page
+    return { success: true };
+  }, "Erreur lors du changement d'ordre");
 }
 
 export async function getPreviousMonthBudgetRemaining(year: number, month: number) {

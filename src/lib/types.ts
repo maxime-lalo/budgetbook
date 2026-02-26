@@ -20,6 +20,7 @@ export type SerializedTransaction = {
   bucketId: string | null;
   isAmex: boolean;
   recurring: boolean;
+  sortOrder: number;
   destinationAccountId: string | null;
   account: { name: string; color: string | null } | null;
   destinationAccount: { name: string; color: string | null } | null;

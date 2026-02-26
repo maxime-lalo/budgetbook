@@ -88,6 +88,7 @@ export const transactions = sqliteTable(
     bucketId: text("bucketId"),
     isAmex: integer("isAmex", { mode: "boolean" }).notNull().default(false),
     recurring: integer("recurring", { mode: "boolean" }).notNull().default(false),
+    sortOrder: integer("sortOrder").notNull().default(0),
     createdAt: text("createdAt").notNull().$defaultFn(() => new Date().toISOString()),
     updatedAt: text("updatedAt").notNull().$defaultFn(() => new Date().toISOString()).$onUpdate(() => new Date().toISOString()),
   },

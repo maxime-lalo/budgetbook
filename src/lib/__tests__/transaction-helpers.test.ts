@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => {
   const insert = vi.fn();
   const update = vi.fn();
   const del = vi.fn();
+  const select = vi.fn();
   const findFirst = vi.fn();
 
   // Chainable builder helpers
@@ -17,20 +18,30 @@ vi.mock("@/lib/db", () => {
     return chain;
   };
 
+  // Select chain: select().from().where() → [{ max: -1 }]
+  const makeSelectChain = () => {
+    const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+    chain.where = vi.fn().mockResolvedValue([{ max: -1 }]);
+    chain.from = vi.fn().mockReturnValue(chain);
+    return chain;
+  };
+
   insert.mockImplementation(() => makeChain());
   update.mockImplementation(() => makeChain());
   del.mockImplementation(() => makeChain());
+  select.mockImplementation(() => makeSelectChain());
 
   return {
     db: {
       insert,
       update,
       delete: del,
+      select,
       query: {
         transactions: { findFirst },
       },
     },
-    transactions: { id: "id", year: "year", month: "month" },
+    transactions: { id: "id", year: "year", month: "month", sortOrder: "sortOrder", recurring: "recurring" },
   };
 });
 
@@ -99,6 +110,7 @@ const dbMock = db as unknown as {
   insert: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
   query: { transactions: { findFirst: ReturnType<typeof vi.fn> } };
 };
 
@@ -119,9 +131,18 @@ beforeEach(() => {
     where: vi.fn().mockResolvedValue(undefined),
   });
 
+  // Select chain: select().from().where() → [{ max: -1 }]
+  const makeSelectChain = () => {
+    const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+    chain.where = vi.fn().mockResolvedValue([{ max: -1 }]);
+    chain.from = vi.fn().mockReturnValue(chain);
+    return chain;
+  };
+
   dbMock.insert.mockImplementation(() => makeChain());
   dbMock.update.mockImplementation(() => makeChain());
   dbMock.delete.mockImplementation(() => makeChain());
+  dbMock.select.mockImplementation(() => makeSelectChain());
 
   // findFirst resolves to undefined by default (transaction not found)
   dbMock.query.transactions.findFirst.mockResolvedValue(undefined);

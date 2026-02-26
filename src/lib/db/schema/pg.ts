@@ -108,6 +108,7 @@ export const transactions = pgTable(
     bucketId: text("bucketId"),
     isAmex: boolean("isAmex").notNull().default(false),
     recurring: boolean("recurring").notNull().default(false),
+    sortOrder: integer("sortOrder").notNull().default(0),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

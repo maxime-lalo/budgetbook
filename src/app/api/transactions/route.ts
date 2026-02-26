@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db, transactions, accounts, appPreferences } from "@/lib/db";
-import { eq, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createId } from "@paralleldrive/cuid2";
 import { validateApiToken, unauthorizedResponse } from "@/lib/api-auth";
@@ -68,6 +68,15 @@ export async function POST(request: Request) {
     accountId = defaultAccount.id;
   }
 
+  const [maxRow] = await db
+    .select({ max: sql<number>`coalesce(max(${transactions.sortOrder}), -1)` })
+    .from(transactions)
+    .where(and(
+      eq(transactions.year, year),
+      eq(transactions.month, month),
+      eq(transactions.recurring, false)
+    ));
+
   const id = createId();
   await db.insert(transactions).values({
     id,
@@ -81,6 +90,7 @@ export async function POST(request: Request) {
     categoryId: data.categoryId,
     subCategoryId: data.subCategoryId ?? null,
     isAmex: data.isAmex ?? false,
+    sortOrder: (maxRow?.max ?? -1) + 1,
   });
 
   await recomputeMonthlyBalance(year, month);

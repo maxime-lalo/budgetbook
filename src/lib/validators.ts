@@ -94,6 +94,7 @@ export const partialTransactionFieldSchema = z.object({
   note: z.string().nullable().optional(),
   isAmex: z.boolean().optional(),
   recurring: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).optional(),
   destinationAccountId: z.string().nullable().optional(),
 });
 
@@ -161,6 +162,7 @@ const exportTransactionSchema = z.object({
   bucketId: z.string().nullable(),
   isAmex: z.boolean(),
   recurring: z.boolean().default(false),
+  sortOrder: z.number().default(0),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

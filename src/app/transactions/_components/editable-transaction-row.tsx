@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, CreditCard, ArrowRightLeft, RefreshCw } from "lucide-react";
+import { Pencil, Trash2, CreditCard, ArrowRightLeft, RefreshCw, ChevronUp, ChevronDown } from "lucide-react";
 import { STATUS_LABELS, STATUS_COLORS, DEFAULT_COLOR, FILTER_NONE } from "@/lib/formatters";
 import {
   updateTransactionField,
@@ -30,11 +30,21 @@ export function EditableTransactionRow({
   accounts,
   categories,
   amexEnabled = true,
+  showReorderArrows = false,
+  isFirst = false,
+  isLast = false,
+  onMoveUp,
+  onMoveDown,
 }: {
   transaction: SerializedTransaction;
   accounts: FormAccount[];
   categories: FormCategory[];
   amexEnabled?: boolean;
+  showReorderArrows?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const [label, setLabel] = useState(transaction.label);
   const [amount, setAmount] = useState(transaction.amount.toFixed(2));
@@ -321,9 +331,31 @@ export function EditableTransactionRow({
 
   return (
     <>
-      <TableRow className={status === "CANCELLED" ? "opacity-50" : ""}>
+      <TableRow data-transaction-id={transaction.id} className={status === "CANCELLED" ? "opacity-50" : ""}>
         <TableCell className="p-1">
           <div className="flex items-center gap-1">
+            {showReorderArrows && (
+              <div className="flex flex-col shrink-0">
+                <button
+                  type="button"
+                  onClick={onMoveUp}
+                  disabled={isFirst}
+                  className="p-0.5 rounded hover:bg-muted disabled:opacity-30 disabled:pointer-events-none text-muted-foreground hover:text-foreground"
+                  aria-label="Monter"
+                >
+                  <ChevronUp className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onMoveDown}
+                  disabled={isLast}
+                  className="p-0.5 rounded hover:bg-muted disabled:opacity-30 disabled:pointer-events-none text-muted-foreground hover:text-foreground"
+                  aria-label="Descendre"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             {transaction.recurring && (
               <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />
             )}

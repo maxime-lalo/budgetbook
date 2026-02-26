@@ -1,5 +1,5 @@
 import { db, transactions } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { transactionSchema, type TransactionInput } from "@/lib/validators";
 import { revalidateTransactionPages } from "@/lib/revalidate";
@@ -71,9 +71,18 @@ export async function insertTransaction(
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   return safeAction(async () => {
+    const [maxRow] = await db
+      .select({ max: sql<number>`coalesce(max(${transactions.sortOrder}), -1)` })
+      .from(transactions)
+      .where(and(
+        eq(transactions.year, parsed.data.year),
+        eq(transactions.month, parsed.data.month),
+        eq(transactions.recurring, parsed.data.recurring)
+      ));
     await db.insert(transactions).values({
       id: createId(),
       ...buildTransactionValues(parsed.data),
+      sortOrder: (maxRow?.max ?? -1) + 1,
     });
     await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
     revalidateTransactionPages();
