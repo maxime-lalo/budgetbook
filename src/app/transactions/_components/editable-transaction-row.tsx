@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useTransition } from "react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,6 +59,7 @@ export function EditableTransactionRow({
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelNote, setCancelNote] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [, startEditTransition] = useTransition();
   const [editDate, setEditDate] = useState(date);
   const [editRecurring, setEditRecurring] = useState(transaction.recurring);
   const [editMonth, setEditMonth] = useState(
@@ -273,7 +274,7 @@ export function EditableTransactionRow({
     setEditBucketId(ba ? ba.buckets[0].id : "");
   }
 
-  async function handleEditSave() {
+  function handleEditSave() {
     const fields: Parameters<typeof updateTransactionField>[1] = {};
     const originalDate = transaction.date
       ? format(new Date(transaction.date), "yyyy-MM-dd")
@@ -303,24 +304,19 @@ export function EditableTransactionRow({
       fields.destinationAccountId = newDestId;
     }
 
-    if (Object.keys(fields).length === 0) {
-      setEditDialogOpen(false);
-      return;
-    }
+    if (Object.keys(fields).length === 0) return;
 
-    const result = await updateTransactionField(transaction.id, fields);
-    if ("error" in result) {
-      toast.error("Erreur lors de la mise à jour");
-      return;
-    }
-
-    if (fields.date !== undefined) {
-      setDate(editDate);
-    }
-    if (fields.accountId) {
-      setAccountId(editAccountId);
-    }
-    setEditDialogOpen(false);
+    // La fermeture est gérée par DialogClose (Radix) sur le bouton.
+    // On lance juste la server action en arrière-plan.
+    startEditTransition(async () => {
+      const result = await updateTransactionField(transaction.id, fields);
+      if ("error" in result) {
+        toast.error("Erreur lors de la mise à jour");
+        return;
+      }
+      if (fields.date !== undefined) setDate(editDate);
+      if (fields.accountId) setAccountId(editAccountId);
+    });
   }
 
   return (
@@ -525,7 +521,6 @@ export function EditableTransactionRow({
         editBucketId={editBucketId}
         onBucketChange={setEditBucketId}
         onSave={handleEditSave}
-        onClose={() => setEditDialogOpen(false)}
       />
     </>
   );

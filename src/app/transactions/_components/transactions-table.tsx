@@ -265,7 +265,16 @@ export function TransactionsTable({
       />
     ));
   } else if (!separateRecurring) {
-    transactionRows = filtered.map((t) => (
+    const mixed = [...filtered].sort((a, b) => {
+      if (!a.date && b.date) return 1;
+      if (a.date && !b.date) return -1;
+      if (a.date && b.date) {
+        const cmp = a.date.localeCompare(b.date);
+        if (cmp !== 0) return cmp;
+      }
+      return a.label.localeCompare(b.label);
+    });
+    transactionRows = mixed.map((t) => (
       <EditableTransactionRow
         key={t.id}
         transaction={t}

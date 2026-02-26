@@ -2,6 +2,7 @@
 
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -37,7 +38,6 @@ type EditTransactionDialogProps = {
   editBucketId: string;
   onBucketChange: (value: string) => void;
   onSave: () => void;
-  onClose: () => void;
 };
 
 export function EditTransactionDialog({
@@ -57,7 +57,6 @@ export function EditTransactionDialog({
   editBucketId,
   onBucketChange,
   onSave,
-  onClose,
 }: EditTransactionDialogProps) {
   const isSavings = (a?: FormAccount) => a && (a.type === "SAVINGS" || a.type === "INVESTMENT") && a.buckets.length > 0;
   const destAcct = editDestinationAccountId ? accounts.find((a) => a.id === editDestinationAccountId) : undefined;
@@ -147,12 +146,16 @@ export function EditTransactionDialog({
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Annuler
-            </Button>
-            <Button onClick={onSave}>
-              Enregistrer
-            </Button>
+            <DialogClose asChild>
+              <Button variant="outline">
+                Annuler
+              </Button>
+            </DialogClose>
+            <DialogClose asChild>
+              <Button onClick={onSave}>
+                Enregistrer
+              </Button>
+            </DialogClose>
           </div>
         </div>
       </DialogContent>
