@@ -8,6 +8,7 @@ import { TRANSACTION_STATUSES } from "@/lib/types";
 import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
 import { revalidatePath } from "next/cache";
 import { toDbDate } from "@/lib/db/helpers";
+import { logger } from "@/lib/logger";
 
 const apiTransactionSchema = z.object({
   label: z.string().min(1, "Le libellé est requis"),
@@ -28,11 +29,13 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
+    logger.warn("API: Invalid JSON in transaction request", { userId });
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const parsed = apiTransactionSchema.safeParse(body);
   if (!parsed.success) {
+    logger.debug("API: Transaction validation failed", { userId, errors: parsed.error.flatten().fieldErrors });
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
       { status: 400 }
@@ -97,6 +100,8 @@ export async function POST(request: Request) {
 
   await recomputeMonthlyBalance(year, month, userId);
   revalidatePath("/transactions");
+
+  logger.info("API: Transaction created", { userId, label: data.label, amount: data.amount });
 
   return NextResponse.json(
     {

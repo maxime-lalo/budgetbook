@@ -4,6 +4,7 @@ import { db, users, accounts, transactions, categories, budgets, monthlyBalances
 import { eq, sql, inArray } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth/session";
 import { safeAction } from "@/lib/safe-action";
+import { logger } from "@/lib/logger";
 
 export async function getUsers() {
   const admin = await requireAdmin();
@@ -71,6 +72,7 @@ export async function deleteUser(userId: string) {
     await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
     await db.delete(users).where(eq(users.id, userId));
 
+    logger.warn("User deleted", { adminId: admin.id, deletedUserId: userId });
     return { success: true };
   }, "Erreur lors de la suppression de l'utilisateur");
 }
@@ -84,6 +86,7 @@ export async function toggleAdmin(userId: string, isAdmin: boolean) {
 
   return safeAction(async () => {
     await db.update(users).set({ isAdmin }).where(eq(users.id, userId));
+    logger.warn("Admin status toggled", { adminId: admin.id, targetUserId: userId, isAdmin });
     return { success: true };
   }, "Erreur lors de la mise à jour des droits");
 }

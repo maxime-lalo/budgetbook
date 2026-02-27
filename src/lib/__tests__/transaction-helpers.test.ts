@@ -70,7 +70,7 @@ vi.mock("@paralleldrive/cuid2", () => ({
 
 // Logger is invoked by safeAction on error; silence it
 vi.mock("@/lib/logger", () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
 // --- Imports after mocks ---

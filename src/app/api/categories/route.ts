@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, categories } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { validateApiToken, unauthorizedResponse } from "@/lib/api-auth";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: Request) {
   const userId = await validateApiToken(request);
@@ -27,5 +28,6 @@ export async function GET(request: Request) {
       ),
     }));
 
+  logger.debug("API: Categories listed", { userId, count: sorted.length });
   return NextResponse.json(sorted);
 }

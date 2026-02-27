@@ -6,6 +6,7 @@ import { revalidateTransactionPages } from "@/lib/revalidate";
 import { recomputeMonthlyBalance } from "@/lib/monthly-balance";
 import { toDbDate } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
+import { logger } from "@/lib/logger";
 
 type TransactionOverrides = {
   forceNegativeAmount?: boolean;
@@ -69,7 +70,10 @@ export async function insertTransaction(
 ) {
   const modified = applyOverrides(data, overrides);
   const parsed = transactionSchema.safeParse(modified);
-  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  if (!parsed.success) {
+    logger.debug("Transaction validation failed", { userId, errors: parsed.error.flatten().fieldErrors });
+    return { error: parsed.error.flatten().fieldErrors };
+  }
 
   return safeAction(async () => {
     const [maxRow] = await db
@@ -88,6 +92,7 @@ export async function insertTransaction(
     });
     await recomputeMonthlyBalance(parsed.data.year, parsed.data.month, userId);
     revalidateTransactionPages();
+    logger.info("Transaction created", { userId, label: parsed.data.label, amount: parsed.data.amount, month: parsed.data.month, year: parsed.data.year, recurring: parsed.data.recurring });
     return { success: true };
   }, errorMessage);
 }
@@ -101,7 +106,10 @@ export async function updateTransactionById(
 ) {
   const modified = applyOverrides(data, overrides);
   const parsed = transactionSchema.safeParse(modified);
-  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
+  if (!parsed.success) {
+    logger.debug("Transaction validation failed", { userId, id, errors: parsed.error.flatten().fieldErrors });
+    return { error: parsed.error.flatten().fieldErrors };
+  }
 
   return safeAction(async () => {
     const oldTransaction = await db.query.transactions.findFirst({
@@ -115,10 +123,12 @@ export async function updateTransactionById(
 
     await recomputeMonthlyBalance(parsed.data.year, parsed.data.month, userId);
     if (oldTransaction && (oldTransaction.year !== parsed.data.year || oldTransaction.month !== parsed.data.month)) {
+      logger.debug("Transaction month changed", { id, userId, from: `${oldTransaction.year}-${oldTransaction.month}`, to: `${parsed.data.year}-${parsed.data.month}` });
       await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month, userId);
     }
 
     revalidateTransactionPages();
+    logger.info("Transaction updated", { id, userId });
     return { success: true };
   }, errorMessage);
 }
@@ -141,6 +151,7 @@ export async function deleteTransactionById(
     }
 
     revalidateTransactionPages();
+    logger.info("Transaction deleted", { id, userId, month: transaction?.month, year: transaction?.year });
     return { success: true };
   }, errorMessage);
 }

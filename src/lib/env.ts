@@ -12,6 +12,7 @@ const envSchema = z.object({
   LDAP_SEARCH_BASE: z.string().optional(),
   LDAP_SEARCH_FILTER: z.string().default("(uid={{identifier}})"),
   REGISTRATION_ENABLED: z.string().default("true").transform((v) => v !== "false"),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
 });
 
 export const env = envSchema.parse({
@@ -26,4 +27,5 @@ export const env = envSchema.parse({
   LDAP_SEARCH_BASE: process.env.LDAP_SEARCH_BASE,
   LDAP_SEARCH_FILTER: process.env.LDAP_SEARCH_FILTER,
   REGISTRATION_ENABLED: process.env.REGISTRATION_ENABLED,
+  LOG_LEVEL: process.env.LOG_LEVEL,
 });

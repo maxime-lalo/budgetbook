@@ -10,6 +10,7 @@ import { toNumber, toISOString, toDbDate, round2, getCheckingAccountIds } from "
 import { safeAction } from "@/lib/safe-action";
 import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
 import { requireAuth } from "@/lib/auth/session";
+import { logger } from "@/lib/logger";
 
 export async function getTransactions(year: number, month: number) {
   const user = await requireAuth();
@@ -126,6 +127,7 @@ export async function markTransactionCompleted(id: string) {
     }
 
     revalidateTransactionPages();
+    logger.info("Transaction marked completed", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la validation de la transaction");
 }
@@ -153,6 +155,7 @@ export async function completeAmexTransactions(year: number, month: number) {
 
     await recomputeMonthlyBalance(year, month, user.id);
     revalidateTransactionPages();
+    logger.info("AMEX transactions completed", { userId: user.id, year, month, count: Number(count) });
     return { count: Number(count) };
   }, "Erreur lors de la validation des transactions AMEX");
 }
@@ -174,6 +177,7 @@ export async function cancelTransaction(id: string, note: string) {
     }
 
     revalidateTransactionPages();
+    logger.info("Transaction cancelled", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de l'annulation de la transaction");
 }
@@ -245,6 +249,7 @@ export async function updateTransactionField(
     }
 
     revalidateTransactionPages();
+    logger.info("Transaction field updated", { id, userId: user.id, fields: Object.keys(fields) });
     return { success: true };
   }, "Erreur lors de la mise à jour du champ");
 }
@@ -305,6 +310,7 @@ export async function copyRecurringTransactions(year: number, month: number) {
 
     await recomputeMonthlyBalance(year, month, user.id);
     revalidateTransactionPages();
+    logger.info("Recurring transactions copied", { userId: user.id, year, month, count: previousRecurring.length });
     return { success: true, count: previousRecurring.length };
   }, "Erreur lors de la copie des transactions récurrentes");
 }
@@ -323,6 +329,7 @@ export async function swapTransactionOrder(idA: string, idB: string) {
     ]);
     // Pas de revalidateTransactionPages() — l'update optimiste côté client suffit
     // et évite un rechargement complet de la page
+    logger.debug("Transaction order swapped", { userId: user.id, idA, idB });
     return { success: true };
   }, "Erreur lors du changement d'ordre");
 }

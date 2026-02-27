@@ -10,6 +10,7 @@ import { safeAction } from "@/lib/safe-action";
 import { budgetSchema } from "@/lib/validators";
 import { revalidateTransactionPages } from "@/lib/revalidate";
 import { requireAuth } from "@/lib/auth/session";
+import { logger } from "@/lib/logger";
 
 export async function getBudgetsWithSpent(year: number, month: number) {
   const user = await requireAuth();
@@ -90,6 +91,7 @@ export async function upsertBudget(categoryId: string, year: number, month: numb
     await recomputeMonthlyBalance(parsed.data.year, parsed.data.month, user.id);
     revalidatePath("/budgets");
     revalidateTransactionPages();
+    logger.info("Budget upserted", { userId: user.id, categoryId: parsed.data.categoryId, amount: parsed.data.amount, isNew: !existing });
     return { success: true };
   }, "Erreur lors de la mise à jour du budget");
 }
@@ -134,6 +136,7 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
     await recomputeMonthlyBalance(year, month, user.id);
     revalidatePath("/budgets");
     revalidateTransactionPages();
+    logger.info("Budgets copied from previous month", { userId: user.id, year, month, count: previousBudgets.length });
     return { success: true, count: previousBudgets.length };
   }, "Erreur lors de la copie des budgets");
 }
@@ -169,6 +172,7 @@ export async function calibrateBudgets(year: number, month: number) {
     await recomputeMonthlyBalance(year, month, user.id);
     revalidatePath("/budgets");
     revalidateTransactionPages();
+    logger.info("Budgets calibrated", { userId: user.id, year, month, count: overBudget.length });
     return { success: true, count: overBudget.length };
   }, "Erreur lors de la calibration des budgets");
 }

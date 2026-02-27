@@ -1,5 +1,6 @@
 import { db, accounts, categories, subCategories, appPreferences } from "@/lib/db";
 import { createId } from "@paralleldrive/cuid2";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_CATEGORIES = [
   { name: "Logement", color: "#6366f1", icon: "Home", subs: ["Loyer", "Charges", "Assurance habitation", "Travaux"] },
@@ -71,4 +72,6 @@ export async function seedUserDefaults(userId: string): Promise<void> {
     amexEnabled: true,
     separateRecurring: true,
   });
+
+  logger.info("User defaults seeded", { userId });
 }

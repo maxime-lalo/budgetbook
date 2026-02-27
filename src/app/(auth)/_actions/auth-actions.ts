@@ -36,11 +36,13 @@ export async function loginAction(
         user = await db.query.users.findFirst({ where: eq(users.id, id) });
         if (user) {
           await seedUserDefaults(user.id);
+          logger.info("LDAP user created", { userId: user.id, email: user.email });
         }
       }
 
       if (user) {
         await createSessionTokens(user);
+        logger.info("Login successful", { userId: user.id, provider: "ldap" });
         return { success: true };
       }
     }
@@ -60,6 +62,7 @@ export async function loginAction(
     }
 
     await createSessionTokens(user);
+    logger.info("Login successful", { userId: user.id, provider: "local" });
     return { success: true };
   } catch (e) {
     logger.error("Login error", { error: e instanceof Error ? e.message : String(e) });
@@ -107,6 +110,7 @@ export async function registerAction(
       await createSessionTokens(user);
     }
 
+    logger.info("User registered", { userId: id, email });
     return { success: true };
   } catch (e) {
     logger.error("Register error", { error: e instanceof Error ? e.message : String(e) });
@@ -119,6 +123,7 @@ export async function logoutAction(): Promise<void> {
     // Supprimer les refresh tokens de la BDD
     // On ne peut pas facilement identifier le token actuel sans le lire
     // Pour simplifier, on clear juste les cookies
+    logger.info("User logged out");
     await clearAuthCookies();
   } catch (e) {
     logger.error("Logout error", { error: e instanceof Error ? e.message : String(e) });

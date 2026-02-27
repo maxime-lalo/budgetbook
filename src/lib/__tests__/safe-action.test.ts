@@ -3,6 +3,7 @@ import { safeAction } from "@/lib/safe-action";
 
 vi.mock("@/lib/logger", () => ({
   logger: {
+    debug: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
     info: vi.fn(),

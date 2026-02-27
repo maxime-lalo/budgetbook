@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { toNumber } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
 import { requireAuth } from "@/lib/auth/session";
+import { logger } from "@/lib/logger";
 
 export async function getAccounts() {
   const user = await requireAuth();
@@ -88,6 +89,7 @@ export async function createAccount(formData: FormData) {
       linkedAccountId: parsed.data.linkedAccountId || null,
     });
     revalidatePath("/accounts");
+    logger.info("Account created", { userId: user.id, name: parsed.data.name, type: parsed.data.type });
     return { success: true };
   }, "Erreur lors de la création du compte");
 }
@@ -106,6 +108,7 @@ export async function updateAccount(id: string, formData: FormData) {
       linkedAccountId: parsed.data.linkedAccountId || null,
     }).where(and(eq(accounts.id, id), eq(accounts.userId, user.id)));
     revalidatePath("/accounts");
+    logger.info("Account updated", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la mise à jour du compte");
 }
@@ -116,6 +119,7 @@ export async function deleteAccount(id: string) {
   return safeAction(async () => {
     await db.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.userId, user.id)));
     revalidatePath("/accounts");
+    logger.info("Account deleted", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la suppression du compte");
 }
@@ -142,6 +146,7 @@ export async function createBucket(formData: FormData) {
       baseAmount: parsed.data.baseAmount.toString(),
     });
     revalidatePath("/accounts");
+    logger.info("Bucket created", { userId: user.id, name: parsed.data.name });
     return { success: true };
   }, "Erreur lors de la création du bucket");
 }
@@ -173,6 +178,7 @@ export async function updateBucket(id: string, formData: FormData) {
       baseAmount: parsed.data.baseAmount.toString(),
     }).where(eq(buckets.id, id));
     revalidatePath("/accounts");
+    logger.info("Bucket updated", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la mise à jour du bucket");
 }
@@ -196,6 +202,7 @@ export async function deleteBucket(id: string) {
 
     await db.delete(buckets).where(eq(buckets.id, id));
     revalidatePath("/accounts");
+    logger.info("Bucket deleted", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la suppression du bucket");
 }

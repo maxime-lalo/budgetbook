@@ -3,6 +3,7 @@ import { eq, and, or, inArray, lt } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { toNumber, round2, getCheckingAccountIds } from "@/lib/db/helpers";
+import { logger } from "@/lib/logger";
 
 export async function recomputeMonthlyBalance(year: number, month: number, userId: string) {
   // 1. Forecast = même logique que getTransactionTotals (comptes CHECKING uniquement + virements entrants)
@@ -97,6 +98,8 @@ export async function recomputeMonthlyBalance(year: number, month: number, userI
       surplus: surplus.toString(),
     });
   }
+
+  logger.debug("Monthly balance recomputed", { userId, year, month, surplus });
 }
 
 export async function getCarryOver(year: number, month: number, userId: string) {
@@ -123,4 +126,6 @@ export async function backfillAllMonthlyBalances(userId: string) {
   for (const { year, month } of distinctMonths) {
     await recomputeMonthlyBalance(year, month, userId);
   }
+
+  logger.info("Monthly balances backfilled", { userId, monthCount: distinctMonths.length });
 }

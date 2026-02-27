@@ -7,6 +7,7 @@ import { categorySchema, subCategorySchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 import { safeAction } from "@/lib/safe-action";
 import { requireAuth } from "@/lib/auth/session";
+import { logger } from "@/lib/logger";
 
 export async function getCategories() {
   const user = await requireAuth();
@@ -44,6 +45,7 @@ export async function createCategory(formData: FormData) {
       ...parsed.data,
     });
     revalidatePath("/categories");
+    logger.info("Category created", { userId: user.id, name: parsed.data.name });
     return { success: true };
   }, "Erreur lors de la création de la catégorie");
 }
@@ -57,6 +59,7 @@ export async function updateCategory(id: string, formData: FormData) {
   return safeAction(async () => {
     await db.update(categories).set(parsed.data).where(and(eq(categories.id, id), eq(categories.userId, user.id)));
     revalidatePath("/categories");
+    logger.info("Category updated", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la mise à jour de la catégorie");
 }
@@ -89,6 +92,7 @@ export async function deleteCategory(id: string) {
     revalidatePath("/categories");
     revalidatePath("/transactions");
     revalidatePath("/budgets");
+    logger.info("Category deleted", { id, userId: user.id, subCategoriesRemoved: subIds.length });
     return { success: true };
   }, "Erreur lors de la suppression de la catégorie");
 }
@@ -106,6 +110,7 @@ export async function createSubCategory(formData: FormData) {
       ...parsed.data,
     });
     revalidatePath("/categories");
+    logger.info("SubCategory created", { userId: user.id, name: parsed.data.name });
     return { success: true };
   }, "Erreur lors de la création de la sous-catégorie");
 }
@@ -119,6 +124,7 @@ export async function updateSubCategory(id: string, formData: FormData) {
   return safeAction(async () => {
     await db.update(subCategories).set(parsed.data).where(and(eq(subCategories.id, id), eq(subCategories.userId, user.id)));
     revalidatePath("/categories");
+    logger.info("SubCategory updated", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la mise à jour de la sous-catégorie");
 }
@@ -128,6 +134,7 @@ export async function deleteSubCategory(id: string) {
   return safeAction(async () => {
     await db.delete(subCategories).where(and(eq(subCategories.id, id), eq(subCategories.userId, user.id)));
     revalidatePath("/categories");
+    logger.info("SubCategory deleted", { id, userId: user.id });
     return { success: true };
   }, "Erreur lors de la suppression de la sous-catégorie");
 }

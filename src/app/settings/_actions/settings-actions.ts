@@ -46,6 +46,7 @@ export async function regenerateApiToken() {
       where: eq(apiTokens.id, id),
     });
 
+    logger.info("API token regenerated", { userId: user.id, tokenPrefix });
     return {
       token: plainToken,
       tokenPrefix,
@@ -89,6 +90,7 @@ export async function updateAmexEnabled(enabled: boolean) {
 
     revalidateTransactionPages();
     revalidatePath("/settings");
+    logger.info("AMEX preference updated", { userId: user.id, enabled });
     return { success: true };
   }, "Erreur lors de la mise à jour de la préférence AMEX");
 }
@@ -108,6 +110,7 @@ export async function updateSeparateRecurring(enabled: boolean) {
 
     revalidateTransactionPages();
     revalidatePath("/settings");
+    logger.info("Separate recurring preference updated", { userId: user.id, enabled });
     return { success: true };
   }, "Erreur lors de la mise à jour de la préférence récurrentes");
 }
@@ -162,6 +165,7 @@ export async function exportAllData(): Promise<string> {
     },
   };
 
+  logger.info("Data exported", { userId: user.id, accounts: accs.length, categories: cats.length, transactions: txs.length, budgets: bdgs.length });
   return JSON.stringify(exportData, null, 2);
 }
 
@@ -185,6 +189,7 @@ export async function clearAllData() {
     await db.update(accounts).set({ linkedAccountId: null }).where(eq(accounts.userId, user.id));
     await db.delete(accounts).where(eq(accounts.userId, user.id));
     revalidatePath("/");
+    logger.warn("All user data cleared", { userId: user.id });
     return { success: true };
   }, "Erreur lors de la suppression des données");
 }
@@ -201,6 +206,7 @@ export async function importAllData(
     const counts: Record<string, number> = {};
 
     // 1. Clear toutes les données existantes de l'utilisateur
+    logger.info("Import: clearing existing data", { userId: user.id });
     await db.delete(monthlyBalances).where(eq(monthlyBalances.userId, user.id));
     await db.delete(budgets).where(eq(budgets.userId, user.id));
     await db.delete(transactions).where(eq(transactions.userId, user.id));
@@ -229,6 +235,7 @@ export async function importAllData(
       oldId ? map.get(oldId) ?? null : null;
 
     // 2. Insérer les comptes (sans linkedAccountId d'abord)
+    logger.info("Import: inserting accounts", { userId: user.id, count: data.accounts.length });
     for (const account of data.accounts) {
       const newId = createId();
       accountIdMap.set(account.id, newId);
@@ -247,6 +254,7 @@ export async function importAllData(
     }
 
     // 3. Insérer les catégories
+    logger.info("Import: inserting categories", { userId: user.id, count: data.categories.length });
     for (const category of data.categories) {
       const newId = createId();
       categoryIdMap.set(category.id, newId);
@@ -295,6 +303,7 @@ export async function importAllData(
     }
 
     // 6. Insérer les transactions (avec sortOrder incrémental par mois si absent)
+    logger.info("Import: inserting transactions", { userId: user.id, count: data.transactions.length });
     const sortCounters = new Map<string, number>();
     for (const transaction of data.transactions) {
       const key = `${transaction.year}-${transaction.month}`;
@@ -330,6 +339,7 @@ export async function importAllData(
     }
 
     // 7. Insérer les budgets
+    logger.info("Import: inserting budgets", { userId: user.id, count: data.budgets.length });
     for (const budget of data.budgets) {
       await db.insert(budgets).values({
         id: createId(),
@@ -375,12 +385,14 @@ export async function importAllData(
     counts.transactions = data.transactions.length;
     counts.budgets = data.budgets.length;
     // Recalculer les monthly balances (hors transaction — récupérable via Recalculer)
+    logger.info("Import: recalculating monthly balances", { userId: user.id });
     await backfillAllMonthlyBalances(user.id);
     const recalculated = await db.query.monthlyBalances.findMany({
       where: eq(monthlyBalances.userId, user.id),
     });
     counts.monthlyBalances = recalculated.length;
 
+    logger.info("Data imported", { userId: user.id, counts });
     revalidatePath("/");
     return { success: true, counts };
   } catch (e) {
@@ -418,6 +430,7 @@ export async function recalculateAllBalances() {
       where: eq(monthlyBalances.userId, user.id),
     });
     revalidatePath("/");
+    logger.info("All balances recalculated", { userId: user.id, count: recalculated.length });
     return { success: true, count: recalculated.length };
   }, "Erreur lors du recalcul des soldes mensuels");
 }
