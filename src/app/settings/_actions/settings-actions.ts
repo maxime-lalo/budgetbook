@@ -302,10 +302,11 @@ export async function importAllData(
       });
     }
 
-    // 6. Insérer les transactions (avec sortOrder incrémental par mois si absent)
+    // 6. Insérer les transactions en batches de 500
+    const BATCH_SIZE = 500;
     logger.info("Import: inserting transactions", { userId: user.id, count: data.transactions.length });
     const sortCounters = new Map<string, number>();
-    for (const transaction of data.transactions) {
+    const txValues = data.transactions.map((transaction) => {
       const key = `${transaction.year}-${transaction.month}`;
       let sortOrder: number;
       if (transaction.sortOrder != null && transaction.sortOrder > 0) {
@@ -315,7 +316,7 @@ export async function importAllData(
       }
       sortCounters.set(key, Math.max(sortCounters.get(key) ?? 0, sortOrder + 1));
 
-      await db.insert(transactions).values({
+      return {
         id: createId(),
         userId: user.id,
         label: transaction.label,
@@ -335,7 +336,12 @@ export async function importAllData(
         sortOrder,
         createdAt: new Date(transaction.createdAt),
         updatedAt: new Date(transaction.updatedAt),
-      });
+      };
+    });
+    for (let i = 0; i < txValues.length; i += BATCH_SIZE) {
+      const batch = txValues.slice(i, i + BATCH_SIZE);
+      await db.insert(transactions).values(batch);
+      logger.info("Import: transactions batch inserted", { userId: user.id, progress: `${Math.min(i + BATCH_SIZE, txValues.length)}/${txValues.length}` });
     }
 
     // 7. Insérer les budgets
