@@ -85,7 +85,6 @@ export default async function AccountsPage() {
 
       <div className="grid gap-6">
         {accounts.map((account) => {
-          const isSavingsOrInvestment = account.type === "SAVINGS" || account.type === "INVESTMENT";
           const currentYear = new Date().getFullYear();
           const currentMonth = new Date().getMonth() + 1;
 

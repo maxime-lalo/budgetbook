@@ -10,6 +10,7 @@ import { authenticateLdap } from "@/lib/auth/ldap";
 import { seedUserDefaults } from "@/lib/auth/seed-defaults";
 import { hashToken } from "@/lib/api-auth";
 import { logger } from "@/lib/logger";
+import { env } from "@/lib/env";
 
 export async function loginAction(
   identifier: string,
@@ -71,6 +72,10 @@ export async function registerAction(
   email: string,
   password: string
 ): Promise<{ success: true } | { error: string }> {
+  if (!env.REGISTRATION_ENABLED) {
+    return { error: "Les inscriptions sont désactivées" };
+  }
+
   try {
     const existing = await db.query.users.findFirst({
       where: eq(users.email, email),

@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 interface LdapUser {
   email: string;
   name: string;
@@ -12,8 +14,11 @@ export async function authenticateLdap(identifier: string, password: string): Pr
 
   // Si les variables LDAP ne sont pas configurées, LDAP est désactivé
   if (!ldapUrl || !bindDn || !bindPassword || !searchBase) {
+    logger.info("LDAP disabled (missing env vars)", { ldapUrl: !!ldapUrl, bindDn: !!bindDn, searchBase: !!searchBase });
     return null;
   }
+
+  logger.info("LDAP auth attempt", { identifier, ldapUrl, searchBase });
 
   const ldap = await import("ldapjs");
   const client = ldap.createClient({
@@ -24,19 +29,24 @@ export async function authenticateLdap(identifier: string, password: string): Pr
 
   // Capturer les erreurs asynchrones du client (DNS, connexion refusée, etc.)
   // Sans ce handler, l'erreur devient un uncaughtException qui crash le process
-  client.on("error", () => {});
+  client.on("error", (err) => {
+    logger.error("LDAP client async error", { error: err instanceof Error ? err.message : String(err) });
+  });
 
   try {
     // Bind avec le service account
+    logger.info("LDAP service bind", { bindDn });
     await new Promise<void>((resolve, reject) => {
       client.bind(bindDn, bindPassword, (err) => {
         if (err) reject(err);
         else resolve();
       });
     });
+    logger.info("LDAP service bind OK");
 
     // Rechercher l'utilisateur
     const filter = searchFilter.replace("{{identifier}}", identifier);
+    logger.info("LDAP search", { searchBase, filter });
     const searchResult = await new Promise<LdapUser | null>((resolve, reject) => {
       client.search(searchBase, { filter, scope: "sub", attributes: ["mail", "cn", "displayName", "uid"] }, (err, res) => {
         if (err) {
@@ -48,6 +58,7 @@ export async function authenticateLdap(identifier: string, password: string): Pr
 
         res.on("searchEntry", (entry) => {
           const attrs = entry.pojo.attributes;
+          logger.info("LDAP entry found", { attributes: attrs.map((a) => ({ type: a.type, values: a.values })) });
           const mailAttr = attrs.find((a) => a.type === "mail");
           const nameAttr = attrs.find((a) => a.type === "displayName") || attrs.find((a) => a.type === "cn");
           // Utiliser l'email LDAP si disponible, sinon l'identifiant fourni
@@ -66,9 +77,12 @@ export async function authenticateLdap(identifier: string, password: string): Pr
     });
 
     if (!searchResult) {
+      logger.warn("LDAP user not found", { identifier, filter });
       client.destroy();
       return null;
     }
+
+    logger.info("LDAP user found", { email: searchResult.email, name: searchResult.name });
 
     // Rechercher le DN de l'utilisateur pour le bind
     const userDn = await new Promise<string | null>((resolve, reject) => {
@@ -88,9 +102,12 @@ export async function authenticateLdap(identifier: string, password: string): Pr
     });
 
     if (!userDn) {
+      logger.warn("LDAP DN not found", { identifier });
       client.destroy();
       return null;
     }
+
+    logger.info("LDAP user bind attempt", { userDn });
 
     // Vérifier le password de l'utilisateur
     await new Promise<void>((resolve, reject) => {
@@ -100,9 +117,11 @@ export async function authenticateLdap(identifier: string, password: string): Pr
       });
     });
 
+    logger.info("LDAP auth successful", { identifier, email: searchResult.email });
     client.destroy();
     return searchResult;
-  } catch {
+  } catch (e) {
+    logger.error("LDAP auth failed", { identifier, error: e instanceof Error ? e.message : String(e) });
     try { client.destroy(); } catch { /* ignore */ }
     return null;
   }

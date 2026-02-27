@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Wallet } from "lucide-react";
 import { loginAction } from "../../_actions/auth-actions";
 
-export function LoginForm() {
+export function LoginForm({ registrationEnabled = true }: { registrationEnabled?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,17 +57,19 @@ export function LoginForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Mot de passe</Label>
-            <Input id="password" name="password" type="password" required autoComplete="current-password" />
+            <Input id="password" name="password" type="password" required autoComplete="current-password" placeholder="Mot de passe" />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Connexion..." : "Se connecter"}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Pas encore de compte ?{" "}
-            <Link href="/register" className="text-primary underline-offset-4 hover:underline">
-              S&apos;inscrire
-            </Link>
-          </p>
+          {registrationEnabled && (
+            <p className="text-center text-sm text-muted-foreground">
+              Pas encore de compte ?{" "}
+              <Link href="/register" className="text-primary underline-offset-4 hover:underline">
+                S&apos;inscrire
+              </Link>
+            </p>
+          )}
         </form>
       </CardContent>
     </Card>
