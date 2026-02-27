@@ -147,7 +147,7 @@ comptes/
 | `LDAP_BIND_DN` | DN de bind LDAP | Non | `cn=admin,dc=example,dc=com` |
 | `LDAP_BIND_PASSWORD` | Mot de passe bind LDAP | Non | - |
 | `LDAP_SEARCH_BASE` | Base de recherche LDAP | Non | `ou=users,dc=example,dc=com` |
-| `LDAP_SEARCH_FILTER` | Filtre de recherche LDAP | Non | `(mail={{email}})` |
+| `LDAP_SEARCH_FILTER` | Filtre de recherche LDAP | Non | `(uid={{identifier}})` |
 
 ## Authentification
 

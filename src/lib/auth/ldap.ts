@@ -3,23 +3,30 @@ interface LdapUser {
   name: string;
 }
 
-export async function authenticateLdap(email: string, password: string): Promise<LdapUser | null> {
+export async function authenticateLdap(identifier: string, password: string): Promise<LdapUser | null> {
   const ldapUrl = process.env.LDAP_URL;
   const bindDn = process.env.LDAP_BIND_DN;
   const bindPassword = process.env.LDAP_BIND_PASSWORD;
   const searchBase = process.env.LDAP_SEARCH_BASE;
-  const searchFilter = process.env.LDAP_SEARCH_FILTER || "(mail={{email}})";
+  const searchFilter = process.env.LDAP_SEARCH_FILTER || "(uid={{identifier}})";
 
   // Si les variables LDAP ne sont pas configurées, LDAP est désactivé
   if (!ldapUrl || !bindDn || !bindPassword || !searchBase) {
     return null;
   }
 
-  try {
-    // Dynamic import pour ne charger ldapjs que quand LDAP est configuré
-    const ldap = await import("ldapjs");
-    const client = ldap.createClient({ url: ldapUrl });
+  const ldap = await import("ldapjs");
+  const client = ldap.createClient({
+    url: ldapUrl,
+    connectTimeout: 5000,
+    timeout: 5000,
+  });
 
+  // Capturer les erreurs asynchrones du client (DNS, connexion refusée, etc.)
+  // Sans ce handler, l'erreur devient un uncaughtException qui crash le process
+  client.on("error", () => {});
+
+  try {
     // Bind avec le service account
     await new Promise<void>((resolve, reject) => {
       client.bind(bindDn, bindPassword, (err) => {
@@ -29,9 +36,9 @@ export async function authenticateLdap(email: string, password: string): Promise
     });
 
     // Rechercher l'utilisateur
-    const filter = searchFilter.replace("{{email}}", email);
+    const filter = searchFilter.replace("{{identifier}}", identifier);
     const searchResult = await new Promise<LdapUser | null>((resolve, reject) => {
-      client.search(searchBase, { filter, scope: "sub", attributes: ["mail", "cn", "displayName"] }, (err, res) => {
+      client.search(searchBase, { filter, scope: "sub", attributes: ["mail", "cn", "displayName", "uid"] }, (err, res) => {
         if (err) {
           reject(err);
           return;
@@ -43,12 +50,14 @@ export async function authenticateLdap(email: string, password: string): Promise
           const attrs = entry.pojo.attributes;
           const mailAttr = attrs.find((a) => a.type === "mail");
           const nameAttr = attrs.find((a) => a.type === "displayName") || attrs.find((a) => a.type === "cn");
-          if (mailAttr) {
-            user = {
-              email: Array.isArray(mailAttr.values) ? mailAttr.values[0] : String(mailAttr.values),
-              name: nameAttr ? (Array.isArray(nameAttr.values) ? nameAttr.values[0] : String(nameAttr.values)) : email,
-            };
-          }
+          // Utiliser l'email LDAP si disponible, sinon l'identifiant fourni
+          const email = mailAttr
+            ? (Array.isArray(mailAttr.values) ? mailAttr.values[0] : String(mailAttr.values))
+            : identifier;
+          user = {
+            email,
+            name: nameAttr ? (Array.isArray(nameAttr.values) ? nameAttr.values[0] : String(nameAttr.values)) : identifier,
+          };
         });
 
         res.on("error", reject);
@@ -61,8 +70,7 @@ export async function authenticateLdap(email: string, password: string): Promise
       return null;
     }
 
-    // Bind avec les credentials de l'utilisateur pour vérifier le mot de passe
-    // On refait une recherche pour obtenir le DN
+    // Rechercher le DN de l'utilisateur pour le bind
     const userDn = await new Promise<string | null>((resolve, reject) => {
       client.search(searchBase, { filter, scope: "sub", attributes: ["dn"] }, (err, res) => {
         if (err) {
@@ -95,6 +103,7 @@ export async function authenticateLdap(email: string, password: string): Promise
     client.destroy();
     return searchResult;
   } catch {
+    try { client.destroy(); } catch { /* ignore */ }
     return null;
   }
 }

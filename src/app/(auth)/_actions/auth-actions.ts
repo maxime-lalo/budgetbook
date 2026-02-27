@@ -12,12 +12,12 @@ import { hashToken } from "@/lib/api-auth";
 import { logger } from "@/lib/logger";
 
 export async function loginAction(
-  email: string,
+  identifier: string,
   password: string
 ): Promise<{ success: true } | { error: string }> {
   try {
-    // 1. Essayer LDAP si configuré
-    const ldapUser = await authenticateLdap(email, password);
+    // 1. Essayer LDAP si configuré (identifier = pseudo ou email)
+    const ldapUser = await authenticateLdap(identifier, password);
     if (ldapUser) {
       let user = await db.query.users.findFirst({
         where: eq(users.email, ldapUser.email),
@@ -44,9 +44,9 @@ export async function loginAction(
       }
     }
 
-    // 2. Auth locale
+    // 2. Auth locale (par email)
     const user = await db.query.users.findFirst({
-      where: eq(users.email, email),
+      where: eq(users.email, identifier),
     });
 
     if (!user || !user.passwordHash) {

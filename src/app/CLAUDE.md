@@ -12,7 +12,7 @@
 ## Authentification
 
 - **`(auth)/`** : Layout group pour les pages publiques (login, register). Layout minimal sans sidebar
-  - **`login/`** : Formulaire de connexion (email + password). Supporte auth locale et LDAP
+  - **`login/`** : Formulaire de connexion (identifiant/pseudo + password). Supporte auth locale (par email) et LDAP (par uid)
   - **`register/`** : Formulaire d'inscription (nom, email, password)
   - **`_actions/auth-actions.ts`** : `loginAction()`, `registerAction()`, `logoutAction()` -- gère auth locale + LDAP avec creation de session JWT
 - **Middleware** (`src/proxy.ts`) : vérifie le cookie `access_token` (JWT) sur toutes les routes protegees. Redirige vers `/login` si absent, tente un refresh via `/api/auth/refresh` si expiré. Les routes `/login`, `/register`, `/api/*` et `/_next/*` sont exclues de la vérification

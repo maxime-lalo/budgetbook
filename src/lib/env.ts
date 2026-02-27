@@ -10,7 +10,7 @@ const envSchema = z.object({
   LDAP_BIND_DN: z.string().optional(),
   LDAP_BIND_PASSWORD: z.string().optional(),
   LDAP_SEARCH_BASE: z.string().optional(),
-  LDAP_SEARCH_FILTER: z.string().default("(mail={{email}})"),
+  LDAP_SEARCH_FILTER: z.string().default("(uid={{identifier}})"),
 });
 
 export const env = envSchema.parse({

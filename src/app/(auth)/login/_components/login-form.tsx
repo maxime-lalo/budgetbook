@@ -21,10 +21,10 @@ export function LoginForm() {
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
+    const identifier = formData.get("identifier") as string;
     const password = formData.get("password") as string;
 
-    const result = await loginAction(email, password);
+    const result = await loginAction(identifier, password);
 
     if ("error" in result) {
       setError(result.error);
@@ -52,8 +52,8 @@ export function LoginForm() {
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required autoComplete="email" />
+            <Label htmlFor="identifier">Identifiant</Label>
+            <Input id="identifier" name="identifier" type="text" placeholder="Pseudo ou email" required autoComplete="username" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Mot de passe</Label>

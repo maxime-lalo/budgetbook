@@ -79,7 +79,7 @@ Module d'authentification multi-provider (local + LDAP). Exporte depuis `index.t
 | `password.ts` | `hashPassword(plain)`, `verifyPassword(plain, hash)` -- bcrypt/scrypt |
 | `jwt.ts` | `signAccessToken(payload)`, `signRefreshToken(userId)`, `verifyAccessToken(token)`, `verifyRefreshToken(token)`. Types exportés : `AccessTokenPayload`, `RefreshTokenPayload` |
 | `session.ts` | `getCurrentUser()`, `requireAuth()`, `requireAdmin()`, `requireUserId()`, `setAuthCookies(access, refresh)`, `clearAuthCookies()` |
-| `ldap.ts` | `authenticateLdap(email, password)` -- authentification LDAP optionnelle |
+| `ldap.ts` | `authenticateLdap(identifier, password)` -- authentification LDAP optionnelle (identifier = pseudo ou email) |
 | `seed-defaults.ts` | `seedUserDefaults(userId)` -- crée les données par défaut pour un nouvel utilisateur |
 
 ### utils.ts
@@ -147,7 +147,7 @@ Validation des variables d'environnement via Zod. Exporte un objet `env` typé.
 | `LDAP_BIND_DN` | string optionnel |
 | `LDAP_BIND_PASSWORD` | string optionnel |
 | `LDAP_SEARCH_BASE` | string optionnel |
-| `LDAP_SEARCH_FILTER` | string, défaut `"(mail={{email}})"` |
+| `LDAP_SEARCH_FILTER` | string, défaut `"(uid={{identifier}})"` |
 
 ### logger.ts
 Logger structuré pour les server actions et l'API.

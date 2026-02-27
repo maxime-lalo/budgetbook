@@ -1,0 +1,59 @@
+version: '3.8'
+services:
+  comptes-db:
+    image: postgres:17-alpine
+    container_name: comptes-db
+    networks:
+      - ingress
+    environment:
+      - POSTGRES_DB=comptes
+      - POSTGRES_USER=comptes
+      - POSTGRES_PASSWORD=${COMPTES_DB_PASSWORD}
+    volumes:
+      - /basepool/config/comptes/pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comptes"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  comptes-app:
+    image: ghcr.io/maxime-lalo/budgetbook:latest
+    container_name: comptes-app
+    networks:
+      - ingress
+    environment:
+      - DATABASE_URL=postgresql://comptes:${COMPTES_DB_PASSWORD}@comptes-db:5432/comptes
+      - NODE_ENV=production
+      - JWT_SECRET=${COMPTES_JWT_SECRET}
+      # LDAP → LLDAP existant
+      - LDAP_URL=ldap://lldap:3890
+      - LDAP_BIND_DN=uid=admin,ou=people,dc=eplp,dc=fr
+      - LDAP_BIND_PASSWORD=${LLDAP_ADMIN_PASSWORD}
+      - LDAP_SEARCH_BASE=ou=people,dc=eplp,dc=fr
+      - LDAP_SEARCH_FILTER=(uid={{identifier}})
+    depends_on:
+      comptes-db:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comptes.rule=Host(`comptes.eplp.fr`)"
+      - "traefik.http.routers.comptes.entrypoints=web"
+      - "traefik.http.routers.comptes.middlewares=https_redirect"
+      - "traefik.http.routers.comptes-secure.rule=Host(`comptes.eplp.fr`)"
+      - "traefik.http.routers.comptes-secure.entrypoints=websecure"
+      - "traefik.http.routers.comptes-secure.tls=true"
+      - "traefik.http.routers.comptes-secure.tls.certresolver=cloudflare_resolver"
+      - "traefik.docker.network=ingress"
+      - "traefik.http.services.comptes.loadbalancer.server.port=3000"
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "dashboard.name=Comptes"
+      - "dashboard.icon=fa-solid fa-piggy-bank"
+      - "dashboard.description=Gestion de finances personnelles"
+      - "dashboard.category=Applications"
+
+networks:
+  ingress:
+    external: true
