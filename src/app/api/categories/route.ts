@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, categories } from "@/lib/db";
+import { eq } from "drizzle-orm";
 import { validateApiToken, unauthorizedResponse } from "@/lib/api-auth";
 
 export async function GET(request: Request) {
-  if (!(await validateApiToken(request))) return unauthorizedResponse();
+  const userId = await validateApiToken(request);
+  if (!userId) return unauthorizedResponse();
 
   const result = await db.query.categories.findMany({
+    where: eq(categories.userId, userId),
     with: {
       subCategories: {
         columns: { id: true, name: true },

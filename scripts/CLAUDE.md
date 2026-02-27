@@ -4,7 +4,7 @@
 
 | Script | Type | Description |
 |--------|------|-------------|
-| `docker-entrypoint.sh` | Bash | Entrypoint Docker : `drizzle-kit push --force` puis `node server.js`. Provider-aware via `DB_PROVIDER` |
+| `docker-entrypoint.sh` | Bash | Entrypoint Docker : `drizzle-kit push --force` puis `node server.js` |
 | `compare-savings.ts` | TypeScript | Compare les transactions épargne d'un export JSON avec le baseline Excel. Groupement par année, totaux |
 | `deep-compare.ts` | TypeScript | Réconciliation détaillée année par année entre export JSON et baseline Excel hardcodé. Table avec écarts, détail ligne par ligne pour variances > 10€ |
 | `compare-detail.ts` | TypeScript | Comparaison résumée des totaux annuels (LJ + LA + Voyages + Vêtements vs JSON) |

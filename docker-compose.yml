@@ -3,7 +3,7 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_DB: comptes
       POSTGRES_USER: comptes
@@ -11,5 +11,36 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  ldap:
+    image: osixia/openldap:1.5.0
+    ports:
+      - "3389:389"
+    environment:
+      LDAP_ORGANISATION: "Comptes Dev"
+      LDAP_DOMAIN: "comptes.local"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_READONLY_USER: "true"
+      LDAP_READONLY_USER_USERNAME: "readonly"
+      LDAP_READONLY_USER_PASSWORD: "readonly"
+    volumes:
+      - ldapdata:/var/lib/ldap
+      - ldapconfig:/etc/ldap/slapd.d
+    profiles:
+      - ldap
+
+  ldap-admin:
+    image: osixia/phpldapadmin:0.9.0
+    ports:
+      - "6443:443"
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: ldap
+      PHPLDAPADMIN_HTTPS: "false"
+    depends_on:
+      - ldap
+    profiles:
+      - ldap
+
 volumes:
   pgdata:
+  ldapdata:
+  ldapconfig:

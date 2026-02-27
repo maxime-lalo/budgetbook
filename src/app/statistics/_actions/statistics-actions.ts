@@ -4,18 +4,20 @@ import { db, transactions, accounts, categories, subCategories, buckets } from "
 import { eq, and, inArray, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
 import { toNumber } from "@/lib/db/helpers";
 import { DEFAULT_COLOR } from "@/lib/formatters";
+import { requireAuth } from "@/lib/auth/session";
 
-async function getAccountFilter(accountId?: string) {
+async function getAccountFilter(userId: string, accountId?: string) {
   if (accountId) return [accountId];
   const realAccounts = await db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.type, ["CHECKING", "CREDIT_CARD"]));
+    .where(and(eq(accounts.userId, userId), inArray(accounts.type, ["CHECKING", "CREDIT_CARD"])));
   return realAccounts.map((a) => a.id);
 }
 
 export async function getYearlyOverview(year: number, accountId?: string) {
-  const accountIds = await getAccountFilter(accountId);
+  const user = await requireAuth();
+  const accountIds = await getAccountFilter(user.id, accountId);
 
   const result = await db
     .select({
@@ -27,6 +29,7 @@ export async function getYearlyOverview(year: number, accountId?: string) {
     .where(
       and(
         eq(transactions.year, year),
+        eq(transactions.userId, user.id),
         inArray(transactions.status, ["COMPLETED", "PENDING"]),
         isNull(transactions.destinationAccountId),
         inArray(transactions.accountId, accountIds)
@@ -49,7 +52,8 @@ export async function getYearlyOverview(year: number, accountId?: string) {
 }
 
 export async function getCategoryBreakdown(year: number, month: number, accountId?: string) {
-  const accountIds = await getAccountFilter(accountId);
+  const user = await requireAuth();
+  const accountIds = await getAccountFilter(user.id, accountId);
 
   const result = await db
     .select({
@@ -60,6 +64,7 @@ export async function getCategoryBreakdown(year: number, month: number, accountI
     .where(
       and(
         eq(transactions.year, year),
+        eq(transactions.userId, user.id),
         lte(transactions.month, month),
         inArray(transactions.status, ["COMPLETED", "PENDING"]),
         inArray(transactions.accountId, accountIds)
@@ -88,7 +93,8 @@ export async function getCategoryBreakdown(year: number, month: number, accountI
 }
 
 export async function getSubCategoryBreakdown(year: number, month: number, accountId?: string) {
-  const accountIds = await getAccountFilter(accountId);
+  const user = await requireAuth();
+  const accountIds = await getAccountFilter(user.id, accountId);
 
   const result = await db
     .select({
@@ -100,6 +106,7 @@ export async function getSubCategoryBreakdown(year: number, month: number, accou
     .where(
       and(
         eq(transactions.year, year),
+        eq(transactions.userId, user.id),
         lte(transactions.month, month),
         inArray(transactions.status, ["COMPLETED", "PENDING"]),
         isNotNull(transactions.subCategoryId),
@@ -142,9 +149,11 @@ export async function getSubCategoryBreakdown(year: number, month: number, accou
 }
 
 export async function getCategoryYearComparison(year: number, month: number, accountId?: string) {
-  const accountIds = await getAccountFilter(accountId);
+  const user = await requireAuth();
+  const accountIds = await getAccountFilter(user.id, accountId);
 
   const baseWhere = and(
+    eq(transactions.userId, user.id),
     inArray(transactions.status, ["COMPLETED", "PENDING"]),
     inArray(transactions.accountId, accountIds)
   );
@@ -228,10 +237,11 @@ export async function getCategoryYearComparison(year: number, month: number, acc
 }
 
 export async function getSavingsOverview(year: number) {
+  const user = await requireAuth();
   const savingsAccounts = await db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.type, ["SAVINGS", "INVESTMENT"]));
+    .where(and(eq(accounts.userId, user.id), inArray(accounts.type, ["SAVINGS", "INVESTMENT"])));
   const accountIds = savingsAccounts.map((a) => a.id);
 
   if (accountIds.length === 0) {
@@ -243,18 +253,19 @@ export async function getSavingsOverview(year: number) {
   }
 
   const statusFilter = ["COMPLETED", "PENDING"] as const;
+  const userFilter = eq(transactions.userId, user.id);
 
   // Previous years totals + base amounts (4 queries)
   const [prevStandalone, prevIncoming, prevOutgoing, totalBaseAmount] = await Promise.all([
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
+      .where(and(userFilter, inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
+      .where(and(userFilter, inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
+      .where(and(userFilter, inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), lt(transactions.year, year))),
     db.select({ total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)` })
       .from(buckets)
       .where(inArray(buckets.accountId, accountIds)),
@@ -270,15 +281,15 @@ export async function getSavingsOverview(year: number) {
   const [standaloneByMonth, incomingByMonth, outgoingByMonth] = await Promise.all([
     db.select({ month: transactions.month, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
+      .where(and(userFilter, inArray(transactions.accountId, accountIds), isNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
       .groupBy(transactions.month),
     db.select({ month: transactions.month, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
+      .where(and(userFilter, inArray(transactions.destinationAccountId, accountIds), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
       .groupBy(transactions.month),
     db.select({ month: transactions.month, total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
+      .where(and(userFilter, inArray(transactions.accountId, accountIds), isNotNull(transactions.destinationAccountId), inArray(transactions.status, statusFilter), eq(transactions.year, year)))
       .groupBy(transactions.month),
   ]);
 
@@ -302,16 +313,20 @@ export async function getSavingsOverview(year: number) {
 }
 
 export async function getAccounts() {
+  const user = await requireAuth();
   return db.query.accounts.findMany({
+    where: eq(accounts.userId, user.id),
     orderBy: [asc(accounts.sortOrder)],
   });
 }
 
 export async function getCategoryMonthlyHeatmap(year: number, accountId?: string) {
-  const accountIds = await getAccountFilter(accountId);
+  const user = await requireAuth();
+  const accountIds = await getAccountFilter(user.id, accountId);
 
   const baseWhere = and(
     eq(transactions.year, year),
+    eq(transactions.userId, user.id),
     inArray(transactions.status, ["COMPLETED", "PENDING"]),
     sql`${transactions.amount} < 0`,
     inArray(transactions.accountId, accountIds)

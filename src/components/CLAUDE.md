@@ -40,3 +40,8 @@ alert-dialog, badge, button, calendar, card, chart, command, dialog, dropdown-me
 ### ThemeToggle (`theme-toggle.tsx`)
 - Bouton avec icônes Sun/Moon en transition (rotation + scale)
 - Bascule entre `light` et `dark`
+
+### UserProvider (`user-provider.tsx`)
+- Contexte React pour l'utilisateur authentifié (`AuthUser` de `@/lib/types`)
+- Exporte `UserProvider`, `useUser()` (retourne `AuthUser | null`), `useRequiredUser()` (throw si non authentifié)
+- Wrappé dans le layout racine, alimenté par `getCurrentUser()` côté serveur

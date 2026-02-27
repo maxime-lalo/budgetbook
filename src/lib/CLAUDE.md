@@ -3,12 +3,11 @@
 ## Fichiers
 
 ### db/ (Drizzle ORM)
-Module de base de données dual-provider (PostgreSQL / SQLite).
+Module de base de données PostgreSQL.
 
-- **`schema/pg.ts`** : Schéma PostgreSQL avec `pgTable`, `numeric(12,2)`, `date`, `timestamp`, `pgEnum`, relations, index
-- **`schema/sqlite.ts`** : Schéma SQLite avec `sqliteTable`, `real`, `text`, `integer({ mode: "boolean" })`, relations
-- **`index.ts`** : Singleton dual-provider utilisant le pattern `globalThis`. Lit `DB_PROVIDER` au runtime pour choisir le driver (postgres.js ou better-sqlite3). Exporte `db` et toutes les tables.
-- **`helpers.ts`** : `toNumber()` (string|number → number), `toISOString()` (Date|string → string), `toDecimal()`, `toDate()`
+- **`schema/pg.ts`** : Schéma PostgreSQL avec `pgTable`, `numeric(12,2)`, `date`, `timestamp`, `pgEnum`, relations, index. Inclut les tables `users` et `refreshTokens` pour l'authentification, avec `userId` FK sur toutes les tables de donnees
+- **`index.ts`** : Singleton PostgreSQL utilisant le pattern `globalThis`. Client postgres.js avec `env.DATABASE_URL`. Exporte `db` et toutes les tables (dont `users`, `refreshTokens`)
+- **`helpers.ts`** : `toNumber()` (string|number → number), `toISOString()` (Date|string → string), `toDecimal()`, `toDate()`, `getCheckingAccountIds(userId)`
 - **`seed.ts`** : Script de seed standalone (14 catégories, 2 comptes, buckets, transactions d'exemple)
 
 ```typescript
@@ -55,9 +54,9 @@ Gestion du report cumulatif inter-mois via la table `MonthlyBalance`.
 
 | Fonction | Description |
 |----------|-------------|
-| `recomputeMonthlyBalance(year, month)` | Recalcule et upsert le surplus du mois (forecast - committed) |
-| `getCarryOver(year, month)` | Retourne le report cumulé = `SUM(surplus)` de tous les mois antérieurs à (year, month) |
-| `backfillAllMonthlyBalances()` | Recalcule le surplus pour tous les mois distincts présents dans les transactions |
+| `recomputeMonthlyBalance(year, month, userId)` | Recalcule et upsert le surplus du mois (forecast - committed) pour l'utilisateur |
+| `getCarryOver(year, month, userId)` | Retourne le report cumulé = `SUM(surplus)` de tous les mois antérieurs à (year, month) pour l'utilisateur |
+| `backfillAllMonthlyBalances(userId)` | Recalcule le surplus pour tous les mois distincts présents dans les transactions de l'utilisateur |
 
 Appelée automatiquement après chaque mutation de transaction ou budget.
 
@@ -66,12 +65,22 @@ Authentification des API routes REST par Bearer token.
 
 | Fonction | Description |
 |----------|-------------|
-| `validateApiToken(request)` | Lit le header `Authorization: Bearer <token>`, vérifie en BDD, retourne `boolean` |
+| `hashToken(token)` | Hashe un token en SHA-256 (utilisé lors de la creation et validation) |
+| `validateApiToken(request)` | Lit le header `Authorization: Bearer <token>`, vérifie en BDD, retourne `string | null` (userId si valide, null sinon) |
 | `unauthorizedResponse()` | Retourne `NextResponse.json({ error: "Unauthorized" }, { status: 401 })` |
 
 Utilisé par toutes les routes `/api/*`. Le token est stocké dans la table `api_tokens` et géré depuis `/settings`.
 
-Les tokens sont hashés en SHA-256 avant comparaison avec la BDD. La fonction `hashToken(plain)` est aussi exportée pour le hashing lors de la création.
+### auth/
+Module d'authentification multi-provider (local + LDAP). Exporte depuis `index.ts`.
+
+| Fichier | Description |
+|---------|-------------|
+| `password.ts` | `hashPassword(plain)`, `verifyPassword(plain, hash)` -- bcrypt/scrypt |
+| `jwt.ts` | `signAccessToken(payload)`, `signRefreshToken(userId)`, `verifyAccessToken(token)`, `verifyRefreshToken(token)`. Types exportés : `AccessTokenPayload`, `RefreshTokenPayload` |
+| `session.ts` | `getCurrentUser()`, `requireAuth()`, `requireAdmin()`, `requireUserId()`, `setAuthCookies(access, refresh)`, `clearAuthCookies()` |
+| `ldap.ts` | `authenticateLdap(email, password)` -- authentification LDAP optionnelle |
+| `seed-defaults.ts` | `seedUserDefaults(userId)` -- crée les données par défaut pour un nouvel utilisateur |
 
 ### utils.ts
 Fonction `cn()` : merge de classes Tailwind via `clsx` + `twMerge` (standard Shadcn/UI).
@@ -118,9 +127,9 @@ CRUD partagé pour transactions et transferts, évitant ~150 lignes de duplicati
 
 | Fonction | Description |
 |----------|-------------|
-| `insertTransaction(data, overrides?, errorMessage?)` | Validation Zod + insert + recompute + revalidate |
-| `updateTransactionById(id, data, overrides?, errorMessage?)` | Validation + update + gère changement de mois |
-| `deleteTransactionById(id, errorMessage?)` | Fetch year/month + delete + recompute + revalidate |
+| `insertTransaction(data, userId, overrides?, errorMessage?)` | Validation Zod + insert + recompute + revalidate |
+| `updateTransactionById(id, userId, data, overrides?, errorMessage?)` | Validation + update + gère changement de mois |
+| `deleteTransactionById(id, userId, errorMessage?)` | Fetch year/month + delete + recompute + revalidate |
 
 `TransactionOverrides` : `{ forceNegativeAmount?, forceIsAmex?, forceRecurring? }` -- utilisé par les transferts.
 
@@ -129,9 +138,16 @@ Validation des variables d'environnement via Zod. Exporte un objet `env` typé.
 
 | Variable | Validation |
 |----------|------------|
-| `DB_PROVIDER` | `"postgresql"` ou `"sqlite"`, défaut `"postgresql"` |
 | `DATABASE_URL` | string optionnel |
 | `NODE_ENV` | `"development"`, `"production"`, `"test"`, défaut `"development"` |
+| `JWT_SECRET` | string min 32 chars (défaut dev fourni) |
+| `JWT_ACCESS_EXPIRY` | string, défaut `"15m"` |
+| `JWT_REFRESH_EXPIRY` | string, défaut `"7d"` |
+| `LDAP_URL` | string optionnel |
+| `LDAP_BIND_DN` | string optionnel |
+| `LDAP_BIND_PASSWORD` | string optionnel |
+| `LDAP_SEARCH_BASE` | string optionnel |
+| `LDAP_SEARCH_FILTER` | string, défaut `"(mail={{email}})"` |
 
 ### logger.ts
 Logger structuré pour les server actions et l'API.
@@ -159,14 +175,18 @@ Rate limiting en mémoire pour les API routes.
 Configuration : 60 requêtes/minute par IP, max 10 000 entrées en mémoire avec éviction LRU.
 
 ### __tests__/
-Tests unitaires Vitest (4 fichiers, 43 tests).
+Tests unitaires Vitest (8 fichiers, 213 tests).
 
 | Fichier | Tests |
 |---------|-------|
-| `helpers.test.ts` | toNumber, round2, toDate, toISOString (17 tests) |
+| `helpers.test.ts` | toNumber, round2, toDate, toISOString (21 tests) |
 | `formatters.test.ts` | formatCurrency, parseMonthParam, toMonthParam (11 tests) |
-| `validators.test.ts` | transactionSchema, refines (11 tests) |
-| `api-rate-limit.test.ts` | checkRateLimit (4 tests) |
+| `validators.test.ts` | transactionSchema, refines (69 tests) |
+| `api-rate-limit.test.ts` | checkRateLimit (23 tests) |
+| `api-auth.test.ts` | hashToken, validateApiToken, unauthorizedResponse (13 tests) |
+| `transaction-helpers.test.ts` | insertTransaction, updateTransactionById, deleteTransactionById (41 tests) |
+| `monthly-balance.test.ts` | recomputeMonthlyBalance, getCarryOver, backfillAllMonthlyBalances (25 tests) |
+| `safe-action.test.ts` | safeAction wrapper (10 tests) |
 
 
 <claude-mem-context>

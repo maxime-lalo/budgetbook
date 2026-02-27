@@ -5,36 +5,23 @@
  * Usage: pnpm db:import
  */
 
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import Database from "better-sqlite3";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import * as pgSchema from "../src/lib/db/schema/pg";
-import * as sqliteSchema from "../src/lib/db/schema/sqlite";
 import { toNumber } from "../src/lib/db/helpers";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const provider = process.env.DB_PROVIDER ?? "postgresql";
-
 function createDb() {
-  if (provider === "sqlite") {
-    const dbPath = (process.env.DATABASE_URL ?? "file:./dev.db").replace("file:", "");
-    const sqlite = new Database(dbPath);
-    sqlite.pragma("journal_mode = WAL");
-    sqlite.pragma("foreign_keys = ON");
-    return drizzleSqlite(sqlite, { schema: sqliteSchema });
-  }
   const connectionString = process.env.DATABASE_URL ?? "postgresql://comptes:comptes@localhost:5432/comptes";
   const client = postgres(connectionString);
-  return drizzlePg(client, { schema: pgSchema });
+  return drizzle(client, { schema: pgSchema });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db: any = createDb();
-const s = (provider === "sqlite" ? sqliteSchema : pgSchema) as typeof pgSchema;
+const db = createDb();
+const s = pgSchema;
 
 const DATA_DIR = join(__dirname, "data");
 
@@ -61,6 +48,8 @@ function readJSON<T>(filename: string): T {
   return JSON.parse(raw);
 }
 
+let importUserId = "";
+
 async function clearDatabase() {
   console.log("Clearing database...");
   await db.delete(s.monthlyBalances);
@@ -70,18 +59,31 @@ async function clearDatabase() {
   await db.delete(s.categories);
   await db.delete(s.buckets);
   await db.delete(s.accounts);
+  await db.delete(s.refreshTokens);
+  await db.delete(s.users);
   console.log("  All tables cleared.");
 }
 
-async function createAccounts() {
-  console.log("Creating accounts...");
+async function createUserAndAccounts() {
+  console.log("Creating user and accounts...");
+
+  const userId = createId();
+  await db.insert(s.users).values({
+    id: userId,
+    email: "admin@comptes.local",
+    name: "Admin",
+    passwordHash: null,
+    authProvider: "local",
+    isAdmin: true,
+  });
+  importUserId = userId;
 
   await db.insert(s.accounts).values({
-    id: "bnp-checking", name: "BNP", type: "CHECKING", color: "#4f46e5", icon: "Wallet", sortOrder: 0,
+    id: "bnp-checking", userId, name: "BNP", type: "CHECKING", color: "#4f46e5", icon: "Wallet", sortOrder: 0,
   });
 
   await db.insert(s.accounts).values({
-    id: "livret-a", name: "Livret A", type: "SAVINGS", color: "#10b981", icon: "PiggyBank", sortOrder: 1,
+    id: "livret-a", userId, name: "Livret A", type: "SAVINGS", color: "#10b981", icon: "PiggyBank", sortOrder: 1,
   });
 
   console.log("  Created accounts: BNP, Livret A");
@@ -98,7 +100,7 @@ async function importCategories(categoriesData: CategoryData[]) {
     const cat = categoriesData[i];
     const catId = createId();
     await db.insert(s.categories).values({
-      id: catId, name: cat.name, color: cat.color, sortOrder: i,
+      id: catId, userId: importUserId, name: cat.name, color: cat.color, sortOrder: i,
     });
     categoryMap.set(cat.name, catId);
 
@@ -106,7 +108,7 @@ async function importCategories(categoriesData: CategoryData[]) {
       const subName = cat.subcategories[j];
       const subId = createId();
       await db.insert(s.subCategories).values({
-        id: subId, name: subName, categoryId: catId, sortOrder: j,
+        id: subId, userId: importUserId, name: subName, categoryId: catId, sortOrder: j,
       });
       subCategoryMap.set(`${cat.name}|${subName}`, subId);
     }
@@ -164,6 +166,7 @@ async function importTransactions(
 
     await db.insert(s.transactions).values({
       id: createId(),
+      userId: importUserId,
       label,
       amount: tx.amount.toString(),
       date: tx.date ? new Date(tx.date) : null,
@@ -213,7 +216,7 @@ async function recomputeAllMonthlyBalances() {
 
     const budgetMap = new Map<string, number>((budgetsResult as { categoryId: string; amount: string | number }[]).map((b) => [b.categoryId, toNumber(b.amount)]));
     const spentMap = new Map<string, number>(
-      spentByCategory.map((sp: { categoryId: string; total: string }) => [sp.categoryId, Math.abs(toNumber(sp.total))])
+      spentByCategory.map((sp: { categoryId: string | null; total: string }) => [sp.categoryId ?? "", Math.abs(toNumber(sp.total))])
     );
 
     const allCategoryIds = new Set<string>([...budgetMap.keys(), ...spentMap.keys()]);
@@ -239,6 +242,7 @@ async function recomputeAllMonthlyBalances() {
     } else {
       await db.insert(s.monthlyBalances).values({
         id: createId(),
+        userId: importUserId,
         year, month,
         forecast: totalForecast.toString(),
         committed: totalCommitted.toString(),
@@ -258,7 +262,7 @@ async function main() {
   console.log(`Loaded: ${categoriesFile.length} categories, ${transactionsFile.length} transactions\n`);
 
   await clearDatabase();
-  const accountIds = await createAccounts();
+  const accountIds = await createUserAndAccounts();
   const { categoryMap, subCategoryMap } = await importCategories(categoriesFile);
   await importTransactions(transactionsFile, accountIds, categoryMap, subCategoryMap);
   await recomputeAllMonthlyBalances();

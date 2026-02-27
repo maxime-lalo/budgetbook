@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeftRight,
   Home,
@@ -12,12 +12,16 @@ import {
   Repeat,
   BarChart3,
   Settings,
+  Shield,
+  LogOut,
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useUser } from "@/components/layout/user-provider";
+import { logoutAction } from "@/app/(auth)/_actions/auth-actions";
 
 const navItems = [
   { href: "/", label: "Accueil", icon: Home },
@@ -33,7 +37,19 @@ const navItems = [
 
 export function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const user = useUser();
+
+  // Ne pas afficher la nav mobile sur les pages auth
+  if (!user) return null;
+
+  async function handleLogout() {
+    setOpen(false);
+    await logoutAction();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="flex md:hidden items-center h-14 border-b px-4 gap-4 print:hidden">
@@ -72,7 +88,30 @@ export function MobileNav() {
                 </Link>
               );
             })}
+            {user.isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/admin")
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
           </nav>
+          <div className="border-t p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground truncate">{user.name}</span>
+              <Button variant="ghost" size="icon" onClick={handleLogout} title="Déconnexion">
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </SheetContent>
       </Sheet>
       <Link href="/" className="flex items-center gap-2 font-semibold">

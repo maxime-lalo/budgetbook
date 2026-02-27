@@ -41,7 +41,7 @@ vi.mock("@/lib/db", () => {
         transactions: { findFirst },
       },
     },
-    transactions: { id: "id", year: "year", month: "month", sortOrder: "sortOrder", recurring: "recurring" },
+    transactions: { id: "id", userId: "userId", year: "year", month: "month", sortOrder: "sortOrder", recurring: "recurring" },
   };
 });
 
@@ -84,6 +84,8 @@ import type { TransactionInput } from "@/lib/validators";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const TEST_USER_ID = "test-user-id";
 
 function makeValidInput(overrides: Partial<TransactionInput> = {}): TransactionInput {
   return {
@@ -157,7 +159,7 @@ beforeEach(() => {
 
 describe("buildTransactionValues (via insertTransaction)", () => {
   it("converts amount to decimal string before inserting", async () => {
-    await insertTransaction(makeValidInput({ amount: -123.45 }));
+    await insertTransaction(makeValidInput({ amount: -123.45 }), TEST_USER_ID);
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -166,7 +168,7 @@ describe("buildTransactionValues (via insertTransaction)", () => {
 
   it("converts date to DB-formatted value", async () => {
     const date = new Date("2026-02-15");
-    await insertTransaction(makeValidInput({ date }));
+    await insertTransaction(makeValidInput({ date }), TEST_USER_ID);
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -174,7 +176,7 @@ describe("buildTransactionValues (via insertTransaction)", () => {
   });
 
   it("sets month and year from parsed data", async () => {
-    await insertTransaction(makeValidInput({ month: 3, year: 2025 }));
+    await insertTransaction(makeValidInput({ month: 3, year: 2025 }), TEST_USER_ID);
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -183,7 +185,7 @@ describe("buildTransactionValues (via insertTransaction)", () => {
   });
 
   it("stores null date for recurring transactions", async () => {
-    await insertTransaction(makeValidInput({ date: null }));
+    await insertTransaction(makeValidInput({ date: null }), TEST_USER_ID);
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -197,7 +199,7 @@ describe("buildTransactionValues (via insertTransaction)", () => {
 
 describe("applyOverrides (via insertTransaction)", () => {
   it("without overrides, leaves amount unchanged", async () => {
-    await insertTransaction(makeValidInput({ amount: -50 }));
+    await insertTransaction(makeValidInput({ amount: -50 }), TEST_USER_ID);
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -205,7 +207,7 @@ describe("applyOverrides (via insertTransaction)", () => {
   });
 
   it("with forceNegativeAmount, makes positive amount negative", async () => {
-    await insertTransaction(makeValidInput({ amount: 200 }), { forceNegativeAmount: true });
+    await insertTransaction(makeValidInput({ amount: 200 }), TEST_USER_ID, { forceNegativeAmount: true });
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -213,7 +215,7 @@ describe("applyOverrides (via insertTransaction)", () => {
   });
 
   it("with forceNegativeAmount, keeps already-negative amount unchanged", async () => {
-    await insertTransaction(makeValidInput({ amount: -200 }), { forceNegativeAmount: true });
+    await insertTransaction(makeValidInput({ amount: -200 }), TEST_USER_ID, { forceNegativeAmount: true });
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -221,7 +223,7 @@ describe("applyOverrides (via insertTransaction)", () => {
   });
 
   it("with forceIsAmex, overrides isAmex flag", async () => {
-    await insertTransaction(makeValidInput({ isAmex: false }), { forceIsAmex: true });
+    await insertTransaction(makeValidInput({ isAmex: false }), TEST_USER_ID, { forceIsAmex: true });
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -229,7 +231,7 @@ describe("applyOverrides (via insertTransaction)", () => {
   });
 
   it("with forceRecurring, overrides recurring flag", async () => {
-    await insertTransaction(makeValidInput({ recurring: false }), { forceRecurring: true });
+    await insertTransaction(makeValidInput({ recurring: false }), TEST_USER_ID, { forceRecurring: true });
 
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
@@ -243,12 +245,12 @@ describe("applyOverrides (via insertTransaction)", () => {
 
 describe("insertTransaction", () => {
   it("returns { success: true } for valid data", async () => {
-    const result = await insertTransaction(makeValidInput());
+    const result = await insertTransaction(makeValidInput(), TEST_USER_ID);
     expect(result).toEqual({ success: true });
   });
 
   it("returns Zod field errors for invalid data", async () => {
-    const result = await insertTransaction(makeValidInput({ label: "" }));
+    const result = await insertTransaction(makeValidInput({ label: "" }), TEST_USER_ID);
     expect(result).toHaveProperty("error");
     // The error should contain fieldErrors from Zod flatten()
     const errorResult = result as { error: unknown };
@@ -256,32 +258,32 @@ describe("insertTransaction", () => {
   });
 
   it("returns Zod field errors when amount is zero", async () => {
-    const result = await insertTransaction(makeValidInput({ amount: 0 }));
+    const result = await insertTransaction(makeValidInput({ amount: 0 }), TEST_USER_ID);
     expect(result).toHaveProperty("error");
     const errorResult = result as { error: unknown };
     expect(errorResult.error).toHaveProperty("amount");
   });
 
   it("does not call db.insert when validation fails", async () => {
-    await insertTransaction(makeValidInput({ label: "" }));
+    await insertTransaction(makeValidInput({ label: "" }), TEST_USER_ID);
     expect(dbMock.insert).not.toHaveBeenCalled();
   });
 
   it("calls db.insert with the generated id", async () => {
-    await insertTransaction(makeValidInput());
+    await insertTransaction(makeValidInput(), TEST_USER_ID);
     expect(dbMock.insert).toHaveBeenCalledOnce();
     const insertChain = dbMock.insert.mock.results[0].value;
     const values = insertChain.values.mock.calls[0][0];
     expect(values.id).toBe("test-cuid-id");
   });
 
-  it("calls recomputeMonthlyBalance with correct year and month", async () => {
-    await insertTransaction(makeValidInput({ month: 2, year: 2026 }));
-    expect(recomputeMock).toHaveBeenCalledWith(2026, 2);
+  it("calls recomputeMonthlyBalance with correct year, month and userId", async () => {
+    await insertTransaction(makeValidInput({ month: 2, year: 2026 }), TEST_USER_ID);
+    expect(recomputeMock).toHaveBeenCalledWith(2026, 2, TEST_USER_ID);
   });
 
   it("calls revalidateTransactionPages after insert", async () => {
-    await insertTransaction(makeValidInput());
+    await insertTransaction(makeValidInput(), TEST_USER_ID);
     expect(revalidateMock).toHaveBeenCalledOnce();
   });
 
@@ -290,7 +292,7 @@ describe("insertTransaction", () => {
       throw new Error("DB connection failed");
     });
 
-    const result = await insertTransaction(makeValidInput());
+    const result = await insertTransaction(makeValidInput(), TEST_USER_ID);
     expect(result).toHaveProperty("error");
     expect((result as { error: string }).error).toBe("Erreur lors de la création");
   });
@@ -300,7 +302,7 @@ describe("insertTransaction", () => {
       throw new Error("Constraint violation");
     });
 
-    const result = await insertTransaction(makeValidInput(), undefined, "Custom error");
+    const result = await insertTransaction(makeValidInput(), TEST_USER_ID, undefined, "Custom error");
     expect((result as { error: string }).error).toBe("Custom error");
   });
 
@@ -309,7 +311,7 @@ describe("insertTransaction", () => {
       throw new Error("DB error");
     });
 
-    await insertTransaction(makeValidInput());
+    await insertTransaction(makeValidInput(), TEST_USER_ID);
     expect(revalidateMock).not.toHaveBeenCalled();
   });
 });
@@ -322,26 +324,26 @@ describe("updateTransactionById", () => {
   it("returns { success: true } for valid data", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    const result = await updateTransactionById("tx_1", makeValidInput());
+    const result = await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput());
     expect(result).toEqual({ success: true });
   });
 
   it("returns Zod field errors for invalid data", async () => {
-    const result = await updateTransactionById("tx_1", makeValidInput({ label: "" }));
+    const result = await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ label: "" }));
     expect(result).toHaveProperty("error");
     const errorResult = result as { error: unknown };
     expect(errorResult.error).toHaveProperty("label");
   });
 
   it("does not call db.update when validation fails", async () => {
-    await updateTransactionById("tx_1", makeValidInput({ amount: 0 }));
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ amount: 0 }));
     expect(dbMock.update).not.toHaveBeenCalled();
   });
 
   it("calls db.update with built transaction values", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await updateTransactionById("tx_1", makeValidInput({ amount: -999 }));
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ amount: -999 }));
 
     expect(dbMock.update).toHaveBeenCalledOnce();
     const chain = dbMock.update.mock.results[0].value;
@@ -352,18 +354,18 @@ describe("updateTransactionById", () => {
   it("calls recomputeMonthlyBalance for the new month", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await updateTransactionById("tx_1", makeValidInput({ month: 3, year: 2026 }));
-    expect(recomputeMock).toHaveBeenCalledWith(2026, 3);
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ month: 3, year: 2026 }));
+    expect(recomputeMock).toHaveBeenCalledWith(2026, 3, TEST_USER_ID);
   });
 
   it("also recomputes balance for old month when month changes", async () => {
     // Transaction originally belonged to Feb 2026; now moved to Mar 2026
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await updateTransactionById("tx_1", makeValidInput({ month: 3, year: 2026 }));
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ month: 3, year: 2026 }));
 
-    expect(recomputeMock).toHaveBeenCalledWith(2026, 3); // new month
-    expect(recomputeMock).toHaveBeenCalledWith(2026, 2); // old month
+    expect(recomputeMock).toHaveBeenCalledWith(2026, 3, TEST_USER_ID); // new month
+    expect(recomputeMock).toHaveBeenCalledWith(2026, 2, TEST_USER_ID); // old month
     expect(recomputeMock).toHaveBeenCalledTimes(2);
   });
 
@@ -371,27 +373,27 @@ describe("updateTransactionById", () => {
     // Transaction stays in Feb 2026
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await updateTransactionById("tx_1", makeValidInput({ month: 2, year: 2026 }));
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ month: 2, year: 2026 }));
 
     expect(recomputeMock).toHaveBeenCalledTimes(1);
-    expect(recomputeMock).toHaveBeenCalledWith(2026, 2);
+    expect(recomputeMock).toHaveBeenCalledWith(2026, 2, TEST_USER_ID);
   });
 
   it("recomputes old month when year changes", async () => {
     // Transaction moves from Jan 2025 to Feb 2026
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2025, month: 1 });
 
-    await updateTransactionById("tx_1", makeValidInput({ month: 2, year: 2026 }));
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput({ month: 2, year: 2026 }));
 
-    expect(recomputeMock).toHaveBeenCalledWith(2026, 2);
-    expect(recomputeMock).toHaveBeenCalledWith(2025, 1);
+    expect(recomputeMock).toHaveBeenCalledWith(2026, 2, TEST_USER_ID);
+    expect(recomputeMock).toHaveBeenCalledWith(2025, 1, TEST_USER_ID);
     expect(recomputeMock).toHaveBeenCalledTimes(2);
   });
 
   it("calls revalidateTransactionPages after update", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await updateTransactionById("tx_1", makeValidInput());
+    await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput());
     expect(revalidateMock).toHaveBeenCalledOnce();
   });
 
@@ -399,7 +401,7 @@ describe("updateTransactionById", () => {
     // findFirst returns undefined: transaction was somehow missing; update proceeds anyway
     dbMock.query.transactions.findFirst.mockResolvedValue(undefined);
 
-    const result = await updateTransactionById("tx_1", makeValidInput());
+    const result = await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput());
     expect(result).toEqual({ success: true });
     // Only new month recomputed
     expect(recomputeMock).toHaveBeenCalledTimes(1);
@@ -411,7 +413,7 @@ describe("updateTransactionById", () => {
       throw new Error("Update failed");
     });
 
-    const result = await updateTransactionById("tx_1", makeValidInput());
+    const result = await updateTransactionById("tx_1", TEST_USER_ID, makeValidInput());
     expect((result as { error: string }).error).toBe("Erreur lors de la mise à jour");
   });
 });
@@ -424,49 +426,49 @@ describe("deleteTransactionById", () => {
   it("returns { success: true } when transaction exists", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    const result = await deleteTransactionById("tx_1");
+    const result = await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(result).toEqual({ success: true });
   });
 
   it("returns { success: true } when transaction is not found", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue(undefined);
 
-    const result = await deleteTransactionById("tx_1");
+    const result = await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(result).toEqual({ success: true });
   });
 
   it("calls db.delete", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await deleteTransactionById("tx_1");
+    await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(dbMock.delete).toHaveBeenCalledOnce();
   });
 
   it("calls recomputeMonthlyBalance with the deleted transaction month", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2025, month: 11 });
 
-    await deleteTransactionById("tx_1");
-    expect(recomputeMock).toHaveBeenCalledWith(2025, 11);
+    await deleteTransactionById("tx_1", TEST_USER_ID);
+    expect(recomputeMock).toHaveBeenCalledWith(2025, 11, TEST_USER_ID);
   });
 
   it("does NOT call recomputeMonthlyBalance when transaction is not found", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue(undefined);
 
-    await deleteTransactionById("tx_1");
+    await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(recomputeMock).not.toHaveBeenCalled();
   });
 
   it("calls revalidateTransactionPages after delete", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue({ year: 2026, month: 2 });
 
-    await deleteTransactionById("tx_1");
+    await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(revalidateMock).toHaveBeenCalledOnce();
   });
 
   it("calls revalidateTransactionPages even when transaction is not found", async () => {
     dbMock.query.transactions.findFirst.mockResolvedValue(undefined);
 
-    await deleteTransactionById("tx_1");
+    await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(revalidateMock).toHaveBeenCalledOnce();
   });
 
@@ -476,7 +478,7 @@ describe("deleteTransactionById", () => {
       throw new Error("Delete failed");
     });
 
-    const result = await deleteTransactionById("tx_1");
+    const result = await deleteTransactionById("tx_1", TEST_USER_ID);
     expect((result as { error: string }).error).toBe("Erreur lors de la suppression");
   });
 
@@ -486,7 +488,7 @@ describe("deleteTransactionById", () => {
       throw new Error("FK violation");
     });
 
-    const result = await deleteTransactionById("tx_1", "Custom delete error");
+    const result = await deleteTransactionById("tx_1", TEST_USER_ID, "Custom delete error");
     expect((result as { error: string }).error).toBe("Custom delete error");
   });
 
@@ -496,7 +498,7 @@ describe("deleteTransactionById", () => {
       throw new Error("DB error");
     });
 
-    await deleteTransactionById("tx_1");
+    await deleteTransactionById("tx_1", TEST_USER_ID);
     expect(revalidateMock).not.toHaveBeenCalled();
   });
 });

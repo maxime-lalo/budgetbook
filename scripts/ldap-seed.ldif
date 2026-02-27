@@ -1,0 +1,16 @@
+# Unité organisationnelle pour les utilisateurs
+dn: ou=users,dc=comptes,dc=local
+objectClass: organizationalUnit
+ou: users
+
+# Utilisateur de test
+dn: uid=testuser,ou=users,dc=comptes,dc=local
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: testuser
+cn: Test User
+sn: User
+displayName: Test User
+mail: test@comptes.local
+userPassword: testpass

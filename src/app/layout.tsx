@@ -4,6 +4,8 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { UserProvider } from "@/components/layout/user-provider";
+import { getCurrentUser } from "@/lib/auth/session";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -21,25 +23,29 @@ export const metadata: Metadata = {
   description: "Application de gestion de finances personnelles",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getCurrentUser();
+
   return (
     <html lang="fr" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <div className="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
-            <Sidebar />
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <MobileNav />
-              <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-4">{children}</main>
+          <UserProvider user={user}>
+            <div className="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
+              <Sidebar />
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <MobileNav />
+                <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-4">{children}</main>
+              </div>
             </div>
-          </div>
-          <Toaster richColors position="bottom-right" />
+            <Toaster richColors position="bottom-right" />
+          </UserProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -5,9 +5,15 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DB_PROVIDER: "postgresql"
       DATABASE_URL: "postgresql://comptes:${DB_PASSWORD:-comptes_prod}@db:5432/comptes?schema=public"
       NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      # LDAP (optional)
+      # LDAP_URL: ${LDAP_URL:-}
+      # LDAP_BIND_DN: ${LDAP_BIND_DN:-}
+      # LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:-}
+      # LDAP_SEARCH_BASE: ${LDAP_SEARCH_BASE:-}
+      # LDAP_SEARCH_FILTER: ${LDAP_SEARCH_FILTER:-}
     depends_on:
       db:
         condition: service_healthy

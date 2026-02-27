@@ -1,31 +1,15 @@
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import Database from "better-sqlite3";
 import * as pgSchema from "./schema/pg";
-import * as sqliteSchema from "./schema/sqlite";
 import { env } from "@/lib/env";
 
-export const provider = env.DB_PROVIDER;
-
-type PgDb = ReturnType<typeof drizzlePg<typeof pgSchema>>;
-
-function createDb(): PgDb {
-  if (provider === "sqlite") {
-    const dbPath = (env.DATABASE_URL ?? "file:./dev.db").replace("file:", "");
-    const sqlite = new Database(dbPath);
-    sqlite.pragma("journal_mode = WAL");
-    sqlite.pragma("foreign_keys = ON");
-    // Cast to PgDb — both APIs are structurally compatible for DML
-    return drizzleSqlite(sqlite, { schema: sqliteSchema }) as unknown as PgDb;
-  }
-
+function createDb() {
   const connectionString = env.DATABASE_URL ?? "postgresql://comptes:comptes@localhost:5432/comptes";
   const client = postgres(connectionString);
-  return drizzlePg(client, { schema: pgSchema });
+  return drizzle(client, { schema: pgSchema });
 }
 
-const globalForDb = globalThis as unknown as { db: PgDb | undefined };
+const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb> | undefined };
 
 export const db = globalForDb.db ?? createDb();
 
@@ -33,16 +17,14 @@ if (process.env.NODE_ENV !== "production") {
   globalForDb.db = db;
 }
 
-// Export table references matching the active provider
-// Both schemas have identical table/column names — safe to cast to pg types for TS
-const s = (provider === "sqlite" ? sqliteSchema : pgSchema) as typeof pgSchema;
-
-export const accounts = s.accounts;
-export const buckets = s.buckets;
-export const categories = s.categories;
-export const subCategories = s.subCategories;
-export const transactions = s.transactions;
-export const budgets = s.budgets;
-export const monthlyBalances = s.monthlyBalances;
-export const apiTokens = s.apiTokens;
-export const appPreferences = s.appPreferences;
+export const users = pgSchema.users;
+export const refreshTokens = pgSchema.refreshTokens;
+export const accounts = pgSchema.accounts;
+export const buckets = pgSchema.buckets;
+export const categories = pgSchema.categories;
+export const subCategories = pgSchema.subCategories;
+export const transactions = pgSchema.transactions;
+export const budgets = pgSchema.budgets;
+export const monthlyBalances = pgSchema.monthlyBalances;
+export const apiTokens = pgSchema.apiTokens;
+export const appPreferences = pgSchema.appPreferences;

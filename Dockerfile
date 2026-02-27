@@ -7,8 +7,6 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-# better-sqlite3 needs build tools
-RUN apk add --no-cache python3 make g++
 RUN pnpm install --frozen-lockfile
 
 # --- Build ---
@@ -28,9 +26,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Dossier pour la base SQLite
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
-
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -39,13 +34,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db ./src/lib/db
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 
-# node_modules for drizzle-kit push at runtime (pnpm nests deps, can't cherry-pick)
+# node_modules for drizzle-kit push at runtime
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-
-# Rebuild better-sqlite3 native bindings for the target architecture
-RUN apk add --no-cache python3 make g++ && \
-    npm rebuild better-sqlite3 && \
-    apk del python3 make g++
 
 # Entrypoint + helper scripts
 COPY --chown=nextjs:nodejs scripts/ ./scripts/

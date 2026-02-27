@@ -7,9 +7,13 @@ import { accountSchema, bucketSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 import { toNumber } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function getAccounts() {
+  const user = await requireAuth();
+
   const result = await db.query.accounts.findMany({
+    where: eq(accounts.userId, user.id),
     with: {
       buckets: { orderBy: [asc(buckets.sortOrder)] },
       linkedAccount: true,
@@ -60,13 +64,17 @@ export async function getAccounts() {
 }
 
 export async function getCheckingAccounts() {
+  const user = await requireAuth();
+
   return db.query.accounts.findMany({
-    where: eq(accounts.type, "CHECKING"),
+    where: and(eq(accounts.userId, user.id), eq(accounts.type, "CHECKING")),
     orderBy: [asc(accounts.sortOrder)],
   });
 }
 
 export async function createAccount(formData: FormData) {
+  const user = await requireAuth();
+
   const raw = Object.fromEntries(formData);
   if (raw.linkedAccountId === "" || raw.linkedAccountId === "__none__") raw.linkedAccountId = null as unknown as string;
   const parsed = accountSchema.safeParse(raw);
@@ -76,6 +84,7 @@ export async function createAccount(formData: FormData) {
     await db.insert(accounts).values({
       id: createId(),
       ...parsed.data,
+      userId: user.id,
       linkedAccountId: parsed.data.linkedAccountId || null,
     });
     revalidatePath("/accounts");
@@ -84,6 +93,8 @@ export async function createAccount(formData: FormData) {
 }
 
 export async function updateAccount(id: string, formData: FormData) {
+  const user = await requireAuth();
+
   const raw = Object.fromEntries(formData);
   if (raw.linkedAccountId === "" || raw.linkedAccountId === "__none__") raw.linkedAccountId = null as unknown as string;
   const parsed = accountSchema.safeParse(raw);
@@ -93,26 +104,37 @@ export async function updateAccount(id: string, formData: FormData) {
     await db.update(accounts).set({
       ...parsed.data,
       linkedAccountId: parsed.data.linkedAccountId || null,
-    }).where(eq(accounts.id, id));
+    }).where(and(eq(accounts.id, id), eq(accounts.userId, user.id)));
     revalidatePath("/accounts");
     return { success: true };
   }, "Erreur lors de la mise à jour du compte");
 }
 
 export async function deleteAccount(id: string) {
+  const user = await requireAuth();
+
   return safeAction(async () => {
-    await db.delete(accounts).where(eq(accounts.id, id));
+    await db.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.userId, user.id)));
     revalidatePath("/accounts");
     return { success: true };
   }, "Erreur lors de la suppression du compte");
 }
 
 export async function createBucket(formData: FormData) {
+  const user = await requireAuth();
+
   const raw = Object.fromEntries(formData);
   const parsed = bucketSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   return safeAction(async () => {
+    // Verify the account belongs to the user
+    const account = await db.query.accounts.findFirst({
+      where: and(eq(accounts.id, parsed.data.accountId), eq(accounts.userId, user.id)),
+      columns: { id: true },
+    });
+    if (!account) return { error: "Compte introuvable" };
+
     await db.insert(buckets).values({
       id: createId(),
       ...parsed.data,
@@ -125,11 +147,26 @@ export async function createBucket(formData: FormData) {
 }
 
 export async function updateBucket(id: string, formData: FormData) {
+  const user = await requireAuth();
+
   const raw = Object.fromEntries(formData);
   const parsed = bucketSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   return safeAction(async () => {
+    // Verify the bucket belongs to an account owned by the user
+    const bucket = await db.query.buckets.findFirst({
+      where: eq(buckets.id, id),
+      columns: { accountId: true },
+    });
+    if (!bucket) return { error: "Bucket introuvable" };
+
+    const account = await db.query.accounts.findFirst({
+      where: and(eq(accounts.id, bucket.accountId), eq(accounts.userId, user.id)),
+      columns: { id: true },
+    });
+    if (!account) return { error: "Bucket introuvable" };
+
     await db.update(buckets).set({
       ...parsed.data,
       goal: parsed.data.goal != null ? parsed.data.goal.toString() : null,
@@ -141,7 +178,22 @@ export async function updateBucket(id: string, formData: FormData) {
 }
 
 export async function deleteBucket(id: string) {
+  const user = await requireAuth();
+
   return safeAction(async () => {
+    // Verify the bucket belongs to an account owned by the user
+    const bucket = await db.query.buckets.findFirst({
+      where: eq(buckets.id, id),
+      columns: { accountId: true },
+    });
+    if (!bucket) return { error: "Bucket introuvable" };
+
+    const account = await db.query.accounts.findFirst({
+      where: and(eq(accounts.id, bucket.accountId), eq(accounts.userId, user.id)),
+      columns: { id: true },
+    });
+    if (!account) return { error: "Bucket introuvable" };
+
     await db.delete(buckets).where(eq(buckets.id, id));
     revalidatePath("/accounts");
     return { success: true };
@@ -149,9 +201,15 @@ export async function deleteBucket(id: string) {
 }
 
 export async function getBucketBalance(bucketId: string): Promise<number> {
+  const user = await requireAuth();
+
   const [txs, bucket] = await Promise.all([
     db.query.transactions.findMany({
-      where: and(eq(transactions.bucketId, bucketId), eq(transactions.status, "COMPLETED")),
+      where: and(
+        eq(transactions.bucketId, bucketId),
+        eq(transactions.status, "COMPLETED"),
+        eq(transactions.userId, user.id),
+      ),
       columns: { amount: true, accountId: true, destinationAccountId: true },
     }),
     db.query.buckets.findFirst({
@@ -159,6 +217,16 @@ export async function getBucketBalance(bucketId: string): Promise<number> {
       columns: { baseAmount: true, accountId: true },
     }),
   ]);
+
+  // Verify the bucket belongs to an account owned by the user
+  if (bucket) {
+    const account = await db.query.accounts.findFirst({
+      where: and(eq(accounts.id, bucket.accountId), eq(accounts.userId, user.id)),
+      columns: { id: true },
+    });
+    if (!account) return 0;
+  }
+
   const base = bucket ? toNumber(bucket.baseAmount) : 0;
   const bucketAccountId = bucket?.accountId;
   let sum = 0;

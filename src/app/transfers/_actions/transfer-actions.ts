@@ -1,16 +1,19 @@
 "use server";
 
-import { db, transactions, accounts, buckets } from "@/lib/db";
+import { db, transactions, accounts, buckets, categories } from "@/lib/db";
 import { eq, and, isNotNull, asc, desc } from "drizzle-orm";
 import { type TransactionInput } from "@/lib/validators";
 import { toNumber, toISOString } from "@/lib/db/helpers";
 import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function getTransfers(year: number, month: number) {
+  const user = await requireAuth();
   const result = await db.query.transactions.findMany({
     where: and(
       eq(transactions.year, year),
       eq(transactions.month, month),
+      eq(transactions.userId, user.id),
       isNotNull(transactions.destinationAccountId)
     ),
     with: {
@@ -49,14 +52,17 @@ export async function getTransfers(year: number, month: number) {
 }
 
 export async function getTransferFormData() {
+  const user = await requireAuth();
   const [accountList, categoryList] = await Promise.all([
     db.query.accounts.findMany({
+      where: eq(accounts.userId, user.id),
       with: {
         buckets: { orderBy: [asc(buckets.sortOrder)] },
       },
       orderBy: [asc(accounts.sortOrder)],
     }),
     db.query.categories.findMany({
+      where: eq(categories.userId, user.id),
       with: { subCategories: true },
     }),
   ]);
@@ -91,13 +97,16 @@ export async function getTransferFormData() {
 const TRANSFER_OVERRIDES = { forceNegativeAmount: true, forceIsAmex: false } as const;
 
 export async function createTransfer(data: TransactionInput) {
-  return insertTransaction(data, TRANSFER_OVERRIDES, "Erreur lors de la création du virement");
+  const user = await requireAuth();
+  return insertTransaction(data, user.id, TRANSFER_OVERRIDES, "Erreur lors de la création du virement");
 }
 
 export async function updateTransfer(id: string, data: TransactionInput) {
-  return updateTransactionById(id, data, TRANSFER_OVERRIDES, "Erreur lors de la mise à jour du virement");
+  const user = await requireAuth();
+  return updateTransactionById(id, user.id, data, TRANSFER_OVERRIDES, "Erreur lors de la mise à jour du virement");
 }
 
 export async function deleteTransfer(id: string) {
-  return deleteTransactionById(id, "Erreur lors de la suppression du virement");
+  const user = await requireAuth();
+  return deleteTransactionById(id, user.id, "Erreur lors de la suppression du virement");
 }

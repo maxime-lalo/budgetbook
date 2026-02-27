@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { db, accounts } from "@/lib/db";
-import { asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { validateApiToken, unauthorizedResponse } from "@/lib/api-auth";
 
 export async function GET(request: Request) {
-  if (!(await validateApiToken(request))) return unauthorizedResponse();
+  const userId = await validateApiToken(request);
+  if (!userId) return unauthorizedResponse();
 
   const result = await db
     .select({ id: accounts.id, name: accounts.name, type: accounts.type })
     .from(accounts)
+    .where(eq(accounts.userId, userId))
     .orderBy(asc(accounts.sortOrder));
 
   return NextResponse.json(result);

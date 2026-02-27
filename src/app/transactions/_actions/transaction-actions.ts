@@ -1,6 +1,6 @@
 "use server";
 
-import { db, transactions, accounts, buckets } from "@/lib/db";
+import { db, transactions, accounts, buckets, categories } from "@/lib/db";
 import { eq, and, inArray, sql, asc, desc, gte, lte, or } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { partialTransactionFieldSchema, type TransactionInput } from "@/lib/validators";
@@ -9,12 +9,15 @@ import { recomputeMonthlyBalance, getCarryOver } from "@/lib/monthly-balance";
 import { toNumber, toISOString, toDbDate, round2, getCheckingAccountIds } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
 import { insertTransaction, updateTransactionById, deleteTransactionById } from "@/lib/transaction-helpers";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function getTransactions(year: number, month: number) {
-  const checkingIds = await getCheckingAccountIds();
+  const user = await requireAuth();
+  const checkingIds = await getCheckingAccountIds(user.id);
 
   const result = await db.query.transactions.findMany({
     where: and(
+      eq(transactions.userId, user.id),
       eq(transactions.year, year),
       eq(transactions.month, month),
       checkingIds.length > 0 ? inArray(transactions.accountId, checkingIds) : undefined
@@ -55,13 +58,14 @@ export async function getTransactions(year: number, month: number) {
 }
 
 export async function getTransactionTotals(year: number, month: number) {
-  const checkingIds = await getCheckingAccountIds();
+  const user = await requireAuth();
+  const checkingIds = await getCheckingAccountIds(user.id);
 
   if (checkingIds.length === 0) {
     return { real: 0, pending: 0, planned: 0, forecast: 0 };
   }
 
-  const baseWhere = and(eq(transactions.year, year), eq(transactions.month, month));
+  const baseWhere = and(eq(transactions.userId, user.id), eq(transactions.year, year), eq(transactions.month, month));
 
   const [[outgoing], [incoming]] = await Promise.all([
     db.select({
@@ -93,28 +97,32 @@ export async function getTransactionTotals(year: number, month: number) {
 }
 
 export async function createTransaction(data: TransactionInput) {
-  return insertTransaction(data, undefined, "Erreur lors de la création de la transaction");
+  const user = await requireAuth();
+  return insertTransaction(data, user.id, undefined, "Erreur lors de la création de la transaction");
 }
 
 export async function updateTransaction(id: string, data: TransactionInput) {
-  return updateTransactionById(id, data, undefined, "Erreur lors de la mise à jour de la transaction");
+  const user = await requireAuth();
+  return updateTransactionById(id, user.id, data, undefined, "Erreur lors de la mise à jour de la transaction");
 }
 
 export async function deleteTransaction(id: string) {
-  return deleteTransactionById(id, "Erreur lors de la suppression de la transaction");
+  const user = await requireAuth();
+  return deleteTransactionById(id, user.id, "Erreur lors de la suppression de la transaction");
 }
 
 export async function markTransactionCompleted(id: string) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const transaction = await db.query.transactions.findFirst({
-      where: eq(transactions.id, id),
+      where: and(eq(transactions.id, id), eq(transactions.userId, user.id)),
       columns: { year: true, month: true },
     });
 
-    await db.update(transactions).set({ status: "COMPLETED" }).where(eq(transactions.id, id));
+    await db.update(transactions).set({ status: "COMPLETED" }).where(and(eq(transactions.id, id), eq(transactions.userId, user.id)));
 
     if (transaction) {
-      await recomputeMonthlyBalance(transaction.year, transaction.month);
+      await recomputeMonthlyBalance(transaction.year, transaction.month, user.id);
     }
 
     revalidateTransactionPages();
@@ -123,8 +131,10 @@ export async function markTransactionCompleted(id: string) {
 }
 
 export async function completeAmexTransactions(year: number, month: number) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const amexWhere = and(
+      eq(transactions.userId, user.id),
       eq(transactions.year, year),
       eq(transactions.month, month),
       eq(transactions.status, "PENDING"),
@@ -141,25 +151,26 @@ export async function completeAmexTransactions(year: number, month: number) {
       .set({ status: "COMPLETED" })
       .where(amexWhere);
 
-    await recomputeMonthlyBalance(year, month);
+    await recomputeMonthlyBalance(year, month, user.id);
     revalidateTransactionPages();
     return { count: Number(count) };
   }, "Erreur lors de la validation des transactions AMEX");
 }
 
 export async function cancelTransaction(id: string, note: string) {
+  const user = await requireAuth();
   if (!note.trim()) return { error: "Une note est requise pour annuler" };
 
   return safeAction(async () => {
     const transaction = await db.query.transactions.findFirst({
-      where: eq(transactions.id, id),
+      where: and(eq(transactions.id, id), eq(transactions.userId, user.id)),
       columns: { year: true, month: true },
     });
 
-    await db.update(transactions).set({ status: "CANCELLED", note }).where(eq(transactions.id, id));
+    await db.update(transactions).set({ status: "CANCELLED", note }).where(and(eq(transactions.id, id), eq(transactions.userId, user.id)));
 
     if (transaction) {
-      await recomputeMonthlyBalance(transaction.year, transaction.month);
+      await recomputeMonthlyBalance(transaction.year, transaction.month, user.id);
     }
 
     revalidateTransactionPages();
@@ -186,12 +197,13 @@ export async function updateTransactionField(
     destinationAccountId: string | null;
   }>
 ) {
+  const user = await requireAuth();
   const validated = partialTransactionFieldSchema.safeParse(fields);
   if (!validated.success) return { error: validated.error.flatten().fieldErrors };
 
   return safeAction(async () => {
     const oldTransaction = await db.query.transactions.findFirst({
-      where: eq(transactions.id, id),
+      where: and(eq(transactions.id, id), eq(transactions.userId, user.id)),
       columns: { year: true, month: true },
     });
 
@@ -218,18 +230,18 @@ export async function updateTransactionField(
     if (fields.recurring !== undefined) data.recurring = fields.recurring;
     if (fields.destinationAccountId !== undefined) data.destinationAccountId = fields.destinationAccountId;
 
-    await db.update(transactions).set(data).where(eq(transactions.id, id));
+    await db.update(transactions).set(data).where(and(eq(transactions.id, id), eq(transactions.userId, user.id)));
 
     const updated = await db.query.transactions.findFirst({
-      where: eq(transactions.id, id),
+      where: and(eq(transactions.id, id), eq(transactions.userId, user.id)),
       columns: { year: true, month: true },
     });
 
     if (updated) {
-      await recomputeMonthlyBalance(updated.year, updated.month);
+      await recomputeMonthlyBalance(updated.year, updated.month, user.id);
     }
     if (oldTransaction && updated && (oldTransaction.year !== updated.year || oldTransaction.month !== updated.month)) {
-      await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
+      await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month, user.id);
     }
 
     revalidateTransactionPages();
@@ -238,12 +250,14 @@ export async function updateTransactionField(
 }
 
 export async function copyRecurringTransactions(year: number, month: number) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
 
     const previousRecurring = await db.query.transactions.findMany({
       where: and(
+        eq(transactions.userId, user.id),
         eq(transactions.year, prevYear),
         eq(transactions.month, prevMonth),
         eq(transactions.recurring, true)
@@ -256,14 +270,14 @@ export async function copyRecurringTransactions(year: number, month: number) {
 
     // Supprimer les récurrentes existantes du mois cible
     await db.delete(transactions).where(
-      and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.recurring, true))
+      and(eq(transactions.userId, user.id), eq(transactions.year, year), eq(transactions.month, month), eq(transactions.recurring, true))
     );
 
     // Calculer le prochain sortOrder après les transactions restantes du mois
     const [maxRow] = await db
       .select({ max: sql<number>`coalesce(max(${transactions.sortOrder}), -1)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.month, month)));
+      .where(and(eq(transactions.userId, user.id), eq(transactions.year, year), eq(transactions.month, month)));
     const startOrder = (maxRow?.max ?? -1) + 1;
 
     // Copier avec status PENDING et sans note (batch insert)
@@ -285,25 +299,27 @@ export async function copyRecurringTransactions(year: number, month: number) {
         recurring: true,
         sortOrder: startOrder + index,
         destinationAccountId: t.destinationAccountId,
+        userId: user.id,
       }))
     );
 
-    await recomputeMonthlyBalance(year, month);
+    await recomputeMonthlyBalance(year, month, user.id);
     revalidateTransactionPages();
     return { success: true, count: previousRecurring.length };
   }, "Erreur lors de la copie des transactions récurrentes");
 }
 
 export async function swapTransactionOrder(idA: string, idB: string) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const [a, b] = await Promise.all([
-      db.query.transactions.findFirst({ where: eq(transactions.id, idA), columns: { sortOrder: true } }),
-      db.query.transactions.findFirst({ where: eq(transactions.id, idB), columns: { sortOrder: true } }),
+      db.query.transactions.findFirst({ where: and(eq(transactions.id, idA), eq(transactions.userId, user.id)), columns: { sortOrder: true } }),
+      db.query.transactions.findFirst({ where: and(eq(transactions.id, idB), eq(transactions.userId, user.id)), columns: { sortOrder: true } }),
     ]);
     if (!a || !b) return { error: "Transaction introuvable" };
     await Promise.all([
-      db.update(transactions).set({ sortOrder: b.sortOrder }).where(eq(transactions.id, idA)),
-      db.update(transactions).set({ sortOrder: a.sortOrder }).where(eq(transactions.id, idB)),
+      db.update(transactions).set({ sortOrder: b.sortOrder }).where(and(eq(transactions.id, idA), eq(transactions.userId, user.id))),
+      db.update(transactions).set({ sortOrder: a.sortOrder }).where(and(eq(transactions.id, idB), eq(transactions.userId, user.id))),
     ]);
     // Pas de revalidateTransactionPages() — l'update optimiste côté client suffit
     // et évite un rechargement complet de la page
@@ -312,7 +328,8 @@ export async function swapTransactionOrder(idA: string, idB: string) {
 }
 
 export async function getPreviousMonthBudgetRemaining(year: number, month: number) {
-  return getCarryOver(year, month);
+  const user = await requireAuth();
+  return getCarryOver(year, month, user.id);
 }
 
 export async function searchTransactionsAcrossMonths(
@@ -327,7 +344,8 @@ export async function searchTransactionsAcrossMonths(
     dateTo?: string;
   }
 ) {
-  const conditions = [];
+  const user = await requireAuth();
+  const conditions = [eq(transactions.userId, user.id)];
 
   if (query) {
     const pattern = `%${query.toLowerCase()}%`;
@@ -335,7 +353,7 @@ export async function searchTransactionsAcrossMonths(
       or(
         sql`lower(${transactions.label}) like ${pattern}`,
         sql`lower(${transactions.note}) like ${pattern}`
-      )
+      )!
     );
   }
 
@@ -362,7 +380,7 @@ export async function searchTransactionsAcrossMonths(
   }
 
   const result = await db.query.transactions.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
+    where: and(...conditions),
     with: {
       account: true,
       category: true,
@@ -399,8 +417,10 @@ export async function searchTransactionsAcrossMonths(
 }
 
 export async function getFormData() {
+  const user = await requireAuth();
   const [accountList, categoryList] = await Promise.all([
     db.query.accounts.findMany({
+      where: eq(accounts.userId, user.id),
       with: {
         buckets: { orderBy: [asc(buckets.sortOrder)] },
         linkedCards: true,
@@ -408,6 +428,7 @@ export async function getFormData() {
       orderBy: [asc(accounts.sortOrder)],
     }),
     db.query.categories.findMany({
+      where: eq(categories.userId, user.id),
       with: { subCategories: true },
     }),
   ]);

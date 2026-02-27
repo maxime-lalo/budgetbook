@@ -65,31 +65,31 @@ describe("validateApiToken", () => {
     vi.clearAllMocks();
   });
 
-  it("returns false when no Authorization header is present", async () => {
+  it("returns null when no Authorization header is present", async () => {
     const result = await validateApiToken(makeRequest());
-    expect(result).toBe(false);
+    expect(result).toBeNull();
   });
 
-  it("returns false when Authorization header does not start with 'Bearer '", async () => {
+  it("returns null when Authorization header does not start with 'Bearer '", async () => {
     const result = await validateApiToken(makeRequest("Basic dXNlcjpwYXNz"));
-    expect(result).toBe(false);
+    expect(result).toBeNull();
   });
 
-  it("returns false when token is not found in the DB", async () => {
+  it("returns null when token is not found in the DB", async () => {
     mockFindFirst.mockResolvedValueOnce(undefined);
     const result = await validateApiToken(makeRequest("Bearer unknown-token"));
-    expect(result).toBe(false);
+    expect(result).toBeNull();
   });
 
-  it("returns true when token matches a record in the DB", async () => {
-    mockFindFirst.mockResolvedValueOnce({ token: hashToken("valid-token") });
+  it("returns userId when token matches a record in the DB", async () => {
+    mockFindFirst.mockResolvedValueOnce({ token: hashToken("valid-token"), userId: "user_123" });
     const result = await validateApiToken(makeRequest("Bearer valid-token"));
-    expect(result).toBe(true);
+    expect(result).toBe("user_123");
   });
 
   it("queries the DB with the hashed token, not the plain token", async () => {
     const plainToken = "plain-token";
-    mockFindFirst.mockResolvedValueOnce({ token: hashToken(plainToken) });
+    mockFindFirst.mockResolvedValueOnce({ token: hashToken(plainToken), userId: "user_123" });
 
     await validateApiToken(makeRequest(`Bearer ${plainToken}`));
 
@@ -102,24 +102,24 @@ describe("validateApiToken", () => {
     expect(JSON.stringify(callArgs)).not.toContain("plain-token");
   });
 
-  it("returns false when header is 'Bearer' with no space and no token", async () => {
+  it("returns null when header is 'Bearer' with no space and no token", async () => {
     const result = await validateApiToken(makeRequest("Bearer"));
-    expect(result).toBe(false);
+    expect(result).toBeNull();
     expect(mockFindFirst).not.toHaveBeenCalled();
   });
 
-  it("returns false when header uses lowercase 'bearer' prefix", async () => {
+  it("returns null when header uses lowercase 'bearer' prefix", async () => {
     const result = await validateApiToken(makeRequest("bearer valid-token"));
-    expect(result).toBe(false);
+    expect(result).toBeNull();
     expect(mockFindFirst).not.toHaveBeenCalled();
   });
 
-  it("returns false when token is empty after Bearer prefix", async () => {
+  it("returns null when token is empty after Bearer prefix", async () => {
     // "Bearer " — space present but no actual token value
     mockFindFirst.mockResolvedValueOnce(undefined);
     const result = await validateApiToken(makeRequest("Bearer "));
-    // The slice(7) yields "" which is falsy, so it should return false early
-    expect(result).toBe(false);
+    // The slice(7) yields "" which is falsy, so it should return null early
+    expect(result).toBeNull();
   });
 });
 

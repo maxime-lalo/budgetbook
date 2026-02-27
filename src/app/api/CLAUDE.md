@@ -56,14 +56,6 @@ Liste tous les comptes.
 **Réponse :** `[{ id, name, type }]`
 - Trié par `sortOrder`
 
-## Configuration production (Authelia)
+## Authentification
 
-En production derrière Authelia, les routes `/api/*` doivent être en bypass pour permettre l'authentification par Bearer token :
-
-```yaml
-access_control:
-  rules:
-    - domain: comptes.domaine.fr
-      resources: "^/api/"
-      policy: bypass
-```
+`validateApiToken()` retourne le `userId` (string) associé au token si valide, `null` sinon. Les routes utilisent ce userId pour filtrer les données par utilisateur.

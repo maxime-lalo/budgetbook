@@ -1,6 +1,6 @@
 "use server";
 
-import { db, transactions, budgets } from "@/lib/db";
+import { db, transactions, budgets, categories } from "@/lib/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { revalidatePath } from "next/cache";
@@ -9,9 +9,12 @@ import { toNumber, round2 } from "@/lib/db/helpers";
 import { safeAction } from "@/lib/safe-action";
 import { budgetSchema } from "@/lib/validators";
 import { revalidateTransactionPages } from "@/lib/revalidate";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function getBudgetsWithSpent(year: number, month: number) {
+  const user = await requireAuth();
   const allCategories = await db.query.categories.findMany({
+    where: eq(categories.userId, user.id),
     with: {
       budgets: {
         where: and(eq(budgets.year, year), eq(budgets.month, month)),
@@ -30,6 +33,7 @@ export async function getBudgetsWithSpent(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
+        eq(transactions.userId, user.id),
         inArray(transactions.status, ["COMPLETED", "PENDING"])
       )
     )
@@ -61,19 +65,21 @@ export async function getBudgetsWithSpent(year: number, month: number) {
 }
 
 export async function upsertBudget(categoryId: string, year: number, month: number, amount: number) {
+  const user = await requireAuth();
   const parsed = budgetSchema.safeParse({ categoryId, year, month, amount });
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors };
 
   return safeAction(async () => {
     const existing = await db.query.budgets.findFirst({
-      where: and(eq(budgets.categoryId, parsed.data.categoryId), eq(budgets.year, parsed.data.year), eq(budgets.month, parsed.data.month)),
+      where: and(eq(budgets.categoryId, parsed.data.categoryId), eq(budgets.year, parsed.data.year), eq(budgets.month, parsed.data.month), eq(budgets.userId, user.id)),
     });
 
     if (existing) {
-      await db.update(budgets).set({ amount: parsed.data.amount.toString() }).where(eq(budgets.id, existing.id));
+      await db.update(budgets).set({ amount: parsed.data.amount.toString() }).where(and(eq(budgets.id, existing.id), eq(budgets.userId, user.id)));
     } else {
       await db.insert(budgets).values({
         id: createId(),
+        userId: user.id,
         categoryId: parsed.data.categoryId,
         year: parsed.data.year,
         month: parsed.data.month,
@@ -81,7 +87,7 @@ export async function upsertBudget(categoryId: string, year: number, month: numb
       });
     }
 
-    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
+    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month, user.id);
     revalidatePath("/budgets");
     revalidateTransactionPages();
     return { success: true };
@@ -89,12 +95,13 @@ export async function upsertBudget(categoryId: string, year: number, month: numb
 }
 
 export async function copyBudgetsFromPreviousMonth(year: number, month: number) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
 
     const previousBudgets = await db.query.budgets.findMany({
-      where: and(eq(budgets.year, prevYear), eq(budgets.month, prevMonth)),
+      where: and(eq(budgets.year, prevYear), eq(budgets.month, prevMonth), eq(budgets.userId, user.id)),
     });
 
     if (previousBudgets.length === 0) {
@@ -103,7 +110,7 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
 
     // Batch-fetch all existing budgets for the target month to avoid N+1 queries
     const existingBudgets = await db.query.budgets.findMany({
-      where: and(eq(budgets.year, year), eq(budgets.month, month)),
+      where: and(eq(budgets.year, year), eq(budgets.month, month), eq(budgets.userId, user.id)),
     });
     const existingByCategory = new Map(existingBudgets.map((b) => [b.categoryId, b]));
 
@@ -111,10 +118,11 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
       const existing = existingByCategory.get(budget.categoryId);
 
       if (existing) {
-        await db.update(budgets).set({ amount: budget.amount }).where(eq(budgets.id, existing.id));
+        await db.update(budgets).set({ amount: budget.amount }).where(and(eq(budgets.id, existing.id), eq(budgets.userId, user.id)));
       } else {
         await db.insert(budgets).values({
           id: createId(),
+          userId: user.id,
           categoryId: budget.categoryId,
           year,
           month,
@@ -123,7 +131,7 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
       }
     }
 
-    await recomputeMonthlyBalance(year, month);
+    await recomputeMonthlyBalance(year, month, user.id);
     revalidatePath("/budgets");
     revalidateTransactionPages();
     return { success: true, count: previousBudgets.length };
@@ -131,6 +139,7 @@ export async function copyBudgetsFromPreviousMonth(year: number, month: number) 
 }
 
 export async function calibrateBudgets(year: number, month: number) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const budgetData: { id: string; budgetId: string | null; spent: number; budgeted: number }[] =
       await getBudgetsWithSpent(year, month);
@@ -144,10 +153,11 @@ export async function calibrateBudgets(year: number, month: number) {
     // without any additional DB queries inside the loop
     for (const b of overBudget) {
       if (b.budgetId) {
-        await db.update(budgets).set({ amount: b.spent.toString() }).where(eq(budgets.id, b.budgetId));
+        await db.update(budgets).set({ amount: b.spent.toString() }).where(and(eq(budgets.id, b.budgetId), eq(budgets.userId, user.id)));
       } else {
         await db.insert(budgets).values({
           id: createId(),
+          userId: user.id,
           categoryId: b.id,
           year,
           month,
@@ -156,7 +166,7 @@ export async function calibrateBudgets(year: number, month: number) {
       }
     }
 
-    await recomputeMonthlyBalance(year, month);
+    await recomputeMonthlyBalance(year, month, user.id);
     revalidatePath("/budgets");
     revalidateTransactionPages();
     return { success: true, count: overBudget.length };

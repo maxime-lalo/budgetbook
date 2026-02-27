@@ -1,36 +1,34 @@
 "use server";
 
-import { db, transactions, accounts, buckets, budgets } from "@/lib/db";
+import { db, transactions, accounts, buckets, budgets, categories } from "@/lib/db";
 import { eq, and, inArray, sql, desc, asc, isNotNull } from "drizzle-orm";
-import { toNumber, toISOString, round2 } from "@/lib/db/helpers";
+import { toNumber, toISOString, round2, getCheckingAccountIds } from "@/lib/db/helpers";
 import { getCarryOver } from "@/lib/monthly-balance";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function getDashboardData(year: number, month: number) {
-  const checkingAccounts = await db
-    .select({ id: accounts.id })
-    .from(accounts)
-    .where(eq(accounts.type, "CHECKING"));
-  const checkingIds = checkingAccounts.map((a) => a.id);
+  const user = await requireAuth();
+  const checkingIds = await getCheckingAccountIds(user.id);
 
   const [totals, income, expenses, carryOver, accountList, overBudget, recent, recentXfers] =
     await Promise.all([
-      getTotals(year, month, checkingIds),
-      getIncomeExpenses(year, month, "income"),
-      getIncomeExpenses(year, month, "expenses"),
-      getCarryOver(year, month),
-      getAccountsWithBalance(),
-      getOverBudgetCategories(year, month),
-      getRecentTransactions(year, month),
-      getRecentTransfers(year, month),
+      getTotals(year, month, checkingIds, user.id),
+      getIncomeExpenses(year, month, "income", user.id),
+      getIncomeExpenses(year, month, "expenses", user.id),
+      getCarryOver(year, month, user.id),
+      getAccountsWithBalance(user.id),
+      getOverBudgetCategories(year, month, user.id),
+      getRecentTransactions(year, month, user.id),
+      getRecentTransfers(year, month, user.id),
     ]);
 
   return { totals, income, expenses, carryOver, accounts: accountList, overBudgetCategories: overBudget, recentTransactions: recent, recentTransfers: recentXfers };
 }
 
-async function getTotals(year: number, month: number, checkingIds: string[]) {
+async function getTotals(year: number, month: number, checkingIds: string[], userId: string) {
   if (checkingIds.length === 0) return { real: 0, pending: 0, forecast: 0 };
 
-  const baseWhere = and(eq(transactions.year, year), eq(transactions.month, month));
+  const baseWhere = and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.userId, userId));
 
   const [[outgoing], [incoming]] = await Promise.all([
     db.select({
@@ -57,7 +55,7 @@ async function getTotals(year: number, month: number, checkingIds: string[]) {
   };
 }
 
-async function getIncomeExpenses(year: number, month: number, type: "income" | "expenses") {
+async function getIncomeExpenses(year: number, month: number, type: "income" | "expenses", userId: string) {
   const condition = type === "income" ? sql`${transactions.amount} > 0` : sql`${transactions.amount} < 0`;
   const [result] = await db
     .select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
@@ -66,6 +64,7 @@ async function getIncomeExpenses(year: number, month: number, type: "income" | "
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
+        eq(transactions.userId, userId),
         inArray(transactions.status, ["COMPLETED", "PENDING"]),
         condition
       )
@@ -73,8 +72,9 @@ async function getIncomeExpenses(year: number, month: number, type: "income" | "
   return toNumber(result.total);
 }
 
-async function getAccountsWithBalance() {
+async function getAccountsWithBalance(userId: string) {
   const allAccounts = await db.query.accounts.findMany({
+    where: eq(accounts.userId, userId),
     orderBy: [asc(accounts.sortOrder)],
   });
 
@@ -87,20 +87,21 @@ async function getAccountsWithBalance() {
       total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
     })
       .from(transactions)
-      .where(eq(transactions.status, "COMPLETED"))
+      .where(and(eq(transactions.status, "COMPLETED"), eq(transactions.userId, userId)))
       .groupBy(transactions.accountId),
     db.select({
       accountId: transactions.destinationAccountId,
       total: sql<string>`coalesce(sum(${transactions.amount}), 0)`,
     })
       .from(transactions)
-      .where(and(eq(transactions.status, "COMPLETED"), isNotNull(transactions.destinationAccountId)))
+      .where(and(eq(transactions.status, "COMPLETED"), eq(transactions.userId, userId), isNotNull(transactions.destinationAccountId)))
       .groupBy(transactions.destinationAccountId),
     db.select({
       accountId: buckets.accountId,
       total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)`,
     })
       .from(buckets)
+      .where(inArray(buckets.accountId, allAccounts.map((a) => a.id)))
       .groupBy(buckets.accountId),
   ]);
 
@@ -126,8 +127,9 @@ async function getAccountsWithBalance() {
   });
 }
 
-async function getOverBudgetCategories(year: number, month: number) {
+async function getOverBudgetCategories(year: number, month: number, userId: string) {
   const allCategories = await db.query.categories.findMany({
+    where: eq(categories.userId, userId),
     with: {
       budgets: {
         where: and(eq(budgets.year, year), eq(budgets.month, month)),
@@ -145,6 +147,7 @@ async function getOverBudgetCategories(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
+        eq(transactions.userId, userId),
         inArray(transactions.status, ["COMPLETED", "PENDING"])
       )
     )
@@ -174,9 +177,9 @@ async function getOverBudgetCategories(year: number, month: number) {
     .sort((a, b) => a.remaining - b.remaining);
 }
 
-async function getRecentTransactions(year: number, month: number) {
+async function getRecentTransactions(year: number, month: number, userId: string) {
   const result = await db.query.transactions.findMany({
-    where: and(eq(transactions.year, year), eq(transactions.month, month)),
+    where: and(eq(transactions.year, year), eq(transactions.month, month), eq(transactions.userId, userId)),
     with: {
       category: true,
       account: true,
@@ -196,11 +199,12 @@ async function getRecentTransactions(year: number, month: number) {
   }));
 }
 
-async function getRecentTransfers(year: number, month: number) {
+async function getRecentTransfers(year: number, month: number, userId: string) {
   const result = await db.query.transactions.findMany({
     where: and(
       eq(transactions.year, year),
       eq(transactions.month, month),
+      eq(transactions.userId, userId),
       isNotNull(transactions.destinationAccountId)
     ),
     with: {

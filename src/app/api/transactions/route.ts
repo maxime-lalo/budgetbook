@@ -21,7 +21,8 @@ const apiTransactionSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  if (!(await validateApiToken(request))) return unauthorizedResponse();
+  const userId = await validateApiToken(request);
+  if (!userId) return unauthorizedResponse();
 
   let body: unknown;
   try {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
 
   // Forcer isAmex à false si le support AMEX est désactivé
   const prefs = await db.query.appPreferences.findFirst({
-    where: eq(appPreferences.id, "singleton"),
+    where: eq(appPreferences.userId, userId),
   });
   const amexEnabled = prefs?.amexEnabled ?? true;
   if (!amexEnabled) {
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   let accountId = data.accountId;
   if (!accountId) {
     const defaultAccount = await db.query.accounts.findFirst({
-      where: eq(accounts.type, "CHECKING"),
+      where: and(eq(accounts.type, "CHECKING"), eq(accounts.userId, userId)),
       orderBy: asc(accounts.sortOrder),
     });
     if (!defaultAccount) {
@@ -73,12 +74,14 @@ export async function POST(request: Request) {
     .from(transactions)
     .where(and(
       eq(transactions.year, year),
-      eq(transactions.month, month)
+      eq(transactions.month, month),
+      eq(transactions.userId, userId)
     ));
 
   const id = createId();
   await db.insert(transactions).values({
     id,
+    userId,
     label: data.label,
     amount: data.amount.toString(),
     date: toDbDate(date),
@@ -92,7 +95,7 @@ export async function POST(request: Request) {
     sortOrder: (maxRow?.max ?? -1) + 1,
   });
 
-  await recomputeMonthlyBalance(year, month);
+  await recomputeMonthlyBalance(year, month, userId);
   revalidatePath("/transactions");
 
   return NextResponse.json(

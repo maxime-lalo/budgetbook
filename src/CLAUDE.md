@@ -11,9 +11,8 @@ src/
 └── lib/           # Utilitaires partagés
     ├── db/                # Drizzle ORM (schéma, singleton, helpers)
     │   ├── schema/pg.ts   # Schéma PostgreSQL
-    │   ├── schema/sqlite.ts # Schéma SQLite
-    │   ├── index.ts       # Singleton dual-provider
-    │   ├── helpers.ts     # toNumber(), toISOString(), round2()
+    │   ├── index.ts       # Singleton PostgreSQL
+    │   ├── helpers.ts     # toNumber(), toISOString(), round2(), getCheckingAccountIds()
     │   └── seed.ts        # Données de démo
     ├── __tests__/         # Tests unitaires (Vitest)
     ├── validators.ts      # Schémas Zod (toute la validation)
@@ -22,7 +21,8 @@ src/
     ├── safe-action.ts     # Wrapper try/catch pour server actions
     ├── transaction-helpers.ts # CRUD partagé transactions/transferts
     ├── monthly-balance.ts # Report cumulatif inter-mois (MonthlyBalance)
-    ├── api-auth.ts        # Validation Bearer token + hashage SHA-256
+    ├── auth/              # Authentification (JWT, password, session, LDAP)
+    ├── api-auth.ts        # Validation Bearer token API + hashage SHA-256
     ├── api-rate-limit.ts  # Rate limiting API
     ├── env.ts             # Validation variables d'environnement (Zod)
     ├── logger.ts          # Logger structuré
@@ -58,7 +58,7 @@ Le préfixe `_` empêche Next.js de traiter ces dossiers comme des routes.
 - Convertissent les montants numériques en `number` via `toNumber()` et les `Date` en `string` via `toISOString()` avant de retourner
 
 ### Sérialisation Server → Client
-Les requêtes Drizzle retournent des montants en `string` (PG numeric) ou `number` (SQLite real).
+Les requêtes Drizzle retournent des montants en `string` (PG numeric).
 **Règle** : toujours convertir via `toNumber()` de `@/lib/db/helpers` et construire des objets plain explicitement dans les server actions avant de les passer aux client components.
 
 ### Validation

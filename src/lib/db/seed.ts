@@ -1,32 +1,20 @@
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
-import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import Database from "better-sqlite3";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
+import { hash } from "bcryptjs";
 import * as pgSchema from "./schema/pg";
-import * as sqliteSchema from "./schema/sqlite";
 import { toNumber } from "./helpers";
 import { logger } from "@/lib/logger";
 
-const provider = process.env.DB_PROVIDER ?? "postgresql";
-
 function createDb() {
-  if (provider === "sqlite") {
-    const dbPath = (process.env.DATABASE_URL ?? "file:./dev.db").replace("file:", "");
-    const sqlite = new Database(dbPath);
-    sqlite.pragma("journal_mode = WAL");
-    sqlite.pragma("foreign_keys = ON");
-    return drizzleSqlite(sqlite, { schema: sqliteSchema });
-  }
   const connectionString = process.env.DATABASE_URL ?? "postgresql://comptes:comptes@localhost:5432/comptes";
   const client = postgres(connectionString);
-  return drizzlePg(client, { schema: pgSchema });
+  return drizzle(client, { schema: pgSchema });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db: any = createDb();
-const s = (provider === "sqlite" ? sqliteSchema : pgSchema) as typeof pgSchema;
+const db = createDb();
+const s = pgSchema;
 
 async function main() {
   // Vider la base de données (ordre respectant les FK)
@@ -37,6 +25,22 @@ async function main() {
   await db.delete(s.categories);
   await db.delete(s.buckets);
   await db.delete(s.accounts);
+  await db.delete(s.refreshTokens);
+  await db.delete(s.users);
+
+  // Créer un utilisateur admin par défaut
+  const adminId = createId();
+  const adminPassword = await hash("admin", 12);
+  await db.insert(s.users).values({
+    id: adminId,
+    email: "admin@comptes.local",
+    name: "Admin",
+    passwordHash: adminPassword,
+    authProvider: "local",
+    isAdmin: true,
+  });
+  const userId = adminId;
+  logger.info("Admin user created: admin@comptes.local / admin");
 
   // Catégories avec sous-catégories
   const categoriesData = [
@@ -60,7 +64,6 @@ async function main() {
 
   for (let i = 0; i < categoriesData.length; i++) {
     const cat = categoriesData[i];
-    // Upsert: check if exists
     const existing = await db.query.categories.findFirst({
       where: eq(s.categories.name, cat.name),
     });
@@ -71,7 +74,7 @@ async function main() {
       await db.update(s.categories).set({ color: cat.color, icon: cat.icon, sortOrder: i }).where(eq(s.categories.id, catId));
     } else {
       catId = createId();
-      await db.insert(s.categories).values({ id: catId, name: cat.name, color: cat.color, icon: cat.icon, sortOrder: i });
+      await db.insert(s.categories).values({ id: catId, userId, name: cat.name, color: cat.color, icon: cat.icon, sortOrder: i });
     }
     catIdMap.set(cat.name, catId);
 
@@ -82,7 +85,7 @@ async function main() {
       if (existingSub) {
         await db.update(s.subCategories).set({ sortOrder: j }).where(eq(s.subCategories.id, existingSub.id));
       } else {
-        await db.insert(s.subCategories).values({ id: createId(), name: cat.subs[j], categoryId: catId, sortOrder: j });
+        await db.insert(s.subCategories).values({ id: createId(), userId, name: cat.subs[j], categoryId: catId, sortOrder: j });
       }
     }
   }
@@ -91,14 +94,14 @@ async function main() {
   const existingChecking = await db.query.accounts.findFirst({ where: eq(s.accounts.id, "checking-main") });
   if (!existingChecking) {
     await db.insert(s.accounts).values({
-      id: "checking-main", name: "Compte Courant", type: "CHECKING", color: "#3b82f6", icon: "Wallet", sortOrder: 0,
+      id: "checking-main", userId, name: "Compte Courant", type: "CHECKING", color: "#3b82f6", icon: "Wallet", sortOrder: 0,
     });
   }
 
   const existingSavings = await db.query.accounts.findFirst({ where: eq(s.accounts.id, "savings-main") });
   if (!existingSavings) {
     await db.insert(s.accounts).values({
-      id: "savings-main", name: "Livret A", type: "SAVINGS", color: "#10b981", icon: "PiggyBank", sortOrder: 1,
+      id: "savings-main", userId, name: "Livret A", type: "SAVINGS", color: "#10b981", icon: "PiggyBank", sortOrder: 1,
     });
   }
 
@@ -125,10 +128,6 @@ async function main() {
   const currentMonth = now.getMonth();
   const month = currentMonth + 1;
 
-  // Helper pour formater les dates selon le provider
-  const toDate = (d: Date): Date | string =>
-    provider === "sqlite" ? d.toISOString().split("T")[0] : d;
-
   const allCats = await db.query.categories.findMany({ with: { subCategories: true } });
   const getCatId = (name: string) => (allCats as { name: string; id: string }[]).find((c) => c.name === name)!.id;
   const getSubId = (catName: string, subName: string) => {
@@ -137,13 +136,13 @@ async function main() {
   };
 
   const sampleTransactions = [
-    { label: "Salaire", amount: "3200", date: toDate(new Date(currentYear, currentMonth, 1)), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Revenus"), subCategoryId: getSubId("Revenus", "Salaire") },
-    { label: "Courses Carrefour", amount: "-87.5", date: toDate(new Date(currentYear, currentMonth, 8)), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Courses") },
-    { label: "Restaurant", amount: "-45", date: toDate(new Date(currentYear, currentMonth, 10)), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Restaurant"), isAmex: true },
-    { label: "Essence", amount: "-65", date: toDate(new Date(currentYear, currentMonth, 12)), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Transport"), subCategoryId: getSubId("Transport", "Essence") },
-    { label: "Virement épargne", amount: "-500", date: toDate(new Date(currentYear, currentMonth, 2)), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Épargne"), subCategoryId: getSubId("Épargne", "Livret A"), destinationAccountId: "savings-main", bucketId: "bucket-emergency" },
-    { label: "Assurance auto", amount: "-75", date: toDate(new Date(currentYear, currentMonth, 20)), month, year: currentYear, status: "PENDING" as const, accountId: "checking-main", categoryId: getCatId("Transport"), subCategoryId: getSubId("Transport", "Entretien véhicule") },
-    { label: "Prime trimestrielle", amount: "800", date: toDate(new Date(currentYear, currentMonth, 25)), month, year: currentYear, status: "PENDING" as const, accountId: "checking-main", categoryId: getCatId("Revenus"), subCategoryId: getSubId("Revenus", "Prime") },
+    { label: "Salaire", amount: "3200", date: new Date(currentYear, currentMonth, 1), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Revenus"), subCategoryId: getSubId("Revenus", "Salaire") },
+    { label: "Courses Carrefour", amount: "-87.5", date: new Date(currentYear, currentMonth, 8), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Courses") },
+    { label: "Restaurant", amount: "-45", date: new Date(currentYear, currentMonth, 10), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Alimentation"), subCategoryId: getSubId("Alimentation", "Restaurant"), isAmex: true },
+    { label: "Essence", amount: "-65", date: new Date(currentYear, currentMonth, 12), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Transport"), subCategoryId: getSubId("Transport", "Essence") },
+    { label: "Virement épargne", amount: "-500", date: new Date(currentYear, currentMonth, 2), month, year: currentYear, status: "COMPLETED" as const, accountId: "checking-main", categoryId: getCatId("Épargne"), subCategoryId: getSubId("Épargne", "Livret A"), destinationAccountId: "savings-main", bucketId: "bucket-emergency" },
+    { label: "Assurance auto", amount: "-75", date: new Date(currentYear, currentMonth, 20), month, year: currentYear, status: "PENDING" as const, accountId: "checking-main", categoryId: getCatId("Transport"), subCategoryId: getSubId("Transport", "Entretien véhicule") },
+    { label: "Prime trimestrielle", amount: "800", date: new Date(currentYear, currentMonth, 25), month, year: currentYear, status: "PENDING" as const, accountId: "checking-main", categoryId: getCatId("Revenus"), subCategoryId: getSubId("Revenus", "Prime") },
   ];
 
   const recurringTransactions = [
@@ -152,7 +151,7 @@ async function main() {
   ];
 
   for (const t of [...sampleTransactions, ...recurringTransactions]) {
-    await db.insert(s.transactions).values({ id: createId(), ...t });
+    await db.insert(s.transactions).values({ id: createId(), userId, ...t });
   }
 
   // Budgets pour le mois courant
@@ -173,7 +172,7 @@ async function main() {
     if (existing) {
       await db.update(s.budgets).set({ amount: b.amount }).where(eq(s.budgets.id, existing.id));
     } else {
-      await db.insert(s.budgets).values({ id: createId(), ...b, year: currentYear, month });
+      await db.insert(s.budgets).values({ id: createId(), userId, ...b, year: currentYear, month });
     }
   }
 
@@ -204,7 +203,7 @@ async function main() {
       (monthBudgets as { categoryId: string; amount: string | number }[]).map((b) => [b.categoryId, toNumber(b.amount)])
     );
     const spentMap = new Map<string, number>(
-      spentByCategory.map((sp: { categoryId: string; total: string }) => [sp.categoryId, Math.abs(toNumber(sp.total))])
+      spentByCategory.map((sp: { categoryId: string | null; total: string }) => [sp.categoryId ?? "", Math.abs(toNumber(sp.total))])
     );
 
     const allCategoryIds = new Set([...budgetMap.keys(), ...spentMap.keys()]);
@@ -230,6 +229,7 @@ async function main() {
     } else {
       await db.insert(s.monthlyBalances).values({
         id: createId(),
+        userId,
         year: y,
         month: m,
         forecast: totalForecast.toString(),
@@ -239,13 +239,8 @@ async function main() {
     }
   }
 
-  // AppPreferences singleton
-  const existingPrefs = await db.query.appPreferences.findFirst({
-    where: eq(s.appPreferences.id, "singleton"),
-  });
-  if (!existingPrefs) {
-    await db.insert(s.appPreferences).values({ id: "singleton", amexEnabled: true });
-  }
+  // AppPreferences pour l'admin
+  await db.insert(s.appPreferences).values({ id: createId(), userId, amexEnabled: true });
 
   logger.info("Seed completed successfully!");
 }
@@ -256,6 +251,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    // postgres.js ferme automatiquement les connexions
     process.exit(0);
   });

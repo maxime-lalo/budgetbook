@@ -6,7 +6,16 @@
 - Font : Geist Sans + Geist Mono
 - Structure : Sidebar (desktop) + MobileNav (mobile) + main content
 - ThemeProvider (next-themes) : attribut `class`, défaut `system`
+- UserProvider : fournit le contexte utilisateur authentifié à toute l'app
 - Toaster (sonner) : position bottom-right, richColors
+
+## Authentification
+
+- **`(auth)/`** : Layout group pour les pages publiques (login, register). Layout minimal sans sidebar
+  - **`login/`** : Formulaire de connexion (email + password). Supporte auth locale et LDAP
+  - **`register/`** : Formulaire d'inscription (nom, email, password)
+  - **`_actions/auth-actions.ts`** : `loginAction()`, `registerAction()`, `logoutAction()` -- gère auth locale + LDAP avec creation de session JWT
+- **Middleware** (`src/proxy.ts`) : vérifie le cookie `access_token` (JWT) sur toutes les routes protegees. Redirige vers `/login` si absent, tente un refresh via `/api/auth/refresh` si expiré. Les routes `/login`, `/register`, `/api/*` et `/_next/*` sont exclues de la vérification
 
 ## Error Boundaries
 
@@ -34,6 +43,14 @@ Les données du dashboard sont fetchées via `src/app/_actions/dashboard-actions
 | `/accounts` | CRUD comptes et buckets | - |
 | `/statistics` | Graphiques et analyses | `?year=2026&account=xxx` |
 | `/settings` | Réglages (gestion token API) | - |
+| `/admin` | Administration (liste utilisateurs, stats globales) -- `requireAdmin()` | - |
+
+### Groupe auth (`(auth)/`)
+
+| Route | Description |
+|-------|-------------|
+| `/login` | Formulaire de connexion |
+| `/register` | Formulaire d'inscription |
 
 ### API REST (routes `/api/*`)
 
@@ -44,8 +61,9 @@ Endpoints pour intégrations externes (Tasker → n8n → API), sécurisés par 
 | `/api/transactions` | POST | Créer une transaction (body JSON) |
 | `/api/categories` | GET | Lister catégories + sous-catégories |
 | `/api/accounts` | GET | Lister les comptes |
+| `/api/auth/refresh` | GET | Rafraichir le JWT access_token via le refresh_token cookie. Parametre `returnTo` pour redirect |
 
-Auth : header `Authorization: Bearer <token>`. Token géré depuis `/settings`.
+Auth : header `Authorization: Bearer <token>`. Token géré depuis `/settings`. `validateApiToken()` retourne le `userId` associé au token.
 
 ## Navigation
 

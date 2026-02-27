@@ -63,6 +63,7 @@ function buildTransactionValues(parsed: {
 
 export async function insertTransaction(
   data: TransactionInput,
+  userId: string,
   overrides?: TransactionOverrides,
   errorMessage = "Erreur lors de la création"
 ) {
@@ -76,14 +77,16 @@ export async function insertTransaction(
       .from(transactions)
       .where(and(
         eq(transactions.year, parsed.data.year),
-        eq(transactions.month, parsed.data.month)
+        eq(transactions.month, parsed.data.month),
+        eq(transactions.userId, userId)
       ));
     await db.insert(transactions).values({
       id: createId(),
+      userId,
       ...buildTransactionValues(parsed.data),
       sortOrder: (maxRow?.max ?? -1) + 1,
     });
-    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
+    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month, userId);
     revalidateTransactionPages();
     return { success: true };
   }, errorMessage);
@@ -91,6 +94,7 @@ export async function insertTransaction(
 
 export async function updateTransactionById(
   id: string,
+  userId: string,
   data: TransactionInput,
   overrides?: TransactionOverrides,
   errorMessage = "Erreur lors de la mise à jour"
@@ -101,17 +105,17 @@ export async function updateTransactionById(
 
   return safeAction(async () => {
     const oldTransaction = await db.query.transactions.findFirst({
-      where: eq(transactions.id, id),
+      where: and(eq(transactions.id, id), eq(transactions.userId, userId)),
       columns: { year: true, month: true },
     });
 
     await db.update(transactions)
       .set(buildTransactionValues(parsed.data))
-      .where(eq(transactions.id, id));
+      .where(and(eq(transactions.id, id), eq(transactions.userId, userId)));
 
-    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month);
+    await recomputeMonthlyBalance(parsed.data.year, parsed.data.month, userId);
     if (oldTransaction && (oldTransaction.year !== parsed.data.year || oldTransaction.month !== parsed.data.month)) {
-      await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month);
+      await recomputeMonthlyBalance(oldTransaction.year, oldTransaction.month, userId);
     }
 
     revalidateTransactionPages();
@@ -121,18 +125,19 @@ export async function updateTransactionById(
 
 export async function deleteTransactionById(
   id: string,
+  userId: string,
   errorMessage = "Erreur lors de la suppression"
 ) {
   return safeAction(async () => {
     const transaction = await db.query.transactions.findFirst({
-      where: eq(transactions.id, id),
+      where: and(eq(transactions.id, id), eq(transactions.userId, userId)),
       columns: { year: true, month: true },
     });
 
-    await db.delete(transactions).where(eq(transactions.id, id));
+    await db.delete(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, userId)));
 
     if (transaction) {
-      await recomputeMonthlyBalance(transaction.year, transaction.month);
+      await recomputeMonthlyBalance(transaction.year, transaction.month, userId);
     }
 
     revalidateTransactionPages();

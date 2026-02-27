@@ -1,7 +1,7 @@
 "use server";
 
-import { db, provider, accounts, categories, subCategories, buckets, transactions, budgets, monthlyBalances, apiTokens, appPreferences } from "@/lib/db";
-import { eq, asc, desc } from "drizzle-orm";
+import { db, accounts, categories, subCategories, buckets, transactions, budgets, monthlyBalances, apiTokens, appPreferences } from "@/lib/db";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
@@ -12,16 +12,13 @@ import { logger } from "@/lib/logger";
 import { hashToken } from "@/lib/api-auth";
 import { safeAction } from "@/lib/safe-action";
 import { revalidateTransactionPages } from "@/lib/revalidate";
+import { requireAuth } from "@/lib/auth/session";
 
-// Helper: convertit une date ISO string en Date (PG) ou la laisse en string (SQLite)
-const toTimestamp = (isoString: string): Date | string =>
-  provider === "sqlite" ? isoString : new Date(isoString);
-
-const toDateCol = (isoString: string): Date | string =>
-  provider === "sqlite" ? isoString : new Date(isoString);
 
 export async function getApiToken() {
+  const user = await requireAuth();
   const token = await db.query.apiTokens.findFirst({
+    where: eq(apiTokens.userId, user.id),
     orderBy: [desc(apiTokens.createdAt)],
   });
 
@@ -34,15 +31,16 @@ export async function getApiToken() {
 }
 
 export async function regenerateApiToken() {
+  const user = await requireAuth();
   return safeAction(async () => {
-    await db.delete(apiTokens);
+    await db.delete(apiTokens).where(eq(apiTokens.userId, user.id));
 
     const id = createId();
     const plainToken = randomUUID();
     const hashedToken = hashToken(plainToken);
     const tokenPrefix = plainToken.slice(0, 8);
 
-    await db.insert(apiTokens).values({ id, token: hashedToken, tokenPrefix });
+    await db.insert(apiTokens).values({ id, userId: user.id, token: hashedToken, tokenPrefix });
 
     const created = await db.query.apiTokens.findFirst({
       where: eq(apiTokens.id, id),
@@ -57,18 +55,19 @@ export async function regenerateApiToken() {
 }
 
 export async function getAppPreferences() {
+  const user = await requireAuth();
   let prefs = await db.query.appPreferences.findFirst({
-    where: eq(appPreferences.id, "singleton"),
+    where: eq(appPreferences.userId, user.id),
   });
 
   if (!prefs) {
-    await db.insert(appPreferences).values({ id: "singleton", amexEnabled: true, separateRecurring: true });
-    prefs = { id: "singleton", amexEnabled: true, separateRecurring: true, updatedAt: new Date() };
+    await db.insert(appPreferences).values({ id: createId(), userId: user.id, amexEnabled: true, separateRecurring: true });
+    prefs = { id: "new", userId: user.id, amexEnabled: true, separateRecurring: true, updatedAt: new Date() };
   }
 
   // Migrer les lignes existantes sans separateRecurring
   if (prefs.separateRecurring === null || prefs.separateRecurring === undefined) {
-    await db.update(appPreferences).set({ separateRecurring: true }).where(eq(appPreferences.id, "singleton"));
+    await db.update(appPreferences).set({ separateRecurring: true }).where(eq(appPreferences.userId, user.id));
     prefs = { ...prefs, separateRecurring: true };
   }
 
@@ -76,15 +75,16 @@ export async function getAppPreferences() {
 }
 
 export async function updateAmexEnabled(enabled: boolean) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const existing = await db.query.appPreferences.findFirst({
-      where: eq(appPreferences.id, "singleton"),
+      where: eq(appPreferences.userId, user.id),
     });
 
     if (existing) {
-      await db.update(appPreferences).set({ amexEnabled: enabled }).where(eq(appPreferences.id, "singleton"));
+      await db.update(appPreferences).set({ amexEnabled: enabled }).where(eq(appPreferences.userId, user.id));
     } else {
-      await db.insert(appPreferences).values({ id: "singleton", amexEnabled: enabled });
+      await db.insert(appPreferences).values({ id: createId(), userId: user.id, amexEnabled: enabled });
     }
 
     revalidateTransactionPages();
@@ -94,15 +94,16 @@ export async function updateAmexEnabled(enabled: boolean) {
 }
 
 export async function updateSeparateRecurring(enabled: boolean) {
+  const user = await requireAuth();
   return safeAction(async () => {
     const existing = await db.query.appPreferences.findFirst({
-      where: eq(appPreferences.id, "singleton"),
+      where: eq(appPreferences.userId, user.id),
     });
 
     if (existing) {
-      await db.update(appPreferences).set({ separateRecurring: enabled }).where(eq(appPreferences.id, "singleton"));
+      await db.update(appPreferences).set({ separateRecurring: enabled }).where(eq(appPreferences.userId, user.id));
     } else {
-      await db.insert(appPreferences).values({ id: "singleton", separateRecurring: enabled });
+      await db.insert(appPreferences).values({ id: createId(), userId: user.id, separateRecurring: enabled });
     }
 
     revalidateTransactionPages();
@@ -112,18 +113,23 @@ export async function updateSeparateRecurring(enabled: boolean) {
 }
 
 export async function exportAllData(): Promise<string> {
+  const user = await requireAuth();
   const [accs, cats, subs, bkts, txs, bdgs, mbs, tokens, prefs] =
     await Promise.all([
-      db.query.accounts.findMany({ orderBy: [asc(accounts.sortOrder)] }),
-      db.query.categories.findMany({ orderBy: [asc(categories.sortOrder)] }),
-      db.query.subCategories.findMany({ orderBy: [asc(subCategories.sortOrder)] }),
+      db.query.accounts.findMany({ where: eq(accounts.userId, user.id), orderBy: [asc(accounts.sortOrder)] }),
+      db.query.categories.findMany({ where: eq(categories.userId, user.id), orderBy: [asc(categories.sortOrder)] }),
+      db.query.subCategories.findMany({ where: eq(subCategories.userId, user.id), orderBy: [asc(subCategories.sortOrder)] }),
       db.query.buckets.findMany({ orderBy: [asc(buckets.sortOrder)] }),
-      db.query.transactions.findMany({ orderBy: [asc(transactions.createdAt)] }),
-      db.query.budgets.findMany({ orderBy: [asc(budgets.createdAt)] }),
-      db.query.monthlyBalances.findMany({ orderBy: [asc(monthlyBalances.year), asc(monthlyBalances.month)] }),
-      db.query.apiTokens.findMany({ orderBy: [asc(apiTokens.createdAt)] }),
-      db.query.appPreferences.findFirst({ where: eq(appPreferences.id, "singleton") }),
+      db.query.transactions.findMany({ where: eq(transactions.userId, user.id), orderBy: [asc(transactions.createdAt)] }),
+      db.query.budgets.findMany({ where: eq(budgets.userId, user.id), orderBy: [asc(budgets.createdAt)] }),
+      db.query.monthlyBalances.findMany({ where: eq(monthlyBalances.userId, user.id), orderBy: [asc(monthlyBalances.year), asc(monthlyBalances.month)] }),
+      db.query.apiTokens.findMany({ where: eq(apiTokens.userId, user.id), orderBy: [asc(apiTokens.createdAt)] }),
+      db.query.appPreferences.findFirst({ where: eq(appPreferences.userId, user.id) }),
     ]);
+
+  // Filter buckets by user's account IDs
+  const userAccountIds = new Set(accs.map((a) => a.id));
+  const userBuckets = bkts.filter((b) => userAccountIds.has(b.accountId));
 
   const serialize = (items: Record<string, unknown>[]) =>
     items.map((item) => {
@@ -147,7 +153,7 @@ export async function exportAllData(): Promise<string> {
       accounts: serialize(accs),
       categories: serialize(cats),
       subCategories: serialize(subs),
-      buckets: serialize(bkts),
+      buckets: serialize(userBuckets),
       transactions: serialize(txs),
       budgets: serialize(bdgs),
       monthlyBalances: serialize(mbs),
@@ -160,15 +166,24 @@ export async function exportAllData(): Promise<string> {
 }
 
 export async function clearAllData() {
+  const user = await requireAuth();
   return safeAction(async () => {
-    await db.delete(monthlyBalances);
-    await db.delete(budgets);
-    await db.delete(transactions);
-    await db.delete(subCategories);
-    await db.delete(categories);
-    await db.delete(buckets);
-    await db.update(accounts).set({ linkedAccountId: null });
-    await db.delete(accounts);
+    await db.delete(monthlyBalances).where(eq(monthlyBalances.userId, user.id));
+    await db.delete(budgets).where(eq(budgets.userId, user.id));
+    await db.delete(transactions).where(eq(transactions.userId, user.id));
+    await db.delete(subCategories).where(eq(subCategories.userId, user.id));
+    await db.delete(categories).where(eq(categories.userId, user.id));
+    // Delete buckets via account IDs (buckets don't have userId)
+    const userAccounts = await db.query.accounts.findMany({
+      where: eq(accounts.userId, user.id),
+      columns: { id: true },
+    });
+    const accountIds = userAccounts.map((a) => a.id);
+    if (accountIds.length > 0) {
+      await db.delete(buckets).where(inArray(buckets.accountId, accountIds));
+    }
+    await db.update(accounts).set({ linkedAccountId: null }).where(eq(accounts.userId, user.id));
+    await db.delete(accounts).where(eq(accounts.userId, user.id));
     revalidatePath("/");
     return { success: true };
   }, "Erreur lors de la suppression des données");
@@ -177,6 +192,7 @@ export async function clearAllData() {
 export async function importAllData(
   jsonString: string
 ): Promise<{ success: true; counts: Record<string, number> } | { error: string }> {
+  const user = await requireAuth();
   try {
     const parsed = JSON.parse(jsonString);
     const validated = comptesExportSchema.parse(parsed);
@@ -184,69 +200,97 @@ export async function importAllData(
 
     const counts: Record<string, number> = {};
 
-    // 1. Clear toutes les données existantes
-    await db.delete(monthlyBalances);
-    await db.delete(budgets);
-    await db.delete(transactions);
-    await db.delete(subCategories);
-    await db.delete(categories);
-    await db.delete(buckets);
-    await db.update(accounts).set({ linkedAccountId: null });
-    await db.delete(accounts);
-    await db.delete(apiTokens);
+    // 1. Clear toutes les données existantes de l'utilisateur
+    await db.delete(monthlyBalances).where(eq(monthlyBalances.userId, user.id));
+    await db.delete(budgets).where(eq(budgets.userId, user.id));
+    await db.delete(transactions).where(eq(transactions.userId, user.id));
+    await db.delete(subCategories).where(eq(subCategories.userId, user.id));
+    await db.delete(categories).where(eq(categories.userId, user.id));
+    // Delete buckets via account IDs
+    const existingAccounts = await db.query.accounts.findMany({
+      where: eq(accounts.userId, user.id),
+      columns: { id: true },
+    });
+    const existingAccountIds = existingAccounts.map((a) => a.id);
+    if (existingAccountIds.length > 0) {
+      const { inArray } = await import("drizzle-orm");
+      await db.delete(buckets).where(inArray(buckets.accountId, existingAccountIds));
+    }
+    await db.update(accounts).set({ linkedAccountId: null }).where(eq(accounts.userId, user.id));
+    await db.delete(accounts).where(eq(accounts.userId, user.id));
+    await db.delete(apiTokens).where(eq(apiTokens.userId, user.id));
+
+    // ID mappings (ancien ID → nouveau ID) pour remapper les FK
+    const accountIdMap = new Map<string, string>();
+    const categoryIdMap = new Map<string, string>();
+    const subCategoryIdMap = new Map<string, string>();
+    const bucketIdMap = new Map<string, string>();
+    const remap = (map: Map<string, string>, oldId: string | null | undefined) =>
+      oldId ? map.get(oldId) ?? null : null;
 
     // 2. Insérer les comptes (sans linkedAccountId d'abord)
     for (const account of data.accounts) {
+      const newId = createId();
+      accountIdMap.set(account.id, newId);
       await db.insert(accounts).values({
-        id: account.id,
+        id: newId,
+        userId: user.id,
         name: account.name,
         type: account.type,
         color: account.color,
         icon: account.icon,
         sortOrder: account.sortOrder,
         linkedAccountId: null,
-        createdAt: toTimestamp(account.createdAt) as Date,
-        updatedAt: toTimestamp(account.updatedAt) as Date,
+        createdAt: new Date(account.createdAt),
+        updatedAt: new Date(account.updatedAt),
       });
     }
 
     // 3. Insérer les catégories
     for (const category of data.categories) {
+      const newId = createId();
+      categoryIdMap.set(category.id, newId);
       await db.insert(categories).values({
-        id: category.id,
+        id: newId,
+        userId: user.id,
         name: category.name,
         color: category.color,
         icon: category.icon,
         sortOrder: category.sortOrder,
-        createdAt: toTimestamp(category.createdAt) as Date,
-        updatedAt: toTimestamp(category.updatedAt) as Date,
+        createdAt: new Date(category.createdAt),
+        updatedAt: new Date(category.updatedAt),
       });
     }
 
     // 4. Insérer les sous-catégories
     for (const subCategory of data.subCategories) {
+      const newId = createId();
+      subCategoryIdMap.set(subCategory.id, newId);
       await db.insert(subCategories).values({
-        id: subCategory.id,
+        id: newId,
+        userId: user.id,
         name: subCategory.name,
-        categoryId: subCategory.categoryId,
+        categoryId: remap(categoryIdMap, subCategory.categoryId)!,
         sortOrder: subCategory.sortOrder,
-        createdAt: toTimestamp(subCategory.createdAt) as Date,
-        updatedAt: toTimestamp(subCategory.updatedAt) as Date,
+        createdAt: new Date(subCategory.createdAt),
+        updatedAt: new Date(subCategory.updatedAt),
       });
     }
 
     // 5. Insérer les buckets
     for (const bucket of data.buckets) {
+      const newId = createId();
+      bucketIdMap.set(bucket.id, newId);
       await db.insert(buckets).values({
-        id: bucket.id,
+        id: newId,
         name: bucket.name,
-        accountId: bucket.accountId,
+        accountId: remap(accountIdMap, bucket.accountId)!,
         color: bucket.color,
         goal: bucket.goal,
         baseAmount: bucket.baseAmount,
         sortOrder: bucket.sortOrder,
-        createdAt: toTimestamp(bucket.createdAt) as Date,
-        updatedAt: toTimestamp(bucket.updatedAt) as Date,
+        createdAt: new Date(bucket.createdAt),
+        updatedAt: new Date(bucket.updatedAt),
       });
     }
 
@@ -263,68 +307,64 @@ export async function importAllData(
       sortCounters.set(key, Math.max(sortCounters.get(key) ?? 0, sortOrder + 1));
 
       await db.insert(transactions).values({
-        id: transaction.id,
+        id: createId(),
+        userId: user.id,
         label: transaction.label,
         amount: transaction.amount,
-        date: transaction.date ? toDateCol(transaction.date) as Date : null,
+        date: transaction.date ? new Date(transaction.date) : null,
         month: transaction.month,
         year: transaction.year,
         status: transaction.status,
         note: transaction.note,
-        accountId: transaction.accountId,
-        destinationAccountId: transaction.destinationAccountId,
-        categoryId: transaction.categoryId,
-        subCategoryId: transaction.subCategoryId,
-        bucketId: transaction.bucketId,
+        accountId: remap(accountIdMap, transaction.accountId)!,
+        destinationAccountId: remap(accountIdMap, transaction.destinationAccountId),
+        categoryId: remap(categoryIdMap, transaction.categoryId),
+        subCategoryId: remap(subCategoryIdMap, transaction.subCategoryId),
+        bucketId: remap(bucketIdMap, transaction.bucketId),
         isAmex: transaction.isAmex,
         recurring: transaction.recurring ?? false,
         sortOrder,
-        createdAt: toTimestamp(transaction.createdAt) as Date,
-        updatedAt: toTimestamp(transaction.updatedAt) as Date,
+        createdAt: new Date(transaction.createdAt),
+        updatedAt: new Date(transaction.updatedAt),
       });
     }
 
     // 7. Insérer les budgets
     for (const budget of data.budgets) {
       await db.insert(budgets).values({
-        id: budget.id,
-        categoryId: budget.categoryId,
+        id: createId(),
+        userId: user.id,
+        categoryId: remap(categoryIdMap, budget.categoryId)!,
         month: budget.month,
         year: budget.year,
         amount: budget.amount,
-        createdAt: toTimestamp(budget.createdAt) as Date,
-        updatedAt: toTimestamp(budget.updatedAt) as Date,
+        createdAt: new Date(budget.createdAt),
+        updatedAt: new Date(budget.updatedAt),
       });
     }
 
-    // 8. Insérer les API tokens
-    for (const token of data.apiTokens) {
-      await db.insert(apiTokens).values({
-        id: token.id,
-        token: token.token,
-        tokenPrefix: token.tokenPrefix || token.token.slice(0, 8),
-        name: token.name,
-        createdAt: toTimestamp(token.createdAt) as Date,
-      });
-    }
+    // 8. Insérer les API tokens (ne pas réimporter — les tokens sont spécifiques à l'env)
+    // On skip les tokens car le hash ne serait plus valide
 
     // 9. Restaurer les préférences si présentes
     if (data.appPreferences) {
       const existingPrefs = await db.query.appPreferences.findFirst({
-        where: eq(appPreferences.id, "singleton"),
+        where: eq(appPreferences.userId, user.id),
       });
       const prefsData = { amexEnabled: data.appPreferences.amexEnabled, separateRecurring: data.appPreferences.separateRecurring ?? true };
       if (existingPrefs) {
-        await db.update(appPreferences).set(prefsData).where(eq(appPreferences.id, "singleton"));
+        await db.update(appPreferences).set(prefsData).where(eq(appPreferences.userId, user.id));
       } else {
-        await db.insert(appPreferences).values({ id: "singleton", ...prefsData });
+        await db.insert(appPreferences).values({ id: createId(), userId: user.id, ...prefsData });
       }
     }
 
     // 10. 2e passe : mettre à jour les linkedAccountId
     const accountsWithLinked = data.accounts.filter((a) => a.linkedAccountId);
     for (const account of accountsWithLinked) {
-      await db.update(accounts).set({ linkedAccountId: account.linkedAccountId }).where(eq(accounts.id, account.id));
+      const newId = accountIdMap.get(account.id)!;
+      const newLinkedId = remap(accountIdMap, account.linkedAccountId);
+      await db.update(accounts).set({ linkedAccountId: newLinkedId }).where(and(eq(accounts.id, newId), eq(accounts.userId, user.id)));
     }
 
     // Compteurs depuis les données validées
@@ -334,17 +374,31 @@ export async function importAllData(
     counts.buckets = data.buckets.length;
     counts.transactions = data.transactions.length;
     counts.budgets = data.budgets.length;
-    counts.apiTokens = data.apiTokens.length;
-
     // Recalculer les monthly balances (hors transaction — récupérable via Recalculer)
-    await backfillAllMonthlyBalances();
-    const recalculated = await db.query.monthlyBalances.findMany();
+    await backfillAllMonthlyBalances(user.id);
+    const recalculated = await db.query.monthlyBalances.findMany({
+      where: eq(monthlyBalances.userId, user.id),
+    });
     counts.monthlyBalances = recalculated.length;
 
     revalidatePath("/");
     return { success: true, counts };
   } catch (e) {
-    logger.error("Erreur lors de l'import des données", { error: e instanceof Error ? e.message : String(e) });
+    const errorInfo: Record<string, unknown> = { error: e instanceof Error ? e.message : String(e) };
+    if (e && typeof e === "object") {
+      const obj = e as Record<string, unknown>;
+      for (const key of Object.getOwnPropertyNames(obj)) {
+        if (key !== "message" && key !== "stack") errorInfo[key] = obj[key];
+      }
+      if (e instanceof Error && e.cause) {
+        const cause = e.cause as Record<string, unknown>;
+        errorInfo.cause_message = cause.message ?? String(cause);
+        for (const key of Object.getOwnPropertyNames(cause)) {
+          if (key !== "message" && key !== "stack") errorInfo[`cause_${key}`] = cause[key];
+        }
+      }
+    }
+    logger.error("Erreur lors de l'import des données", errorInfo);
     if (e instanceof SyntaxError) {
       return { error: "Le fichier n'est pas un JSON valide" };
     }
@@ -356,10 +410,13 @@ export async function importAllData(
 }
 
 export async function recalculateAllBalances() {
+  const user = await requireAuth();
   return safeAction(async () => {
-    await db.delete(monthlyBalances);
-    await backfillAllMonthlyBalances();
-    const recalculated = await db.query.monthlyBalances.findMany();
+    await db.delete(monthlyBalances).where(eq(monthlyBalances.userId, user.id));
+    await backfillAllMonthlyBalances(user.id);
+    const recalculated = await db.query.monthlyBalances.findMany({
+      where: eq(monthlyBalances.userId, user.id),
+    });
     revalidatePath("/");
     return { success: true, count: recalculated.length };
   }, "Erreur lors du recalcul des soldes mensuels");

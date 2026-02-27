@@ -4,19 +4,16 @@
 
 | Fichier | Description |
 |---------|-------------|
-| `index.ts` | Singleton dual-provider (PG/SQLite) + export de toutes les tables |
-| `helpers.ts` | 7 fonctions de conversion de types (montants, dates, timestamps) |
+| `index.ts` | Singleton PostgreSQL + export de toutes les tables |
+| `helpers.ts` | 8 fonctions de conversion de types et requêtes utilitaires |
 | `seed.ts` | Script de seeding complet (catégories, comptes, buckets, transactions, budgets, monthlyBalances) |
 | `schema/` | Schémas Drizzle — voir `schema/CLAUDE.md` |
 
 ## Singleton (`index.ts`)
 
-- `provider` — Constante runtime depuis `env.DB_PROVIDER` (`"postgresql"` ou `"sqlite"`)
 - `db` — Instance unique cachée sur `globalThis` (évite les instances multiples en dev)
-- SQLite : active `WAL` mode + `foreign_keys = ON` via pragmas
 - PostgreSQL : client postgres.js avec `env.DATABASE_URL`
-- **Type bridge** : l'instance SQLite est castée en `PgDb` (structurellement compatible pour le DML)
-- Exporte toutes les tables : `accounts`, `buckets`, `categories`, `subCategories`, `transactions`, `budgets`, `monthlyBalances`, `apiTokens`, `appPreferences`
+- Exporte toutes les tables : `users`, `refreshTokens`, `accounts`, `buckets`, `categories`, `subCategories`, `transactions`, `budgets`, `monthlyBalances`, `apiTokens`, `appPreferences`
 
 ## Helpers (`helpers.ts`)
 
@@ -26,9 +23,10 @@
 | `toNumber(value)` | `string\|number\|null → number` | Coercition sûre, retourne 0 si null/undefined |
 | `toDecimal(value)` | `number → string` | Pour colonnes numeric PG (toString) |
 | `toDate(value)` | `Date\|string\|null → Date\|null` | Coercition Date sûre |
-| `toISOString(value)` | `Date\|string\|null → string\|null` | Conversion ISO 8601 (gère dates texte SQLite) |
-| `toDbTimestamp(value)` | `Date\|string → Date` | Timestamp provider-aware (ISO string pour SQLite, Date pour PG) |
-| `toDbDate(value)` | `Date\|string → Date` | Date-only provider-aware ("YYYY-MM-DD" pour SQLite, Date pour PG) |
+| `toISOString(value)` | `Date\|string\|null → string\|null` | Conversion ISO 8601 |
+| `toDbTimestamp(value)` | `Date\|string → Date` | Conversion en Date pour colonnes PG timestamp |
+| `toDbDate(value)` | `Date\|string → Date` | Conversion en Date pour colonnes PG date |
+| `getCheckingAccountIds(userId)` | `string → Promise<string[]>` | Retourne les IDs des comptes CHECKING de l'utilisateur |
 
 ## Seed (`seed.ts`)
 

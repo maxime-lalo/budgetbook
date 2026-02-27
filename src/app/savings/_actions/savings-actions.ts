@@ -3,12 +3,14 @@
 import { db, transactions, accounts, buckets } from "@/lib/db";
 import { eq, and, or, inArray, sql, asc } from "drizzle-orm";
 import { toNumber, toISOString, round2 } from "@/lib/db/helpers";
+import { requireAuth } from "@/lib/auth/session";
 
 export async function getSavingsTransactions(year: number) {
+  const user = await requireAuth();
   const savingsAccounts = await db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.type, ["SAVINGS", "INVESTMENT"]));
+    .where(and(eq(accounts.userId, user.id), inArray(accounts.type, ["SAVINGS", "INVESTMENT"])));
   const savingsIds = savingsAccounts.map((a) => a.id);
 
   if (savingsIds.length === 0) return [];
@@ -16,6 +18,7 @@ export async function getSavingsTransactions(year: number) {
   const result = await db.query.transactions.findMany({
     where: and(
       eq(transactions.year, year),
+      eq(transactions.userId, user.id),
       or(
         inArray(transactions.accountId, savingsIds),
         inArray(transactions.destinationAccountId, savingsIds)
@@ -57,29 +60,32 @@ export async function getSavingsTransactions(year: number) {
 }
 
 export async function getSavingsTotals(year: number) {
+  const user = await requireAuth();
   const savingsAccounts = await db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.type, ["SAVINGS", "INVESTMENT"]));
+    .where(and(eq(accounts.userId, user.id), inArray(accounts.type, ["SAVINGS", "INVESTMENT"])));
   const savingsIds = savingsAccounts.map((a) => a.id);
 
   if (savingsIds.length === 0) {
     return { real: 0, pending: 0, planned: 0, forecast: 0 };
   }
 
+  const userFilter = eq(transactions.userId, user.id);
+
   const [completed, pending, incomingCompleted, incomingPending, baseAmounts] = await Promise.all([
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.status, "COMPLETED"), inArray(transactions.accountId, savingsIds))),
+      .where(and(userFilter, eq(transactions.year, year), eq(transactions.status, "COMPLETED"), inArray(transactions.accountId, savingsIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.status, "PENDING"), inArray(transactions.accountId, savingsIds))),
+      .where(and(userFilter, eq(transactions.year, year), eq(transactions.status, "PENDING"), inArray(transactions.accountId, savingsIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, savingsIds))),
+      .where(and(userFilter, eq(transactions.year, year), eq(transactions.status, "COMPLETED"), inArray(transactions.destinationAccountId, savingsIds))),
     db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
       .from(transactions)
-      .where(and(eq(transactions.year, year), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, savingsIds))),
+      .where(and(userFilter, eq(transactions.year, year), eq(transactions.status, "PENDING"), inArray(transactions.destinationAccountId, savingsIds))),
     db.select({ total: sql<string>`coalesce(sum(${buckets.baseAmount}), 0)` })
       .from(buckets)
       .where(inArray(buckets.accountId, savingsIds)),

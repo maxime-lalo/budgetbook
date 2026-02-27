@@ -4,22 +4,23 @@ import { sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { toNumber, round2, getCheckingAccountIds } from "@/lib/db/helpers";
 
-export async function recomputeMonthlyBalance(year: number, month: number) {
+export async function recomputeMonthlyBalance(year: number, month: number, userId: string) {
   // 1. Forecast = même logique que getTransactionTotals (comptes CHECKING uniquement + virements entrants)
-  const checkingIds = await getCheckingAccountIds();
+  const checkingIds = await getCheckingAccountIds(userId);
 
   let totalForecast = 0;
   if (checkingIds.length > 0) {
     const statusFilter = inArray(transactions.status, ["COMPLETED", "PENDING", "PLANNED"]);
     const monthFilter = and(eq(transactions.year, year), eq(transactions.month, month));
+    const userFilter = eq(transactions.userId, userId);
 
     const [onChecking, incomingToChecking] = await Promise.all([
       db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
         .from(transactions)
-        .where(and(monthFilter, statusFilter, inArray(transactions.accountId, checkingIds))),
+        .where(and(monthFilter, statusFilter, userFilter, inArray(transactions.accountId, checkingIds))),
       db.select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
         .from(transactions)
-        .where(and(monthFilter, statusFilter, inArray(transactions.destinationAccountId, checkingIds))),
+        .where(and(monthFilter, statusFilter, userFilter, inArray(transactions.destinationAccountId, checkingIds))),
     ]);
 
     totalForecast = round2(toNumber(onChecking[0].total) + -(toNumber(incomingToChecking[0].total)));
@@ -38,6 +39,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
       and(
         eq(transactions.year, year),
         eq(transactions.month, month),
+        eq(transactions.userId, userId),
         inArray(transactions.status, ["COMPLETED", "PENDING", "PLANNED"]),
         checkingIds.length > 0 ? inArray(transactions.accountId, checkingIds) : undefined
       )
@@ -46,7 +48,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
 
   // 3. Budgets du mois
   const monthBudgets = await db.query.budgets.findMany({
-    where: and(eq(budgets.year, year), eq(budgets.month, month)),
+    where: and(eq(budgets.year, year), eq(budgets.month, month), eq(budgets.userId, userId)),
   });
 
   // 4. committed = Σ max(0, budgété - dépensé_net) par catégorie
@@ -72,7 +74,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
 
   // 6. Upsert dans monthly_balances
   const existing = await db.query.monthlyBalances.findFirst({
-    where: and(eq(monthlyBalances.year, year), eq(monthlyBalances.month, month)),
+    where: and(eq(monthlyBalances.year, year), eq(monthlyBalances.month, month), eq(monthlyBalances.userId, userId)),
   });
 
   if (existing) {
@@ -87,6 +89,7 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
   } else {
     await db.insert(monthlyBalances).values({
       id: createId(),
+      userId,
       year,
       month,
       forecast: totalForecast.toString(),
@@ -96,24 +99,28 @@ export async function recomputeMonthlyBalance(year: number, month: number) {
   }
 }
 
-export async function getCarryOver(year: number, month: number) {
+export async function getCarryOver(year: number, month: number, userId: string) {
   const balances = await db.query.monthlyBalances.findMany({
-    where: or(
-      lt(monthlyBalances.year, year),
-      and(eq(monthlyBalances.year, year), lt(monthlyBalances.month, month))
+    where: and(
+      eq(monthlyBalances.userId, userId),
+      or(
+        lt(monthlyBalances.year, year),
+        and(eq(monthlyBalances.year, year), lt(monthlyBalances.month, month))
+      )
     ),
     columns: { surplus: true },
   });
   return round2(balances.reduce((sum: number, b: { surplus: string | number }) => sum + toNumber(b.surplus), 0));
 }
 
-export async function backfillAllMonthlyBalances() {
+export async function backfillAllMonthlyBalances(userId: string) {
   const distinctMonths = await db
     .selectDistinct({ year: transactions.year, month: transactions.month })
     .from(transactions)
+    .where(eq(transactions.userId, userId))
     .orderBy(transactions.year, transactions.month);
 
   for (const { year, month } of distinctMonths) {
-    await recomputeMonthlyBalance(year, month);
+    await recomputeMonthlyBalance(year, month, userId);
   }
 }

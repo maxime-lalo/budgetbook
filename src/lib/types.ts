@@ -1,3 +1,12 @@
+// --- Auth ---
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  isAdmin: boolean;
+};
+
 // --- Transaction Statuses ---
 
 export const TRANSACTION_STATUSES = ["PENDING", "COMPLETED", "CANCELLED", "PLANNED"] as const;
