@@ -95,6 +95,7 @@ comptes/
 │   │   ├── budgets/          # Budgets mensuels par catégorie
 │   │   ├── categories/       # CRUD catégories/sous-catégories
 │   │   ├── accounts/         # Comptes, buckets, soldes
+│   │   ├── savings/          # Vue annuelle épargne/investissement
 │   │   ├── statistics/       # Graphiques Recharts
 │   │   ├── settings/         # Réglages (token API, préférences)
 │   │   └── api/              # API REST (transactions, categories, accounts, auth/refresh)
@@ -124,7 +125,7 @@ comptes/
 │       ├── api-auth.ts        # Validation Bearer token → userId + hashage SHA-256
 │       ├── api-rate-limit.ts  # Rate limiting (60/min par IP)
 │       ├── env.ts             # Validation variables d'environnement (Zod)
-│       ├── logger.ts          # Logger structuré (error/warn/info)
+│       ├── logger.ts          # Logger structuré (debug/info/warn/error)
 │       ├── revalidate.ts      # revalidateTransactionPages()
 │       ├── utils.ts           # cn() pour Tailwind
 │       └── hooks/             # React hooks custom
@@ -148,6 +149,8 @@ comptes/
 | `LDAP_BIND_PASSWORD` | Mot de passe bind LDAP | Non | - |
 | `LDAP_SEARCH_BASE` | Base de recherche LDAP | Non | `ou=users,dc=example,dc=com` |
 | `LDAP_SEARCH_FILTER` | Filtre de recherche LDAP | Non | `(uid={{identifier}})` |
+| `REGISTRATION_ENABLED` | Active/désactive l'inscription publique | Non (défaut "true") | `"false"` |
+| `LOG_LEVEL` | Niveau de log (debug/info/warn/error) | Non (auto: debug dev, info prod) | `"info"` |
 
 ## Authentification
 
