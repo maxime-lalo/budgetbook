@@ -57,7 +57,13 @@ export async function proxy(request: NextRequest) {
   const accessToken = request.cookies.get("access_token")?.value;
 
   if (!accessToken) {
-    // Pas de token → redirect vers login
+    // Pas d'access token → tenter le refresh si refresh_token présent
+    const refreshToken = request.cookies.get("refresh_token")?.value;
+    if (refreshToken) {
+      const refreshUrl = new URL("/api/auth/refresh", request.url);
+      refreshUrl.searchParams.set("returnTo", pathname);
+      return NextResponse.redirect(refreshUrl);
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
