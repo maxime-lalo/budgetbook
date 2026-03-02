@@ -4,6 +4,7 @@ import { db, users, refreshTokens } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { verifyRefreshToken, signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { hashToken } from "@/lib/api-auth";
+import { createId } from "@paralleldrive/cuid2";
 
 const REFRESH_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
 
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
 
     await db.delete(refreshTokens).where(eq(refreshTokens.tokenHash, oldTokenHash));
     await db.insert(refreshTokens).values({
+      id: createId(),
       userId: user.id,
       tokenHash: newTokenHash,
       expiresAt: new Date(Date.now() + REFRESH_MAX_AGE * 1000),
