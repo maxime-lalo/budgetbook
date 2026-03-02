@@ -8,15 +8,25 @@ import { createId } from "@paralleldrive/cuid2";
 
 const REFRESH_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
 
+function getBaseUrl(request: NextRequest): string {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  return request.url;
+}
+
 export async function GET(request: NextRequest) {
   const returnTo = request.nextUrl.searchParams.get("returnTo") || "/";
+  const baseUrl = getBaseUrl(request);
 
   try {
     const cookieStore = await cookies();
     const refreshTokenValue = cookieStore.get("refresh_token")?.value;
 
     if (!refreshTokenValue) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/login", baseUrl));
     }
 
     // Vérifier le JWT du refresh token
@@ -31,7 +41,7 @@ export async function GET(request: NextRequest) {
     if (!storedToken || storedToken.expiresAt < new Date()) {
       cookieStore.delete("access_token");
       cookieStore.delete("refresh_token");
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/login", baseUrl));
     }
 
     // Récupérer l'utilisateur
@@ -42,7 +52,7 @@ export async function GET(request: NextRequest) {
     if (!user) {
       cookieStore.delete("access_token");
       cookieStore.delete("refresh_token");
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/login", baseUrl));
     }
 
     // Signer un nouveau access token
@@ -66,7 +76,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Set les nouveaux cookies et redirect
-    const response = NextResponse.redirect(new URL(returnTo, request.url));
+    const response = NextResponse.redirect(new URL(returnTo, baseUrl));
     response.cookies.set("access_token", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -84,6 +94,6 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", baseUrl));
   }
 }

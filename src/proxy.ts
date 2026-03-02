@@ -11,8 +11,18 @@ function getJwtSecret(): Uint8Array | null {
   return new TextEncoder().encode(secret);
 }
 
+function getBaseUrl(request: NextRequest): string {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  return request.url;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const baseUrl = getBaseUrl(request);
 
   // Security headers sur toutes les réponses
   const addSecurityHeaders = (response: NextResponse) => {
@@ -60,11 +70,11 @@ export async function proxy(request: NextRequest) {
     // Pas d'access token → tenter le refresh si refresh_token présent
     const refreshToken = request.cookies.get("refresh_token")?.value;
     if (refreshToken) {
-      const refreshUrl = new URL("/api/auth/refresh", request.url);
+      const refreshUrl = new URL("/api/auth/refresh", baseUrl);
       refreshUrl.searchParams.set("returnTo", pathname);
       return NextResponse.redirect(refreshUrl);
     }
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", baseUrl));
   }
 
   // Vérifier le JWT (jose fonctionne en Edge)
@@ -79,7 +89,7 @@ export async function proxy(request: NextRequest) {
     return addSecurityHeaders(NextResponse.next());
   } catch {
     // Token expiré → essayer le refresh
-    const refreshUrl = new URL("/api/auth/refresh", request.url);
+    const refreshUrl = new URL("/api/auth/refresh", baseUrl);
     refreshUrl.searchParams.set("returnTo", pathname);
     return NextResponse.redirect(refreshUrl);
   }
