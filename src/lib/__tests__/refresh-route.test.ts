@@ -65,9 +65,11 @@ vi.mock("next/server", () => ({
   NextRequest: class {
     url: string;
     nextUrl: { searchParams: URLSearchParams };
+    headers: Map<string, string>;
     constructor(url: string) {
       this.url = url;
       this.nextUrl = { searchParams: new URL(url).searchParams };
+      this.headers = new Map();
     }
   },
   NextResponse: {
