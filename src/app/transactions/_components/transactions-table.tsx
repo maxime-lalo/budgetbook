@@ -9,7 +9,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, CreditCard } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronDown, CreditCard, Eye, EyeOff } from "lucide-react";
 import { EditableTransactionRow } from "./editable-transaction-row";
 import { NewTransactionRow } from "./new-transaction-row";
 import { CopyRecurringButton } from "./copy-recurring-button";
@@ -98,6 +98,7 @@ export function TransactionsTable({
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [recurringOpen, setRecurringOpen] = useState(false);
+  const [hideAmex, setHideAmex] = useState(false);
   const [filters, setFilters] = useState<TransactionFilterValues>({
     search: "",
     categoryId: initialCategory ?? FILTER_ALL,
@@ -196,6 +197,7 @@ export function TransactionsTable({
 
   // Apply all filters
   const filtered = orderedTransactions.filter((t) => {
+    if (hideAmex && t.isAmex) return false;
     if (filters.categoryId !== FILTER_ALL && t.categoryId !== filters.categoryId) return false;
     if (filters.accountId !== FILTER_ALL && t.accountId !== filters.accountId) return false;
     if (filters.status !== FILTER_ALL && t.status !== filters.status) return false;
@@ -470,6 +472,13 @@ export function TransactionsTable({
               <span className={`font-medium ${amexMonthlyTotal < 0 ? "text-red-600" : "text-green-600"}`}>
                 {formatCurrency(amexMonthlyTotal)}
               </span>
+              <button
+                onClick={() => setHideAmex((prev) => !prev)}
+                className="ml-1 p-0.5 rounded hover:bg-muted"
+                title={hideAmex ? "Afficher les transactions AMEX" : "Masquer les transactions AMEX"}
+              >
+                {hideAmex ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
             </div>
           )}
         </div>
