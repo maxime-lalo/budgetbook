@@ -1,7 +1,7 @@
 "use server";
 
 import { db, transactions, accounts, categories, subCategories, buckets } from "@/lib/db";
-import { eq, and, inArray, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
+import { eq, ne, and, inArray, lt, lte, isNull, isNotNull, sql, asc } from "drizzle-orm";
 import { toNumber } from "@/lib/db/helpers";
 import { DEFAULT_COLOR } from "@/lib/formatters";
 import { requireAuth } from "@/lib/auth/session";
@@ -327,8 +327,7 @@ export async function getCategoryMonthlyHeatmap(year: number, accountId?: string
   const baseWhere = and(
     eq(transactions.year, year),
     eq(transactions.userId, user.id),
-    inArray(transactions.status, ["COMPLETED", "PENDING"]),
-    sql`${transactions.amount} < 0`,
+    ne(transactions.status, "CANCELLED"),
     inArray(transactions.accountId, accountIds)
   );
 
